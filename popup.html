@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenRead</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --text-color: #1f2937;
+            --bg-color: #f9fafb;
+            --card-bg: #ffffff;
+            --border-color: #e5e7eb;
+            --input-bg: #ffffff;
+            --success-color: #10b981;
+        }
+
+        body {
+            width: 320px;
+            padding: 0;
+            margin: 0;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        .container {
+            padding: 20px;
+            background-color: var(--card-bg);
+            min-height: 100vh;
+        }
+
+        header {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 20px;
+            margin: 0;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+
+        /* Status Banner */
+        .status-banner {
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #e0f2fe;
+            border: 1px solid #bae6fd;
+            border-radius: 6px;
+            color: #0369a1;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .status-banner strong {
+            font-weight: 600;
+        }
+
+        .status-description {
+            font-size: 12px;
+            color: #51718a;
+            margin-top: 4px;
+            margin-left: 22px;
+            /* Align with text */
+            line-height: 1.4;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        label {
+            font-size: 13px;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        input,
+        select {
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            background-color: var(--input-bg);
+            transition: all 0.2s ease;
+            outline: none;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        input:focus,
+        select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        /* Secondary Button (YouTube) */
+        button.secondary-btn {
+            background-color: #ffffff;
+            color: #4b5563;
+            border: 1px solid #d1d5db;
+            margin-top: 16px;
+        }
+
+        button.secondary-btn:hover {
+            background-color: #f3f4f6;
+            color: #111827;
+            border-color: #9ca3af;
+        }
+
+        #status {
+            margin-top: 12px;
+            font-size: 13px;
+            text-align: center;
+            min-height: 20px;
+            color: var(--success-color);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        #status.visible {
+            opacity: 1;
+        }
+
+        .footer {
+            margin-top: 24px;
+            text-align: center;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>OpenRead</h1>
+            <div class="subtitle">Open Source Translation</div>
+        </header>
+
+        <!-- Active Mode Banner -->
+        <div class="status-banner">
+            <div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="font-size: 16px;">✨</span>
+                    <strong>Selection Mode Active</strong>
+                </div>
+                <div class="status-description">
+                    Highlight text on any page to show the translation button.
+                </div>
+            </div>
+        </div>
+
+        <form id="settingsForm">
+            <h2 style="font-size: 14px; margin:0 0 -8px 0; color:#4b5563;">Configuration</h2>
+
+            <div class="form-group">
+                <label for="apiKey">OpenRouter API Key</label>
+                <input type="password" id="apiKey" placeholder="sk-or-..." required>
+            </div>
+
+            <div class="form-group">
+                <label for="modelId">Model ID</label>
+                <input type="text" id="modelId" placeholder="google/gemini-2.0-flash-exp"
+                    value="google/gemini-2.0-flash-exp">
+            </div>
+
+            <div class="form-group">
+                <label for="targetLang">Target Language</label>
+                <select id="targetLang">
+                    <option value="Traditional Chinese">Traditional Chinese (繁體中文)</option>
+                    <option value="Simplified Chinese">Simplified Chinese (简体中文)</option>
+                    <option value="English">English</option>
+                    <option value="Japanese">Japanese (日本語)</option>
+                    <option value="Korean">Korean (한국어)</option>
+                    <option value="Spanish">Spanish (Español)</option>
+                    <option value="French">French (Français)</option>
+                    <option value="German">German (Deutsch)</option>
+                </select>
+            </div>
+
+            <button type="submit" id="saveBtn">
+                Save Settings
+            </button>
+        </form>
+
+        <!-- Extra Features -->
+        <button id="btn-translate-youtube" class="secondary-btn" title="Only available on YouTube pages">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z">
+                </path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            Translate YouTube Subtitles
+        </button>
+
+        <div id="status"></div>
+
+        <div class="footer-tip"
+            style="margin-top: 15px; font-size: 12px; color: #666; padding: 8px; background: #f9f9f9; border-radius: 4px;">
+            <strong>💡 Tip:</strong> To translate local PDF files, go to
+            <a href="#" id="open-extensions">Extension Management</a>
+            and enable <em>"Allow access to file URLs"</em>.
+        </div>
+
+        <div class="footer">
+            OpenRead v1.0.0
+        </div>
+    </div>
+
+    <script type="module" src="popup.js"></script>
+</body>
+
+</html>
