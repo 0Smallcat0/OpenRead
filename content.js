@@ -12,6 +12,7 @@ const ENABLE_LOGGING = false;
 let activeIcon = null;
 let activePanel = null;
 let lastSelectionRange = null;
+let activePort = null; // [OIT] Track active connection for race condition handling
 
 // ===========================================
 // 1. Detection Logic
@@ -321,7 +322,16 @@ async function translateSelection(text, rect, retryCount = 0) {
 
 
         // 4. Start Streaming Connection
+        // [OIT] Cancel previous port connection if exists
+        if (activePort) {
+            try {
+                activePort.disconnect();
+            } catch (e) { /* ignore */ }
+            activePort = null;
+        }
+
         const port = chrome.runtime.connect({ name: "stream-translate" });
+        activePort = port;
 
         // Handle Invalidation immediately after connect?
         if (chrome.runtime.lastError) {
@@ -346,6 +356,7 @@ async function translateSelection(text, rect, retryCount = 0) {
                 appendToPanel(msg.chunk);
             } else if (msg.status === 'done') {
                 port.disconnect();
+                if (activePort === port) activePort = null;
 
                 // ECHO DETECTION
                 const normInput = text.trim().toLowerCase();

@@ -117,43 +117,13 @@ function generateSystemPrompt(targetLang) {
     }
 
     if (isTC) {
-        return `You are a specialized translation engine, NOT a chatbot.
-Your SOLE function is to convert input text into Traditional Chinese (Taiwan).
-
-### IMPORTANT INSTRUCTION:
-If you must analyze the text, enclose your thoughts in <think> tags.
-Example:
-<think>The user wants me to translate...</think>
-[Actual Translation Here]
-
-### RULES (VIOLATION = FAILURE):
-1. **NO PREAMBLE:** Do not say "Here is the translation", "Let me analyze", or "The user wants".
-2. **NO REASONING:** Do not output your thought process unless inside <think> tags.
-3. **NO EXPLANATIONS:** Do not explain why you chose a word.
-4. **DIRECT OUTPUT:** Start the output with the translated text immediately.
-5. **GAME TERMS:** Use standard Taiwanese gaming terminology for game-related texts.
-
-### EXAMPLES (Follow this format EXACTLY):
-
-Input:
-"Hello world. This is a test."
-
-Output:
-你好世界。這是一個測試。
-
-Input:
-"Fate of the Vaal Rewards Get a Big Buff"
-
-Output:
-瓦爾獎勵獲得大幅增強
-
-### TARGET LANGUAGE:
-Traditional Chinese (Taiwan) / 繁體中文 (台灣)`;
+        return `Role: Professional Academic Translator. Target: Traditional Chinese (Taiwan).\nRules:\n1. Accurate, Fluent, Academic tone.\n2. Use strict Taiwan IT/Finance terms (e.g. 電腦, 程式, 演算法).\n3. Translate DIRECTLY. NO "Here is".`;
     }
 
     // Generic
-    return `Target: ${targetLang}.\nRules:\n1. Output ONLY the translation.\n2. Ensure natural phrasing.\n3. Do not output reasoning.`;
+    return `Role: Professional Translator. Target: ${targetLang}.\nRules:\n1. Translate DIRECTLY.\n2. Natural and fluent phrasing.`;
 }
+
 
 /**
  * Call OpenRouter API to translate text with STREAMING.
@@ -188,6 +158,9 @@ function isAIThinking(text) {
     return noisePatterns.some(pattern => pattern.test(text.trim()));
 }
 
+// Global variable to track the active request for race condition handling
+let currentController = null;
+
 export async function translateStream(text, apiKey, model, targetLang, contextObj, onChunk, retryCount = 0) {
     if (!text) return;
     if (!apiKey) throw new Error("API Key is missing");
@@ -196,6 +169,17 @@ export async function translateStream(text, apiKey, model, targetLang, contextOb
     if (apiKey.toLowerCase().startsWith("mock-") || apiKey.startsWith("sk-test")) {
         // ... (Mock logic)
     }
+
+    // 1. CANCEL PREVIOUS REQUEST
+    if (currentController) {
+        // This stops the previous fetch and its stream reader immediately
+        currentController.abort();
+        // console.log("[OIT] Aborted previous stream.");
+    }
+
+    // 2. Create new controller for the current request
+    currentController = new AbortController();
+    const signal = currentController.signal;
 
     // Construct Prompt
     let systemPrompt = generateSystemPrompt(targetLang);
@@ -221,6 +205,7 @@ export async function translateStream(text, apiKey, model, targetLang, contextOb
     try {
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
+            signal: signal, // <--- BIND SIGNAL HERE
             headers: {
                 "Authorization": `Bearer ${apiKey}`,
                 "Content-Type": "application/json",
@@ -244,21 +229,18 @@ export async function translateStream(text, apiKey, model, targetLang, contextOb
         const decoder = new TextDecoder("utf-8");
         let buffer = ""; // Line buffer for streaming parser
 
-        // --- HYBRID PIPELINE STATE ---
-        let contentBuffer = "";  // Accumulates text for filter checking
-        let isBuffering = true;  // [OIT] Strict Buffering State
+        // --- FAST STREAM PIPELINE ---
+        let contentBuffer = "";
+        let isBuffering = true; // Only buffer the very start to catch "Sure," or "Here is"
         const isTargetTC = targetLang === 'Traditional Chinese' || targetLang === 'Traditional Chinese (Taiwan)' || targetLang.includes('繁體');
-        // -----------------------------
 
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
 
             buffer += decoder.decode(value, { stream: true });
-
-            // Process buffer line by line
             const lines = buffer.split("\n");
-            buffer = lines.pop(); // Keep the last partial line in buffer
+            buffer = lines.pop();
 
             for (const line of lines) {
                 const trimmed = line.trim();
@@ -270,51 +252,28 @@ export async function translateStream(text, apiKey, model, targetLang, contextOb
                         const json = JSON.parse(dataStr);
                         const delta = json.choices?.[0]?.delta?.content;
                         if (delta) {
-
-                            // [OIT] Strict Buffering & Anti-Hallucination Logic
                             if (isBuffering) {
                                 contentBuffer += delta;
-
-                                // 1. Check for Separator (Strong Signal)
-                                const separatorIndex = contentBuffer.indexOf('\n\n');
-                                if (separatorIndex !== -1) {
-                                    // CASE A: Separator found!
-                                    // Check if the part BEFORE the separator looks like noise
-                                    const preText = contentBuffer.substring(0, separatorIndex);
-
-                                    if (isAIThinking(preText)) {
-                                        // It IS noise! Discard it.
-                                        let realText = contentBuffer.substring(separatorIndex + 2); // Skip the \n\n
-                                        if (isTargetTC) realText = convertSCToTC(realText);
-                                        onChunk(realText);
-                                    } else {
-                                        // It was NOT noise (just a normal paragraph). Send everything.
-                                        let fullBuf = contentBuffer;
-                                        if (isTargetTC) fullBuf = convertSCToTC(fullBuf);
-                                        onChunk(fullBuf);
+                                // Reluctant Buffer: Fast but Safe (12 chars or newline)
+                                if (contentBuffer.length > 12 || contentBuffer.includes('\n')) {
+                                    // Flush
+                                    let clean = contentBuffer;
+                                    // Simple prefix check
+                                    if (isAIThinking(clean)) {
+                                        clean = cleanAIArtifacts(clean, true);
                                     }
-                                    isBuffering = false;
-                                    contentBuffer = "";
-                                }
-                                // 2. Check for Clean Start (Fast Path)
-                                // If buffer is substantial (>50 chars) and doesn't trigger "Thinking" pattern
-                                else if (contentBuffer.length > 50 && !isAIThinking(contentBuffer)) {
-                                    // CASE B: It's clean from the start!
-                                    let fullBuf = contentBuffer;
-                                    if (isTargetTC) fullBuf = convertSCToTC(fullBuf);
-                                    onChunk(fullBuf);
-                                    isBuffering = false;
-                                    contentBuffer = "";
-                                }
-                                // CASE C: Still looks like thinking or too short, keep buffering...
 
-                            } else {
-                                // Not buffering? Just stream it directly!
-                                let processedChunk = delta;
-                                if (isTargetTC) {
-                                    processedChunk = convertSCToTC(processedChunk);
+                                    if (isTargetTC) clean = convertSCToTC(clean);
+                                    if (clean) onChunk(clean);
+
+                                    isBuffering = false;
+                                    contentBuffer = "";
                                 }
-                                onChunk(processedChunk);
+                            } else {
+                                // Direct Stream
+                                let chunk = delta;
+                                if (isTargetTC) chunk = convertSCToTC(chunk);
+                                onChunk(chunk);
                             }
                         }
                     } catch (e) {
@@ -324,22 +283,27 @@ export async function translateStream(text, apiKey, model, targetLang, contextOb
             }
         }
 
-        // Flush remaining buffer if stream ends while still buffering
+        // Flush remaining if any
         if (isBuffering && contentBuffer.length > 0) {
-            // Final check: if it looks like AI thinking till the very end, we might want to drop it?
-            if (isAIThinking(contentBuffer)) {
-                // Try to strip prefix?
-                // If it ends with just noise, output nothing.
-            } else {
-                let clean = contentBuffer;
-                if (isTargetTC) clean = convertSCToTC(clean);
-                onChunk(clean);
-            }
+            let clean = contentBuffer;
+            if (isAIThinking(clean)) clean = cleanAIArtifacts(clean, true);
+            if (isTargetTC) clean = convertSCToTC(clean);
+            if (clean) onChunk(clean);
         }
 
     } catch (error) {
+        // 3. SILENT EXIT FOR ABORT
+        if (error.name === 'AbortError') {
+            // console.log("[OIT] Request cancelled by user action.");
+            return; // Do NOT call onError, just stop.
+        }
         console.error("Streaming Translation failed:", error);
         throw error;
+    } finally {
+        // Cleanup: If this request finished naturally, clear the controller
+        if (currentController && currentController.signal === signal) {
+            currentController = null;
+        }
     }
 }
 
@@ -495,51 +459,71 @@ function simplifiedToTraditional(text) {
     if (!text) return text;
 
     // 1. Terminology Replacement (Mainland -> Taiwan)
-    // We do this first to catch multi-char terms
+    // Ordered by length (longest first) to avoid partial matching issues
     const terms = [
-        ['视频', '影片'],
-        ['软件', '軟體'],
-        ['信息', '資訊'],
-        ['硬盘', '硬碟'],
-        ['程序', '程式'],
-        ['网络', '網路'],
-        ['优盘', '隨身碟'],
-        ['博客', '部落格'],
-        ['鼠标', '滑鼠'],
-        ['屏幕', '螢幕'],
-        ['默认', '預設'],
-        ['链接', '連結'],
-        ['项目', '專案'], // Context dependent, but usually Project -> 專案 in tech
+        ['计算机', '電腦'],
         ['服务器', '伺服器'],
-        ['云端', '雲端'],
+        ['互联网', '網際網路'],
+        ['数据库', '資料庫'],
+        ['各种', '各種'], // Fix common generic
+        ['通过', '透過'], // Fix common generic
+        ['为了', '為了'], // Fix common generic
+
+        // IT / Tech
+        ['软件', '軟體'],
+        ['硬件', '硬體'],
+        ['程序', '程式'],
+        ['算法', '演算法'],
+        ['默认', '預設'],
+        ['接口', '介面'],
+        ['模块', '模組'],
+        ['变量', '變數'],
+        ['函数', '函式'],
+        ['数组', '陣列'],
+        ['对象', '物件'],
+        ['内存', '記憶體'],
+        ['硬盘', '硬碟'],
+        ['视频', '影片'],
+        ['音频', '音訊'],
+        ['屏幕', '螢幕'],
+        ['鼠标', '滑鼠'],
+        ['键盘', '鍵盤'],
+        ['网络', '網路'],
+        ['链接', '連結'],
+        ['在线', '線上'],
+        ['离线', '離線'],
+        ['支持', '支援'],
+        ['搜索', '搜尋'],
+        ['用户', '使用者'],
+        ['项目', '專案'],
+        ['文件', '檔案'], // Context dependent
+        ['信息', '資訊'], // or 訊息
+        ['质量', '品質'],
+        ['优化', '最佳化'],
+        ['智能', '智慧'],
+        ['移动', '行動'],
+        ['数码', '數位'],
+        ['博客', '部落格'],
+        ['优盘', '隨身碟'],
         ['士巴拿', '扳手'],
-        ['智能', '智慧'] // Added AI context
+        ['交互', '互動'],
+        ['运作', '運作'],
+        ['发送', '傳送'],
+        ['打印', '列印']
     ];
 
     let result = text;
     for (const [sim, tra] of terms) {
-        // Global replace
-        result = result.split(sim).join(tra);
+        // Global replace using split/join is fast enough for ~50 terms
+        // For larger lists, we'd use a regex, but this is fine.
+        while (result.includes(sim)) {
+            result = result.replace(sim, tra);
+        }
     }
 
-    // 2. Character Mapping (Common subset)
-    return mapSCToTCChars(result);
+    // 2. Character Mapping (Full Database)
+    return convertSCToTC(result);
 }
 
-/**
- * 1:1 Character Mapping Helper (Safe for Streams)
- */
-function mapSCToTCChars(text) {
-    if (!text) return text;
-    const charMap = {
-        '爱': '愛', '关': '關', '国': '國', '开': '開', '门': '門', '见': '見',
-        '体': '體', '爷': '爺', '贫': '貧', '贝': '貝', '车': '車', '东': '東',
-        '马': '馬', '长': '長', '乱': '亂', '儿': '兒', '几': '幾', '电': '電',
-        '头': '頭', '么': '麼', '为': '為', '来': '來', '两': '兩', '还': '還',
-        '动': '動', '这': '這', '点': '點', '个': '個', '样': '樣', '总': '總',
-        '办': '辦', '书': '書', '听': '聽', '说': '說', '远': '遠', '发': '發',
-        '变': '變', '实': '實', '专': '專', '师': '師', '导': '導', '复': '復',
-        '记': '記', '业': '業', '义': '義', '备': '備', '医': '醫', '笔': '筆'
-    };
-    return text.split('').map(char => charMap[char] || char).join('');
-}
+// REMOVED mapSCToTCChars - We use zh-map.js now for 2800+ chars coverage
+

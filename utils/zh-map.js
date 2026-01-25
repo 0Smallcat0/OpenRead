@@ -10,6 +10,31 @@ const SC_TC_PAIRS =
 // (Truncated slightly for file size but includes core 2800+ chars and critical overrides like 里/裡, 面/麵)
 
 // Optimized Converter Function
+// Pre-compute Map for O(1) lookup
+const SC_TO_TC_MAP = new Map();
+const TC_TO_SC_MAP = new Map();
+
+(function initMaps() {
+    // 1. Load from string
+    for (let i = 0; i < SC_TC_PAIRS.length; i += 2) {
+        const sim = SC_TC_PAIRS[i];
+        const tra = SC_TC_PAIRS[i + 1];
+        if (!sim || !tra) break;
+        SC_TO_TC_MAP.set(sim, tra);
+        TC_TO_SC_MAP.set(tra, sim);
+    }
+    // 2. Manual Overrides (Critical Fixes)
+    const missed = [
+        ['学', '學'], ['术', '術'],
+        ['里', '裡'], ['面', '麵'], ['台', '臺'], ['发', '發'],
+        ['钟', '鐘'], ['干', '乾'], ['斗', '鬥'], ['丑', '醜']
+    ];
+    missed.forEach(([s, t]) => {
+        SC_TO_TC_MAP.set(s, t);
+        TC_TO_SC_MAP.set(t, s);
+    });
+})();
+
 export function convertSCToTC(text) {
     if (!text) return text;
     let result = '';
@@ -17,16 +42,9 @@ export function convertSCToTC(text) {
 
     for (let i = 0; i < len; i++) {
         const char = text[i];
-        // 1. Try to find the char in the SC slots (even indices)
-        const idx = SC_TC_PAIRS.indexOf(char);
-
-        // Validation: Found AND it's an even index (meaning it is a Simplified char key)
-        if (idx !== -1 && idx % 2 === 0) {
-            result += SC_TC_PAIRS[idx + 1]; // Append the next char (Traditional)
-        } else {
-            // 2. Fallback: If not found, keep original
-            result += char;
-        }
+        // O(1) Lookup
+        const mapped = SC_TO_TC_MAP.get(char);
+        result += mapped || char;
     }
     return result;
 }
@@ -38,13 +56,8 @@ export function convertTCToSC(text) {
     const len = text.length;
     for (let i = 0; i < len; i++) {
         const char = text[i];
-        const idx = SC_TC_PAIRS.indexOf(char);
-        // Validation: Found AND it's an odd index (meaning it is a Traditional char key)
-        if (idx !== -1 && idx % 2 !== 0) {
-            result += SC_TC_PAIRS[idx - 1]; // Append the previous char (Simplified)
-        } else {
-            result += char;
-        }
+        const mapped = TC_TO_SC_MAP.get(char);
+        result += mapped || char;
     }
     return result;
 }
@@ -52,9 +65,7 @@ export function convertTCToSC(text) {
 export function isSimplified(text) {
     // Check if the text contains any Simplified-specific characters from our map
     for (let i = 0; i < text.length; i++) {
-        const char = text[i];
-        const idx = SC_TC_PAIRS.indexOf(char);
-        if (idx !== -1 && idx % 2 === 0) return true;
+        if (SC_TO_TC_MAP.has(text[i])) return true;
     }
     return false;
 }
