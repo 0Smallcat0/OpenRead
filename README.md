@@ -104,6 +104,10 @@ translation, and a machine-readable YAML header — straight into your vault via
 an `obsidian://new` URI. No extra permissions, no server; notes too large for a
 protocol-handler URL fall back to the clipboard.
 
+| One-tap capture, on a real page | The note it writes to your vault |
+| :---: | :---: |
+| ![Capture button in the translate panel on Wikipedia](docs/screenshots/capture-saved.png) | ![The Markdown note OpenRead writes, with its frontmatter handoff contract](docs/screenshots/capture-note.png) |
+
 That header is a deliberate **handoff contract**. Every note is written
 `status: raw`, so a stronger downstream model (a "second brain") can query the
 unprocessed captures, synthesize them, and flip the flag. OpenRead does the
