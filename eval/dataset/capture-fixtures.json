@@ -1,0 +1,72 @@
+[
+  {
+    "id": "clean-01",
+    "category": "clean-json",
+    "raw": "{\"title\":\"線性時間演算法\",\"summary\":\"這段說明演算法以線性時間執行。\",\"tags\":[\"演算法\",\"複雜度\",\"效能\"]}"
+  },
+  {
+    "id": "clean-02",
+    "category": "clean-json",
+    "raw": "{\"title\":\"Transformer 架構\",\"summary\":\"介紹自注意力機制。\",\"tags\":[\"nlp\",\"transformer\",\"attention\"]}"
+  },
+  {
+    "id": "fenced-01",
+    "category": "fenced-json",
+    "raw": "```json\n{\"title\":\"向量資料庫\",\"summary\":\"說明向量檢索的原理。\",\"tags\":[\"database\",\"embeddings\"]}\n```"
+  },
+  {
+    "id": "fenced-02",
+    "category": "fenced-json",
+    "raw": "```\n{\"title\":\"梯度下降\",\"tags\":[\"optimization\",\"training\"]}\n```"
+  },
+  {
+    "id": "preamble-01",
+    "category": "preamble-json",
+    "raw": "Sure! Here is the metadata you asked for:\n\n{\"title\":\"知識圖譜\",\"summary\":\"描述實體與關係的建模。\",\"tags\":[\"graph\",\"knowledge\"]}"
+  },
+  {
+    "id": "preamble-02",
+    "category": "preamble-json",
+    "raw": "好的，這是整理後的結果：{\"title\":\"檢索增強生成\",\"summary\":\"結合檢索與生成的方法。\",\"tags\":[\"rag\",\"llm\",\"retrieval\"]}"
+  },
+  {
+    "id": "trailing-01",
+    "category": "trailing-prose",
+    "raw": "{\"title\":\"擴散模型\",\"summary\":\"逐步去雜訊生成影像。\",\"tags\":[\"diffusion\",\"generative\"]} 希望對你有幫助！"
+  },
+  {
+    "id": "comma-tags-01",
+    "category": "comma-tags",
+    "raw": "{\"title\":\"提示工程\",\"summary\":\"設計提示以引導模型。\",\"tags\":\"prompt, engineering, llm\"}"
+  },
+  {
+    "id": "hash-tags-01",
+    "category": "hash-tags",
+    "raw": "{\"title\":\"量化\",\"summary\":\"降低模型精度以節省記憶體。\",\"tags\":[\"#Quantization\",\"#Model Size\"]}"
+  },
+  {
+    "id": "partial-01",
+    "category": "partial",
+    "raw": "{\"summary\":\"一段關於微調的說明。\"}"
+  },
+  {
+    "id": "refusal-01",
+    "category": "refusal",
+    "raw": "I'm sorry, I can't produce that."
+  },
+  {
+    "id": "garbage-01",
+    "category": "garbage",
+    "raw": "title: 混亂輸出\ntags - a, b, c"
+  },
+  {
+    "id": "empty-fields-01",
+    "category": "empty-fields",
+    "raw": "{\"title\":\"\",\"summary\":\"\",\"tags\":[]}"
+  },
+  {
+    "id": "malformed-01",
+    "category": "malformed",
+    "raw": "{\"title\": \"未閉合"
+  }
+]

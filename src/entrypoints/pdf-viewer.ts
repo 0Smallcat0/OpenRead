@@ -11,8 +11,14 @@ import { loadSettings } from '../settings';
 export default defineUnlistedScript(() => {
   mountSelectionTranslator({
     getSettings: async () => {
-      const { modelId, targetLang } = await loadSettings();
-      return { modelId, targetLang };
+      const s = await loadSettings();
+      return {
+        modelId: s.modelId,
+        targetLang: s.targetLang,
+        obsidianVault: s.obsidianVault,
+        obsidianFolder: s.obsidianFolder,
+        enrichOnCapture: s.enrichOnCapture,
+      };
     },
     // The PDF viewer's overlay CSS targets this class to keep the close button
     // above the rendered page.

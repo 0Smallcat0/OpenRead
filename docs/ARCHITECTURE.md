@@ -14,24 +14,29 @@ src/
     stream.ts             StreamAssembler — reluctant-buffer streaming logic
     zh-convert.ts         OpenCC s2twp Simplified→Traditional wrapper
     prompt.ts             system prompt + adaptive anti-echo few-shot
+    capture.ts            capture → Markdown + obsidian:// URI builders
+    enrich.ts             enrich prompt + tolerant small-model JSON salvager
     types.ts              shared domain types
   api/
-    ollama.ts             typed streaming + single-shot client, pure extractDelta
+    ollama.ts             typed streaming + single-shot + enrich client
   messaging.ts            typed content⇄background port + one-shot protocol
   settings.ts             typed chrome.storage.sync wrapper
   ui/
     selection.ts          shared selection icon + panel + stream client
+    capture.ts            capture orchestrator: enrich round-trip + write
   entrypoints/
-    background.ts         service worker: stream broker + PDF router
+    background.ts         service worker: stream broker + PDF router + enrich
     content.ts            mounts the selection translator on web pages
     pdf-viewer.ts         mounts the same translator inside the PDF.js viewer
     popup/                settings UI (index.html + main.ts)
 public/
   pdfjs/                  vendored PDF.js viewer (worker path fixed to .mjs)
 eval/
-  dataset/fixtures.json   curated failure-mode fixtures
-  detectors.ts            preamble / Simplified / echo detectors (reuse core)
-  run.ts                  before→after runner → eval/RESULTS.md
+  dataset/fixtures.json         curated translation failure-mode fixtures
+  dataset/capture-fixtures.json curated small-model enrichment reply shapes
+  detectors.ts                  preamble / Simplified / echo detectors (reuse core)
+  run.ts                        translation before→after runner → eval/RESULTS.md
+  capture-run.ts                enrichment-parser runner → eval/CAPTURE-RESULTS.md
 ```
 
 ### Why this split
@@ -90,3 +95,5 @@ sequenceDiagram
 | OpenCC `s2twp` over a hand-rolled map                                           | v1's unconditional character map corrupted common words (`界面→界麵`). Phrase-level conversion is correct and maintained. |
 | Ollama base URL read in background from storage; request goes to a local server | No secret rides the message bus — and since the request never leaves the machine, there's nothing to leak either way.     |
 | Offline, deterministic eval                                                     | Before/after numbers are reproducible in CI without a running Ollama server, so they are honest to cite.                  |
+| Capture writes via `obsidian://new` from the content script, not a new API      | Keeps least-privilege intact (no `downloads`/native-host permission) and reuses the user gesture; oversized notes fall back to the clipboard. |
+| Captures are `status: raw`; heavy synthesis deferred to a downstream model      | On-device small models fail at structured output (measured), so OpenRead ships a reliable raw note and lets a stronger "second brain" process it. |

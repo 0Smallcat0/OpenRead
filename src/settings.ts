@@ -10,12 +10,22 @@ export interface Settings {
   baseUrl: string;
   modelId: string;
   targetLang: string;
+  /** Obsidian vault to capture into; empty = the user's current/last vault. */
+  obsidianVault: string;
+  /** Vault-relative folder for captures; empty = the vault root. */
+  obsidianFolder: string;
+  /** Run a local-model enrichment pass when capturing (best-effort, off by
+   * default — small models are unreliable at structured extraction). */
+  enrichOnCapture: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   baseUrl: 'http://localhost:11434',
   modelId: 'qwen2.5',
   targetLang: 'Traditional Chinese',
+  obsidianVault: '',
+  obsidianFolder: 'OpenRead',
+  enrichOnCapture: false,
 };
 
 /** Languages offered in the popup, in display order (first = default). */
@@ -36,6 +46,9 @@ export async function loadSettings(): Promise<Settings> {
     'baseUrl',
     'modelId',
     'targetLang',
+    'obsidianVault',
+    'obsidianFolder',
+    'enrichOnCapture',
   ])) as Partial<Settings>;
   return { ...DEFAULT_SETTINGS, ...stored };
 }

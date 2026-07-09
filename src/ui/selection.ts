@@ -10,6 +10,9 @@
  * network calls via the pure `shouldBypassAI` check.
  */
 import { shouldBypassAI } from '../core/language';
+import { resolveSourceUrl } from '../core/capture';
+import { captureNote, type CaptureConfig } from './capture';
+import type { CaptureNote } from '../core/types';
 import {
   STREAM_PORT_NAME,
   type StartStreamMessage,
@@ -24,6 +27,12 @@ const Z = '2147483647';
 export interface SelectionSettings {
   modelId: string;
   targetLang: string;
+  /** Obsidian vault to capture into; empty = the user's current/last vault. */
+  obsidianVault: string;
+  /** Vault-relative folder for captures. */
+  obsidianFolder: string;
+  /** Run a local-model enrichment pass when capturing. */
+  enrichOnCapture: boolean;
 }
 
 export interface SelectionUIOptions {
@@ -158,17 +167,19 @@ export function mountSelectionTranslator(
 
   async function translate(text: string, rect: DOMRect): Promise<void> {
     removeIcon();
-    const { modelId, targetLang } = await options.getSettings();
+    const settings = await options.getSettings();
     const content = showPanel(rect);
 
     // Same-language selection: show it verbatim, no API round-trip.
-    if (shouldBypassAI(text, targetLang)) {
+    if (shouldBypassAI(text, settings.targetLang)) {
       setPanelText(content, text);
+      mountCaptureButton(text, settings);
       return;
     }
 
     setPanelText(content, 'Translating…');
     let firstChunk = true;
+    let full = '';
 
     activePort?.disconnect();
     const port = chrome.runtime.connect({ name: STREAM_PORT_NAME });
@@ -180,6 +191,7 @@ export function mountSelectionTranslator(
           setPanelText(content, '');
           firstChunk = false;
         }
+        full += res.chunk;
         appendChunk(content, res.chunk);
       } else if (res.status === 'error') {
         setPanelText(content, `⚠️ ${res.message}`);
@@ -188,17 +200,98 @@ export function mountSelectionTranslator(
       } else {
         port.disconnect();
         if (activePort === port) activePort = null;
+        if (full.trim()) mountCaptureButton(full, settings);
       }
     });
 
     const message: StartStreamMessage = {
       type: 'START_STREAM',
       text,
-      targetLang,
-      model: modelId,
+      targetLang: settings.targetLang,
+      model: settings.modelId,
       retryCount: 0,
     };
     port.postMessage(message);
+
+    // Append a one-tap "save to Obsidian" control once a translation is ready.
+    // Hoisted, so the same-language branch above can call it too.
+    function mountCaptureButton(
+      finalText: string,
+      config: SelectionSettings,
+    ): void {
+      if (!panel || panel.querySelector('.oit-capture-bar')) return;
+      const host = panel;
+
+      const bar = document.createElement('div');
+      bar.className = 'oit-capture-bar';
+      bar.style.cssText =
+        'margin-top:12px;padding-top:10px;border-top:1px solid #eee;' +
+        'display:flex;align-items:center;gap:8px';
+
+      const btn = document.createElement('button');
+      btn.textContent = '＋ 儲存到 Obsidian';
+      btn.style.cssText = [
+        'appearance:none',
+        'border:0',
+        'cursor:pointer',
+        'font-size:13px',
+        'padding:6px 10px',
+        'border-radius:6px',
+        'background:#3b82f6',
+        'color:#fff',
+        'font-family:inherit',
+      ].join(';');
+
+      const hint = document.createElement('span');
+      hint.style.cssText = 'font-size:12px;color:#888';
+
+      bar.append(btn, hint);
+      host.appendChild(bar);
+
+      // Guard our own presses from the document-level mousedown teardown.
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        btn.disabled = true;
+        hint.textContent = config.enrichOnCapture ? '整理中…' : '儲存中…';
+
+        const note: CaptureNote = {
+          title: document.title,
+          source: document.title,
+          url: resolveSourceUrl(location.href),
+          capturedAt: new Date().toISOString(),
+          from: 'auto',
+          to: config.targetLang,
+          original: text,
+          translation: finalText,
+          tags: ['openread'],
+          status: 'raw',
+        };
+        const captureConfig: CaptureConfig = {
+          vault: config.obsidianVault,
+          folder: config.obsidianFolder,
+          enrich: config.enrichOnCapture,
+          model: config.modelId,
+          targetLang: config.targetLang,
+        };
+
+        void captureNote(note, captureConfig).then((outcome) => {
+          if (outcome.ok) {
+            hint.textContent =
+              outcome.method === 'clipboard'
+                ? '已複製，貼到 Obsidian'
+                : '已儲存 ✓';
+          } else {
+            hint.textContent = '儲存失敗';
+            btn.disabled = false;
+          }
+        });
+      });
+    }
   }
 
   function onMouseUp(event: MouseEvent): void {

@@ -7,7 +7,7 @@
  * only the text, target language, and model; the background broker reads the
  * Ollama server URL from `chrome.storage` itself.
  */
-import type { TranslationContext } from './core/types';
+import type { TranslationContext, EnrichResult } from './core/types';
 
 /** Long-lived port used for streaming translations. */
 export const STREAM_PORT_NAME = 'stream-translate';
@@ -37,7 +37,24 @@ export interface OpenPdfViewerMessage {
   url: string;
 }
 
-export type RuntimeRequest = OpenPdfViewerMessage;
+/**
+ * content -> background one-shot: run an optional local-model enrichment pass
+ * for a capture. The broker reads the Ollama base URL from storage itself, so
+ * (like translation) it never rides the message bus.
+ */
+export interface EnrichCaptureMessage {
+  type: 'ENRICH_CAPTURE';
+  text: string;
+  targetLang: string;
+  model: string;
+}
+
+export type RuntimeRequest = OpenPdfViewerMessage | EnrichCaptureMessage;
 
 export type OpenPdfViewerResponse =
   { success: true } | { error: 'PERMISSION_DENIED' };
+
+/** background -> content: the parsed enrichment, or null on any failure. */
+export interface EnrichCaptureResponse {
+  result: EnrichResult | null;
+}

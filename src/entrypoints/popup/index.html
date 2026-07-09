@@ -72,6 +72,27 @@
         color: #16a34a;
         text-align: center;
       }
+      hr {
+        margin: 16px 0 4px;
+        border: 0;
+        border-top: 1px solid #ddd;
+      }
+      @media (prefers-color-scheme: dark) {
+        hr {
+          border-top-color: #444;
+        }
+      }
+      label.checkbox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+        font-weight: 400;
+        cursor: pointer;
+      }
+      label.checkbox input {
+        width: auto;
+      }
     </style>
   </head>
   <body>
@@ -85,6 +106,19 @@
 
       <label for="targetLang">Target Language</label>
       <select id="targetLang"></select>
+
+      <hr />
+
+      <label for="obsidianVault">Obsidian Vault (optional)</label>
+      <input id="obsidianVault" type="text" placeholder="Default vault" />
+
+      <label for="obsidianFolder">Capture Folder</label>
+      <input id="obsidianFolder" type="text" placeholder="OpenRead" />
+
+      <label class="checkbox">
+        <input id="enrichOnCapture" type="checkbox" />
+        Enrich captures with the local model
+      </label>
 
       <button id="saveBtn" type="submit">Save</button>
       <div id="status"></div>
