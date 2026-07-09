@@ -33,7 +33,9 @@ through a bundled PDF.js viewer (below: MDN, and a real arXiv paper):
 Everything is configured in a small popup — a local Ollama server URL, a model,
 and a target language. No account, no API key:
 
-![Popup settings](docs/screenshots/popup.png)
+<p align="center">
+  <img src="docs/screenshots/popup.png" alt="Popup settings" width="300" />
+</p>
 
 > All screenshots are real end-to-end runs against a local `llama3.1` via Ollama —
 > captured by the browser E2E harness, not mock-ups.
