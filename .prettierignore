@@ -1,0 +1,6 @@
+.output
+.wxt
+node_modules
+public/pdfjs
+coverage
+pnpm-lock.yaml

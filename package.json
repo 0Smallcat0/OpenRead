@@ -1,0 +1,41 @@
+{
+  "name": "openread",
+  "version": "2.1.0",
+  "description": "Local-first, evaluation-driven LLM translation for web & PDF via Ollama — a case study in making streaming LLM output reliable.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip",
+    "compile": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "eval": "tsx eval/run.ts",
+    "postinstall": "wxt prepare"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.2.2",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.6.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.4",
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.63.0",
+    "vitest": "^4.1.10",
+    "wxt": "^0.20.27"
+  },
+  "dependencies": {
+    "@types/opencc-js": "^1.0.3",
+    "opencc-js": "^1.4.0"
+  }
+}
