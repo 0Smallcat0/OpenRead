@@ -16,7 +16,12 @@ import { generateSystemPrompt, getFewShotMessages } from '../core/prompt';
 import { cleanTranslationOutput } from '../core/sanitize';
 import { toTraditionalTW } from '../core/zh-convert';
 import { StreamAssembler } from '../core/stream';
-import type { ChatMessage, TranslationContext } from '../core/types';
+import { buildEnrichMessages, parseEnrichResponse } from '../core/enrich';
+import type {
+  ChatMessage,
+  TranslationContext,
+  EnrichResult,
+} from '../core/types';
 
 /** Build the OpenAI-compatible chat endpoint for an Ollama server base URL. */
 function endpoint(baseUrl: string): string {
@@ -178,4 +183,44 @@ export async function translateText(params: TranslateParams): Promise<string> {
 
   const cleaned = cleanTranslationOutput(text, content);
   return wantsTraditional(targetLang) ? toTraditionalTW(cleaned) : cleaned;
+}
+
+export interface EnrichParams {
+  text: string;
+  baseUrl: string;
+  model: string;
+  targetLang: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Single non-streamed enrichment call: ask a small model to label a capture
+ * with a title, summary, and tags. Best-effort by design — returns null on any
+ * HTTP or parse failure so a weak local model can never block a capture.
+ * Temperature 0 for determinism.
+ */
+export async function enrichText(
+  params: EnrichParams,
+): Promise<EnrichResult | null> {
+  const { text, baseUrl, model, targetLang, signal } = params;
+  if (!text || !baseUrl) return null;
+
+  const response = await fetch(endpoint(baseUrl), {
+    method: 'POST',
+    signal,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages: buildEnrichMessages(text, targetLang),
+      temperature: 0,
+      stream: false,
+    }),
+  });
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const content = data.choices?.[0]?.message?.content ?? '';
+  return parseEnrichResponse(content);
 }

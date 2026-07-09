@@ -20,6 +20,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "eval": "tsx eval/run.ts",
+    "eval:capture": "tsx eval/capture-run.ts",
     "postinstall": "wxt prepare"
   },
   "devDependencies": {

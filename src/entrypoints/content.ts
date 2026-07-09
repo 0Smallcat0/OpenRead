@@ -14,8 +14,14 @@ export default defineContentScript({
   main() {
     mountSelectionTranslator({
       getSettings: async () => {
-        const { modelId, targetLang } = await loadSettings();
-        return { modelId, targetLang };
+        const s = await loadSettings();
+        return {
+          modelId: s.modelId,
+          targetLang: s.targetLang,
+          obsidianVault: s.obsidianVault,
+          obsidianFolder: s.obsidianFolder,
+          enrichOnCapture: s.enrichOnCapture,
+        };
       },
     });
   },
