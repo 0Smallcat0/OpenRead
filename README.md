@@ -14,6 +14,30 @@ _proving_ the taming works.
 
 ---
 
+## Demo
+
+Select text on any page, click the floating **文**, and the
+Traditional-Chinese translation streams in — here on the
+[Wikipedia article for LLMs](https://en.wikipedia.org/wiki/Large_language_model),
+translated by a local model:
+
+![Web translation on Wikipedia](docs/screenshots/demo-wikipedia.png)
+
+The same selection UI works on developer docs and on PDFs — local or remote —
+through a bundled PDF.js viewer (below: MDN, and a real arXiv paper):
+
+| Developer docs (MDN) | Research PDF (arXiv) |
+| --- | --- |
+| ![Translating MDN docs](docs/screenshots/demo-mdn.png) | ![Translating an arXiv PDF](docs/screenshots/demo-arxiv-pdf.png) |
+
+Everything is configured in a small popup — a local Ollama server URL, a model,
+and a target language. No account, no API key:
+
+![Popup settings](docs/screenshots/popup.png)
+
+> All screenshots are real end-to-end runs against a local `llama3.1` via Ollama —
+> captured by the browser E2E harness, not mock-ups.
+
 ## Why this exists
 
 An LLM told to "translate this" will happily also emit a preamble
