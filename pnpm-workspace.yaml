@@ -1,8 +1,7 @@
-# Build-script allowlist. esbuild ships a platform binary via a postinstall
-# script; WXT/Vite/Vitest all need it, so allow it. spawn-sync is an unused
-# prebuilt fallback — explicitly denied so the tooling stops prompting.
+# Build-script approval (pnpm 11 `allowBuilds`; replaced v10's
+# onlyBuiltDependencies). esbuild ships a platform binary via a postinstall
+# script that WXT / Vite / Vitest need, so approve it. spawn-sync is an unused
+# prebuilt fallback — explicitly reviewed-and-denied so pnpm stops flagging it.
 allowBuilds:
   esbuild: true
   spawn-sync: false
-onlyBuiltDependencies:
-  - esbuild
