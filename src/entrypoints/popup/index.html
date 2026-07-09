@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenRead</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+      }
+      body {
+        width: 320px;
+        margin: 0;
+        padding: 16px;
+        background: #fff;
+        color: #111;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #1e1e1e;
+          color: #eee;
+        }
+        input,
+        select {
+          background: #2a2a2a;
+          color: #eee;
+          border-color: #444;
+        }
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 16px;
+      }
+      label {
+        display: block;
+        margin: 12px 0 4px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      input,
+      select {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 7px 9px;
+        font-size: 13px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+      }
+      button {
+        margin-top: 16px;
+        width: 100%;
+        padding: 9px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #fff;
+        background: #3b82f6;
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #2563eb;
+      }
+      #status {
+        margin-top: 10px;
+        height: 16px;
+        font-size: 12px;
+        color: #16a34a;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>OpenRead</h1>
+    <form id="settingsForm">
+      <label for="baseUrl">Ollama Server URL</label>
+      <input id="baseUrl" type="text" placeholder="http://localhost:11434" />
+
+      <label for="modelId">Model</label>
+      <input id="modelId" type="text" placeholder="qwen2.5" />
+
+      <label for="targetLang">Target Language</label>
+      <select id="targetLang"></select>
+
+      <button id="saveBtn" type="submit">Save</button>
+      <div id="status"></div>
+    </form>
+    <script src="./main.ts" type="module"></script>
+  </body>
+</html>

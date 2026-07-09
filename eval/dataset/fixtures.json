@@ -1,0 +1,163 @@
+[
+  {
+    "id": "preamble-en-tc-01",
+    "category": "preamble",
+    "source": "The algorithm runs in linear time.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "Sure, here is the translation:\n\n這個演算法以線性時間執行。"
+  },
+  {
+    "id": "preamble-en-tc-02",
+    "category": "preamble",
+    "source": "Please save your work before closing.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "Here is the translation: 關閉前請先儲存您的工作。"
+  },
+  {
+    "id": "preamble-en-tc-03",
+    "category": "preamble",
+    "source": "The meeting is scheduled for Monday.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "The user wants a translation.\n\n會議安排在星期一。"
+  },
+  {
+    "id": "preamble-en-tc-04",
+    "category": "preamble",
+    "source": "This function returns a promise.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "Translation: 這個函式會回傳一個 promise。"
+  },
+  {
+    "id": "preamble-think-01",
+    "category": "preamble",
+    "source": "Encryption protects your data.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "<think>The user is asking me to translate this sentence.</think>\n加密可以保護您的資料。"
+  },
+  {
+    "id": "preamble-zh-01",
+    "category": "preamble",
+    "source": "Let's review the quarterly results.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "好的，這段文字翻譯如下：\n\n讓我們來檢視季度業績。"
+  },
+  {
+    "id": "simplified-en-tc-01",
+    "category": "simplified-leak",
+    "source": "The network connection is unstable.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "网络连接不稳定。"
+  },
+  {
+    "id": "simplified-en-tc-02",
+    "category": "simplified-leak",
+    "source": "Open the software settings menu.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "打开软件设置菜单。"
+  },
+  {
+    "id": "simplified-en-tc-03",
+    "category": "simplified-leak",
+    "source": "The computer restarted automatically.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "电脑自动重新启动了。"
+  },
+  {
+    "id": "simplified-en-tc-04",
+    "category": "simplified-leak",
+    "source": "We need to optimize the database queries.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "我们需要优化数据库查询。"
+  },
+  {
+    "id": "simplified-en-tc-05",
+    "category": "simplified-leak",
+    "source": "Click the button to submit the form.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "点击按钮以提交表单。"
+  },
+  {
+    "id": "simplified-sc-tc-01",
+    "category": "simplified-leak",
+    "source": "这是一个关于机器学习的问题。",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "这是一个关于机器学习的问题。"
+  },
+  {
+    "id": "simplified-sc-tc-02",
+    "category": "simplified-leak",
+    "source": "请检查你的网络设置。",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "请检查你的网络设置。"
+  },
+  {
+    "id": "echo-en-tc-01",
+    "category": "echo",
+    "source": "Hello world",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "Hello world 你好世界"
+  },
+  {
+    "id": "echo-en-tc-02",
+    "category": "echo",
+    "source": "Good morning everyone",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "Good morning everyone 大家早安"
+  },
+  {
+    "id": "quotes-en-tc-01",
+    "category": "quotes",
+    "source": "Welcome back.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "「歡迎回來。」"
+  },
+  {
+    "id": "quotes-en-tc-02",
+    "category": "quotes",
+    "source": "Thank you for your patience.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "\"感謝您的耐心。\""
+  },
+  {
+    "id": "mixed-en-tc-01",
+    "category": "mixed",
+    "source": "The user profile was updated.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "Sure! Here is the translation:\n\n用户资料已更新。"
+  },
+  {
+    "id": "mixed-en-tc-02",
+    "category": "mixed",
+    "source": "Loading the video stream now.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "Translation: 正在加载视频流。"
+  },
+  {
+    "id": "clean-en-tc-01",
+    "category": "clean",
+    "source": "The sky is blue today.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "今天的天空是藍色的。"
+  },
+  {
+    "id": "clean-en-tc-02",
+    "category": "clean",
+    "source": "She plays the piano beautifully.",
+    "targetLang": "Traditional Chinese",
+    "rawOutput": "她的鋼琴彈得很優美。"
+  },
+  {
+    "id": "clean-en-en-01",
+    "category": "clean",
+    "source": "Bonjour le monde",
+    "targetLang": "English",
+    "rawOutput": "Hello world"
+  },
+  {
+    "id": "clean-en-en-02",
+    "category": "clean",
+    "source": "Guten Morgen",
+    "targetLang": "English",
+    "rawOutput": "Good morning"
+  }
+]
