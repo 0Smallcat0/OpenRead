@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# WXT build output
+.wxt/
+.output/
+web-ext.config.ts
+
+# Env / secrets (BYOK — never commit keys)
+.env
+.env.*
+!.env.example
+*.local
+
+# Eval harness artifacts (generated reports/caches)
+eval/.cache/
+eval/results/*.json
+!eval/results/.gitkeep
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
+
+# Test / coverage
+coverage/
