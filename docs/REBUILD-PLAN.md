@@ -98,7 +98,7 @@ eval/
 - [x] Demo GIF — real E2E capture (live qwen3 via Ollama), `docs/screenshots/demo.gif`
 - [x] CHANGELOG + semver, MIT LICENSE, CONTRIBUTING, issue + PR templates
 - [x] GitHub Actions CI (`.github/workflows/ci.yml`: compile + test + lint + build)
-- [x] Chrome Web Store submission kit — `docs/store/` (listing copy, 1280×800 screenshots, guide) + `PRIVACY.md`; only the $5 dev account + upload remain manual
+- [x] Chrome Web Store submission kit — `docs/store/` (listing copy, 1280×800 screenshots, guide) + `PRIVACY.md`; publishing itself deliberately skipped (see below)
 
 ## Bugs found in v1 (fix + cite as "what I improved")
 
@@ -161,9 +161,11 @@ eval/
   由 42.9% 提升到 71.4% 可用率；schema 約束解碼把最差模型從 93.3% 提到 100%；
   並保留誠實的負面結果（現代小模型 prompt-only 即 ~100% 輸出乾淨 JSON）。
 
-## Remaining manual steps (not code)
+## Chrome Web Store — intentionally not published
 
-- Chrome Web Store: create the $5 developer account and upload
-  `.output/openread-<version>-chrome.zip` following
-  [`docs/store/SUBMISSION.md`](store/SUBMISSION.md); after approval, add the
-  store link to the README and the resume bullets.
+Decision (2026-07-10): skip the Web Store submission — the $5 developer fee
+buys nothing for a portfolio (the repo, demo GIF, and install-from-source
+instructions carry the story). The complete submission kit is archived in
+[`docs/store/`](store/SUBMISSION.md) (listing copy, screenshots, privacy
+answers, step-by-step guide); if publishing ever becomes worthwhile, it is a
+20-minute task.
