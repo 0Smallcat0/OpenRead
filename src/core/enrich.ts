@@ -29,6 +29,24 @@ const MAX_TITLE_LEN = 120;
 const MAX_SUMMARY_LEN = 400;
 
 /**
+ * JSON schema for Ollama's constrained decoding (`format` parameter). The
+ * structured-output study (`pnpm eval:structured`) measured this closing the
+ * last unreliable tail — deepseek-r1 went 93.3% → 100% usable — at no latency
+ * cost, so the client sends it on every enrichment request. The tolerant
+ * parser below still runs afterwards: constrained decoding guarantees shape,
+ * not content hygiene (length caps, tag normalisation, deduping).
+ */
+export const ENRICH_SCHEMA = {
+  type: 'object',
+  properties: {
+    title: { type: 'string' },
+    summary: { type: 'string' },
+    tags: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['title', 'summary', 'tags'],
+} as const;
+
+/**
  * Build the chat messages for an enrichment request. Title and summary are
  * requested in `targetLang` so the downstream metadata matches the reader's
  * language. Input is trimmed and truncated to `ENRICH_INPUT_LIMIT`.

@@ -1,6 +1,6 @@
 {
   "name": "openread",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Local-first, evaluation-driven LLM translation for web & PDF via Ollama — a case study in making streaming LLM output reliable.",
   "type": "module",
   "license": "MIT",
@@ -21,6 +21,9 @@
     "format": "prettier --write .",
     "eval": "tsx eval/run.ts",
     "eval:capture": "tsx eval/capture-run.ts",
+    "eval:structured": "tsx eval/structured/run.ts",
+    "bench": "tsx eval/bench/run.ts",
+    "bench:agreement": "tsx eval/bench/agreement.ts",
     "postinstall": "wxt prepare"
   },
   "devDependencies": {

@@ -21,7 +21,9 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   baseUrl: 'http://localhost:11434',
-  modelId: 'qwen2.5',
+  // Benchmark-driven default: best quality/latency of the models measured
+  // in docs/BENCHMARK.md (chrF 46.3, TTFT-UI p50 451 ms on the test rig).
+  modelId: 'qwen3:latest',
   targetLang: 'Traditional Chinese',
   obsidianVault: '',
   obsidianFolder: 'OpenRead',

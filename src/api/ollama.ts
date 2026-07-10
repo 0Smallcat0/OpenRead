@@ -1,31 +1,43 @@
 /**
- * Ollama chat-completions client. Ollama exposes an OpenAI-compatible endpoint
- * (`/v1/chat/completions`) with identical SSE streaming, so the streaming
- * machinery here is standard — the only Ollama specifics are the local base URL
- * and the absence of any auth header (inference runs on the user's machine).
+ * Ollama chat client, on the native `/api/chat` endpoint.
  *
- * Two entry points:
- *   - translateStream: SSE streaming for the interactive path.
- *   - translateText:   single non-streamed call, used for retry fallbacks.
+ * Native rather than the OpenAI-compat `/v1` endpoint for one hard reason,
+ * found by the benchmark harness: on reasoning models (qwen3 family,
+ * deepseek-r1) the compat endpoint routes chain-of-thought into a separate
+ * `reasoning` field and — with thinking enabled by default — can burn the
+ * entire generation thinking while `content` stays empty, so the extension
+ * rendered nothing. The native endpoint accepts `think: false` (honoured by
+ * hybrid thinkers, tolerated as a no-op by non-thinkers, and by models that
+ * cannot stop thinking — e.g. deepseek-r1 — it still keeps the thinking out
+ * of `content`). Requires Ollama ≥ 0.9.
  *
- * All prompt building and output cleanup lives in the pure `core` modules; this
- * file only owns the network I/O. Cancellation is per-request via an injected
- * AbortSignal — no shared mutable controller, so concurrent callers never race.
+ * Streaming is NDJSON: one JSON object per line, `done: true` on the final
+ * chunk (which also carries token counts). `extractChunk` parses one line and
+ * is pure, so the stream parser is unit-testable without a socket.
+ *
+ * All prompt building and output cleanup lives in the pure `core` modules;
+ * this file only owns the network I/O. Cancellation is per-request via an
+ * injected AbortSignal — no shared mutable controller, so concurrent callers
+ * never race.
  */
 import { generateSystemPrompt, getFewShotMessages } from '../core/prompt';
 import { cleanTranslationOutput } from '../core/sanitize';
 import { toTraditionalTW } from '../core/zh-convert';
 import { StreamAssembler } from '../core/stream';
-import { buildEnrichMessages, parseEnrichResponse } from '../core/enrich';
+import {
+  buildEnrichMessages,
+  parseEnrichResponse,
+  ENRICH_SCHEMA,
+} from '../core/enrich';
 import type {
   ChatMessage,
   TranslationContext,
   EnrichResult,
 } from '../core/types';
 
-/** Build the OpenAI-compatible chat endpoint for an Ollama server base URL. */
+/** Build the native chat endpoint for an Ollama server base URL. */
 function endpoint(baseUrl: string): string {
-  return `${baseUrl.replace(/\/+$/, '')}/v1/chat/completions`;
+  return `${baseUrl.replace(/\/+$/, '')}/api/chat`;
 }
 
 function wantsTraditional(targetLang: string): boolean {
@@ -46,7 +58,8 @@ function buildUserContent(text: string, context?: TranslationContext): string {
   );
 }
 
-function buildMessages(
+/** Exported so the benchmark harness scores the exact shipped prompt. */
+export function buildMessages(
   text: string,
   targetLang: string,
   context?: TranslationContext,
@@ -61,27 +74,44 @@ function buildMessages(
 async function assertOk(response: Response): Promise<void> {
   if (response.ok) return;
   const data: unknown = await response.json().catch(() => ({}));
+  const error = (data as { error?: string | { message?: string } })?.error;
   const message =
-    (data as { error?: { message?: string } })?.error?.message ??
-    JSON.stringify(data);
+    typeof error === 'string'
+      ? error
+      : (error?.message ?? JSON.stringify(data));
   throw new Error(`Ollama ${response.status}: ${message}`);
 }
 
+export interface NativeChunk {
+  /** Assistant-content delta in this chunk; '' for thinking-only chunks. */
+  content: string;
+  /** Chain-of-thought delta, kept separate so it never reaches the UI. */
+  thinking: string;
+  done: boolean;
+  /** Generated-token count, present on the `done: true` chunk. */
+  evalCount?: number;
+}
+
 /**
- * Parse one SSE line into its delta content. Returns null for keep-alives,
- * the `[DONE]` sentinel, non-`data:` lines, and unparseable payloads. Pure, so
- * the stream parser is unit-testable without a socket.
+ * Parse one NDJSON stream line from `/api/chat`. Returns null for blank lines
+ * and unparseable payloads. Pure, so the stream parser is unit-testable.
  */
-export function extractDelta(line: string): string | null {
+export function extractChunk(line: string): NativeChunk | null {
   const trimmed = line.trim();
-  if (!trimmed.startsWith('data:')) return null;
-  const payload = trimmed.slice('data:'.length).trim();
-  if (payload === '' || payload === '[DONE]') return null;
+  if (!trimmed) return null;
   try {
-    const json = JSON.parse(payload) as {
-      choices?: Array<{ delta?: { content?: string } }>;
+    const json = JSON.parse(trimmed) as {
+      message?: { content?: string; thinking?: string };
+      done?: boolean;
+      eval_count?: number;
     };
-    return json.choices?.[0]?.delta?.content ?? null;
+    if (typeof json !== 'object' || json === null) return null;
+    return {
+      content: json.message?.content ?? '',
+      thinking: json.message?.thinking ?? '',
+      done: json.done === true,
+      evalCount: json.eval_count,
+    };
   } catch {
     return null;
   }
@@ -113,8 +143,9 @@ export async function translateStream(params: StreamParams): Promise<void> {
     body: JSON.stringify({
       model,
       messages: buildMessages(text, targetLang, context),
-      temperature: retryCount > 0 ? 0.7 : 0.3,
       stream: true,
+      think: false,
+      options: { temperature: retryCount > 0 ? 0.7 : 0.3 },
     }),
   });
   await assertOk(response);
@@ -135,9 +166,9 @@ export async function translateStream(params: StreamParams): Promise<void> {
       const lines = lineBuffer.split('\n');
       lineBuffer = lines.pop() ?? '';
       for (const line of lines) {
-        const delta = extractDelta(line);
-        if (delta === null) continue;
-        const emit = assembler.push(delta);
+        const chunk = extractChunk(line);
+        if (chunk === null || chunk.content === '') continue;
+        const emit = assembler.push(chunk.content);
         if (emit) onChunk(emit);
       }
     }
@@ -170,15 +201,17 @@ export async function translateText(params: TranslateParams): Promise<string> {
     body: JSON.stringify({
       model,
       messages: buildMessages(text, targetLang, context),
-      temperature: 0.3,
+      stream: false,
+      think: false,
+      options: { temperature: 0.3 },
     }),
   });
   await assertOk(response);
 
   const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
+    message?: { content?: string };
   };
-  const content = data.choices?.[0]?.message?.content;
+  const content = data.message?.content;
   if (!content) throw new Error('Ollama returned an empty message');
 
   const cleaned = cleanTranslationOutput(text, content);
@@ -212,15 +245,16 @@ export async function enrichText(
     body: JSON.stringify({
       model,
       messages: buildEnrichMessages(text, targetLang),
-      temperature: 0,
       stream: false,
+      think: false,
+      format: ENRICH_SCHEMA,
+      options: { temperature: 0 },
     }),
   });
   if (!response.ok) return null;
 
   const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
+    message?: { content?: string };
   };
-  const content = data.choices?.[0]?.message?.content ?? '';
-  return parseEnrichResponse(content);
+  return parseEnrichResponse(data.message?.content ?? '');
 }

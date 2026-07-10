@@ -48,10 +48,14 @@ The translation reliability harness runs offline against a fixed dataset:
 pnpm eval
 ```
 
-The optional live LLM-as-judge (`eval/judge.ts`) calls a real model instead of
-the fixed dataset. It needs a local [Ollama](https://ollama.com/) server —
-install Ollama, then `ollama pull qwen2.5` — and reads the server URL from the
-`OLLAMA_URL` env var (default `http://localhost:11434`); no API key required.
+The live evaluation suite — `pnpm bench` (model × prompt benchmark),
+`pnpm eval:structured` (structured-output study), `pnpm bench:agreement`
+(judge↔human calibration), and the older `eval/judge.ts` — calls real models
+instead of fixed datasets. It needs a local [Ollama](https://ollama.com/)
+server (≥ 0.9) — install Ollama, then `ollama pull qwen3` — and reads the
+server URL from the `OLLAMA_URL` env var (default `http://localhost:11434`);
+no API key required. See [`docs/BENCHMARK.md`](docs/BENCHMARK.md) for the
+methodology.
 
 ## Project layout
 

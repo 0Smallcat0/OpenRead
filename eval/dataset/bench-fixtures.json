@@ -1,0 +1,191 @@
+[
+  {
+    "id": "news-01",
+    "domain": "news",
+    "source": "The central bank raised interest rates by a quarter point on Thursday, citing persistent inflation and a tight labor market.",
+    "reference": "中央銀行週四宣布升息一碼，理由是通膨持續居高不下，且勞動市場依然緊俏。",
+    "note": "Taiwan financial jargon: 升息一碼 for a quarter-point hike."
+  },
+  {
+    "id": "news-02",
+    "domain": "news",
+    "source": "Wildfires forced thousands of residents to evacuate coastal towns overnight, and officials warned that strong winds could spread the flames further inland.",
+    "reference": "野火迫使數千名居民連夜撤離沿海城鎮，官員警告強風可能使火勢進一步向內陸蔓延。",
+    "note": "Compound sentence with reported speech."
+  },
+  {
+    "id": "news-03",
+    "domain": "news",
+    "source": "The company's shares fell nearly eight percent after it cut its annual revenue forecast for the second time this year.",
+    "reference": "該公司今年第二度下修年度營收預測後，股價下跌近百分之八。",
+    "note": "Taiwan financial term 下修; clause reordering required for natural zh."
+  },
+  {
+    "id": "news-04",
+    "domain": "news",
+    "source": "Negotiators reached a provisional agreement early Saturday, though both sides cautioned that several key issues remain unresolved.",
+    "reference": "談判代表於週六凌晨達成臨時協議，但雙方均提醒，數項關鍵議題仍懸而未決。",
+    "note": "Concessive clause; formal register."
+  },
+  {
+    "id": "tech-01",
+    "domain": "tech-docs",
+    "source": "The cache stores frequently accessed data in memory, reducing the number of round trips to the database.",
+    "reference": "快取會將經常存取的資料儲存在記憶體中，減少往返資料庫的次數。",
+    "note": "Taiwan IT terms: 快取, 存取, 資料, 記憶體, 資料庫."
+  },
+  {
+    "id": "tech-02",
+    "domain": "tech-docs",
+    "source": "If the request fails with a timeout, the client retries with exponential backoff, up to a maximum of five attempts.",
+    "reference": "若請求因逾時而失敗，用戶端會以指數退避方式重試，最多五次。",
+    "note": "Taiwan terms: 逾時 (not 超时), 用戶端."
+  },
+  {
+    "id": "tech-03",
+    "domain": "tech-docs",
+    "source": "This function returns a promise that resolves when all pending writes have been flushed to disk.",
+    "reference": "此函式會回傳一個 Promise，當所有待處理的寫入都已寫入磁碟時便會完成。",
+    "note": "Taiwan terms: 函式 (not 函数), 回傳 (not 返回); Promise conventionally untranslated."
+  },
+  {
+    "id": "tech-04",
+    "domain": "tech-docs",
+    "source": "Deprecated: use the async variant instead. This method blocks the main thread and will be removed in the next major release.",
+    "reference": "已棄用：請改用非同步版本。此方法會阻塞主執行緒，並將在下一個主要版本中移除。",
+    "note": "Taiwan terms: 非同步 (not 异步), 執行緒 (not 线程)."
+  },
+  {
+    "id": "tech-05",
+    "domain": "tech-docs",
+    "source": "By default, the server listens on port 8080; set the PORT environment variable to override this behavior.",
+    "reference": "伺服器預設在連接埠 8080 上監聽；設定 PORT 環境變數即可覆寫此行為。",
+    "note": "Taiwan terms: 伺服器, 預設, 連接埠 (not 端口); PORT must stay verbatim."
+  },
+  {
+    "id": "acad-01",
+    "domain": "academic",
+    "source": "We propose a novel attention mechanism that reduces memory consumption by forty percent while preserving accuracy on downstream tasks.",
+    "reference": "我們提出一種新穎的注意力機制，可在維持下游任務準確率的同時，將記憶體用量降低百分之四十。",
+    "note": "ML paper abstract style; spelled-out percentage."
+  },
+  {
+    "id": "acad-02",
+    "domain": "academic",
+    "source": "The results suggest that the observed correlation is largely driven by confounding variables rather than a causal relationship.",
+    "reference": "結果顯示，觀察到的相關性主要來自干擾變數，而非因果關係。",
+    "note": "Statistics register: 干擾變數, 因果關係."
+  },
+  {
+    "id": "acad-03",
+    "domain": "academic",
+    "source": "Participants were randomly assigned to one of three conditions, and the experiment was conducted double-blind.",
+    "reference": "受試者被隨機分派至三種實驗條件之一，實驗採雙盲方式進行。",
+    "note": "Methods-section phrasing: 受試者, 隨機分派, 雙盲."
+  },
+  {
+    "id": "acad-04",
+    "domain": "academic",
+    "source": "These findings should be interpreted with caution, as the sample size was small and drawn from a single institution.",
+    "reference": "由於樣本數少且僅來自單一機構，這些發現應謹慎解讀。",
+    "note": "Hedging language; cause-first reordering for natural zh."
+  },
+  {
+    "id": "ui-01",
+    "domain": "ui-strings",
+    "source": "Your session has expired. Please sign in again to continue.",
+    "reference": "您的工作階段已逾期，請重新登入以繼續。",
+    "note": "Taiwan Microsoft-glossary terms: 工作階段 (not 会话), 登入 (not 登录)."
+  },
+  {
+    "id": "ui-02",
+    "domain": "ui-strings",
+    "source": "Are you sure you want to delete this file? This action cannot be undone.",
+    "reference": "確定要刪除這個檔案嗎？此動作無法復原。",
+    "note": "Taiwan terms: 檔案 (not 文件), 復原."
+  },
+  {
+    "id": "ui-03",
+    "domain": "ui-strings",
+    "source": "Settings saved. Restart the application for the changes to take effect.",
+    "reference": "設定已儲存。請重新啟動應用程式，變更才會生效。",
+    "note": "Taiwan terms: 儲存 (not 保存), 應用程式 (not 应用程序)."
+  },
+  {
+    "id": "ui-04",
+    "domain": "ui-strings",
+    "source": "Drag and drop files here, or click to browse.",
+    "reference": "將檔案拖曳至此，或按一下以瀏覽。",
+    "note": "Taiwan UI conventions: 拖曳, 按一下 (not 单击/点击)."
+  },
+  {
+    "id": "coll-01",
+    "domain": "colloquial",
+    "source": "Honestly, the movie wasn't as bad as everyone said — I'd probably watch it again.",
+    "reference": "老實說，這部電影沒有大家說的那麼糟——我搞不好還會再看一次。",
+    "note": "Casual register; hedged future."
+  },
+  {
+    "id": "coll-02",
+    "domain": "colloquial",
+    "source": "Sorry for the late reply! Things have been crazy at work this week.",
+    "reference": "抱歉這麼晚才回覆！這週工作忙翻了。",
+    "note": "Chat register; idiomatic 忙翻了."
+  },
+  {
+    "id": "coll-03",
+    "domain": "colloquial",
+    "source": "That restaurant is totally worth the wait, but go early or you'll be standing in line forever.",
+    "reference": "那間餐廳絕對值得等，但要早點去，不然會排隊排到天荒地老。",
+    "note": "Hyperbole; measure word 間 for restaurants."
+  },
+  {
+    "id": "coll-04",
+    "domain": "colloquial",
+    "source": "I can't believe he actually pulled it off — everyone thought the deadline was impossible.",
+    "reference": "真不敢相信他居然辦到了——大家都以為那個期限根本不可能達成。",
+    "note": "Phrasal verb 'pull it off'; exclamative."
+  },
+  {
+    "id": "tricky-01",
+    "domain": "tricky",
+    "source": "It's not rocket science — just read the manual before you start.",
+    "reference": "這又不是什麼高深的學問——開始前先把說明書讀一讀就好。",
+    "note": "Idiom must not be translated literally (火箭科學)."
+  },
+  {
+    "id": "tricky-02",
+    "domain": "tricky",
+    "source": "The new chip is 3.2 times faster, draws 15 watts under load, and costs $249.",
+    "reference": "新晶片速度快了 3.2 倍，滿載時功耗 15 瓦，售價 249 美元。",
+    "note": "Numbers and units must survive; Taiwan term 晶片 (not 芯片)."
+  },
+  {
+    "id": "tricky-03",
+    "domain": "tricky",
+    "source": "Run `npm install` first, then set `DEBUG=true` in your .env file to enable verbose logging.",
+    "reference": "請先執行 `npm install`，接著在 .env 檔案中設定 `DEBUG=true`，即可啟用詳細記錄。",
+    "note": "Inline code and filenames must stay verbatim."
+  },
+  {
+    "id": "tricky-04",
+    "domain": "tricky",
+    "source": "The Taipei Metro carries more than two million passengers a day, and the fare depends on the distance traveled.",
+    "reference": "台北捷運每天載運超過兩百萬人次，票價依乘車距離而定。",
+    "note": "Proper noun 台北捷運; passenger-trips measure 人次."
+  },
+  {
+    "id": "tricky-05",
+    "domain": "tricky",
+    "source": "Large language models generate text one token at a time, which means the user interface receives a stream of small fragments rather than a complete answer. A streaming UI must decide when to display each fragment: showing tokens immediately feels responsive but risks exposing artifacts, while buffering the entire response hides artifacts at the cost of a long blank wait. Most production systems settle on a compromise between the two.",
+    "reference": "大型語言模型逐一產生文字 token，也就是說，使用者介面收到的是一連串的小片段，而不是一次完整的答案。串流介面必須決定何時顯示每個片段：立即顯示雖然感覺反應靈敏，卻可能讓瑕疵直接暴露在畫面上；把整段回應先緩衝起來雖能遮住瑕疵，代價卻是漫長的空白等待。多數正式上線的系統會在兩者之間取得折衷。",
+    "note": "Multi-sentence paragraph; stresses streaming TTFT and long-output behaviour."
+  },
+  {
+    "id": "tricky-06",
+    "domain": "tricky",
+    "source": "Break a leg tonight! You've rehearsed this a hundred times, so trust yourself and enjoy the stage.",
+    "reference": "今晚祝你演出順利！這齣戲你都排練一百次了，相信自己，好好享受舞台吧。",
+    "note": "Idiom 'break a leg' must not become 斷腿; encouragement register."
+  }
+]

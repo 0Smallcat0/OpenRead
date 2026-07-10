@@ -34,9 +34,19 @@ public/
 eval/
   dataset/fixtures.json         curated translation failure-mode fixtures
   dataset/capture-fixtures.json curated small-model enrichment reply shapes
+  dataset/bench-fixtures.json   27 EN→zh-TW segments with Taiwan-convention references
+  dataset/enrich-inputs.json    16 realistic capture excerpts (EN/zh-TW/mixed)
   detectors.ts                  preamble / Simplified / echo detectors (reuse core)
-  run.ts                        translation before→after runner → eval/RESULTS.md
-  capture-run.ts                enrichment-parser runner → eval/CAPTURE-RESULTS.md
+  run.ts                        offline before→after runner → eval/RESULTS.md (CI gate)
+  capture-run.ts                offline enrichment-parser runner → eval/CAPTURE-RESULTS.md
+  bench/                        live model × prompt benchmark (needs Ollama, not CI)
+    chrf.ts                       chrF metric, sacrebleu-cross-validated
+    kappa.ts                      Cohen's κ (plain + quadratic-weighted)
+    run.ts                        matrix runner + LLM judge → eval/BENCHMARK-RESULTS.md
+    agreement.ts                  human-labeling page + judge↔human κ → eval/AGREEMENT.md
+  structured/                   live structured-output study (needs Ollama, not CI)
+    taxonomy.ts                   failure-shape classifier for small-model replies
+    run.ts                        prompt vs schema-constrained → eval/STRUCTURED-RESULTS.md
 ```
 
 ### Why this split
@@ -56,14 +66,22 @@ eval/
 A selection triggers a long-lived port to the background worker, which owns the
 network call and streams cleaned chunks back. Each request has its own
 `AbortController`, so a new selection (or a closed panel) cancels the previous
-SSE cleanly.
+stream cleanly.
+
+The client talks to Ollama's **native `/api/chat`** endpoint (NDJSON streaming)
+with `think: false`. The benchmark found that the OpenAI-compat `/v1` endpoint
+routes reasoning-model chain-of-thought into a separate field and can leave
+`content` empty for the entire generation (qwen3.5: 99 s, 4,055 tokens, zero
+visible output) — the native endpoint disables thinking on hybrid models and
+keeps it out of `content` on models that cannot stop (deepseek-r1). Requires
+Ollama ≥ 0.9. See [`BENCHMARK.md`](BENCHMARK.md) §6.
 
 ```mermaid
 sequenceDiagram
     participant U as User
     participant C as Content script (ui/selection.ts)
     participant B as Background broker
-    participant O as Ollama (local, SSE)
+    participant O as Ollama (local, /api/chat NDJSON)
 
     U->>C: select text, click 文
     C->>C: shouldBypassAI(text, target)?
@@ -72,14 +90,14 @@ sequenceDiagram
     else needs translation
         C->>B: connect "stream-translate" + START_STREAM {text, target, model}
         B->>B: load Ollama base URL from storage; new AbortController
-        B->>O: POST /chat/completions (stream:true, signal)
-        loop each SSE delta
-            O-->>B: data: {delta.content}
+        B->>O: POST /api/chat (stream:true, think:false, signal)
+        loop each NDJSON chunk
+            O-->>B: {message:{content}, done:false}
             B->>B: StreamAssembler.push (buffer opening,<br/>strip preamble, SC→TC)
             B-->>C: {status:"streaming", chunk}
             C-->>U: append chunk to panel
         end
-        O-->>B: data: [DONE]
+        O-->>B: {done:true, eval_count}
         B-->>C: {status:"done"}
     end
 
@@ -95,5 +113,7 @@ sequenceDiagram
 | OpenCC `s2twp` over a hand-rolled map                                           | v1's unconditional character map corrupted common words (`界面→界麵`). Phrase-level conversion is correct and maintained. |
 | Ollama base URL read in background from storage; request goes to a local server | No secret rides the message bus — and since the request never leaves the machine, there's nothing to leak either way.     |
 | Offline, deterministic eval                                                     | Before/after numbers are reproducible in CI without a running Ollama server, so they are honest to cite.                  |
+| Native `/api/chat` + `think: false`, not the OpenAI-compat `/v1`                | On reasoning models `/v1` can burn the whole generation as hidden `reasoning` with `content` empty — the user sees nothing. Found by the benchmark; see `docs/BENCHMARK.md` §6. |
+| Live benchmark imports the shipped modules                                      | `pnpm bench` scores `buildMessages`/`extractChunk`/`StreamAssembler` themselves, so its numbers describe the product, not a re-implementation. |
 | Capture writes via `obsidian://new` from the content script, not a new API      | Keeps least-privilege intact (no `downloads`/native-host permission) and reuses the user gesture; oversized notes fall back to the clipboard. |
 | Captures are `status: raw`; heavy synthesis deferred to a downstream model      | On-device small models fail at structured output (measured), so OpenRead ships a reliable raw note and lets a stronger "second brain" process it. |

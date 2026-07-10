@@ -1,0 +1,114 @@
+[
+  {
+    "id": "mdn-fetch",
+    "url": "https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API",
+    "pageTitle": "Fetch API - Web APIs | MDN",
+    "lang": "en",
+    "text": "The Fetch API provides an interface for fetching resources (including across the network). It is a more powerful and flexible replacement for XMLHttpRequest. The fetch() method takes one mandatory argument, the path to the resource you want to fetch, and returns a Promise that resolves to the Response to that request — as soon as the server responds with headers — even if the server response is an HTTP error status. You can also optionally pass in an init options object as the second argument. Once a Response is retrieved, there are a number of methods available to define what the body content is and how it should be handled."
+  },
+  {
+    "id": "arxiv-attention",
+    "url": "https://arxiv.org/abs/1706.03762",
+    "pageTitle": "Attention Is All You Need",
+    "lang": "en",
+    "text": "The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely. Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train."
+  },
+  {
+    "id": "news-chipact",
+    "url": "https://example-news.com/semiconductor-subsidies",
+    "pageTitle": "Government unveils new semiconductor subsidies",
+    "lang": "en",
+    "text": "The government announced a fresh round of subsidies for domestic semiconductor manufacturing on Tuesday, earmarking twelve billion dollars for new fabrication plants and workforce training programs. Officials framed the package as a national-security measure, arguing that dependence on overseas chip production leaves critical industries exposed to supply-chain shocks. Industry groups welcomed the funding but cautioned that permitting delays, not capital, remain the biggest obstacle to breaking ground on new fabs."
+  },
+  {
+    "id": "blog-burnout",
+    "url": "https://example-blog.dev/on-burnout",
+    "pageTitle": "What I learned from six months of burnout",
+    "lang": "en",
+    "text": "The strangest part of burnout was that it did not feel like exhaustion at first. It felt like indifference. Code reviews I used to enjoy became chores, and side projects sat untouched for weeks. What finally helped was not a vacation — it was renegotiating what I was responsible for, saying no to two recurring meetings, and rediscovering a hobby that had nothing to do with computers. If you are waiting for a dramatic collapse before taking burnout seriously, you are waiting too long."
+  },
+  {
+    "id": "wiki-photosynthesis",
+    "url": "https://en.wikipedia.org/wiki/Photosynthesis",
+    "pageTitle": "Photosynthesis - Wikipedia",
+    "lang": "en",
+    "text": "Photosynthesis is a system of biological processes by which photosynthetic organisms, such as most plants, algae, and cyanobacteria, convert light energy, typically from sunlight, into the chemical energy necessary to fuel their metabolism. The term usually refers to oxygenic photosynthesis, where oxygen is produced as a byproduct and some of the chemical energy produced is stored in energy-rich organic compounds such as sugars, which are synthesized from carbon dioxide and water."
+  },
+  {
+    "id": "docs-docker",
+    "url": "https://docs.docker.com/get-started/overview/",
+    "pageTitle": "Docker overview",
+    "lang": "en",
+    "text": "Docker is an open platform for developing, shipping, and running applications. Docker enables you to separate your applications from your infrastructure so you can deliver software quickly. With Docker, you can manage your infrastructure in the same ways you manage your applications. Docker provides the ability to package and run an application in a loosely isolated environment called a container. The isolation and security lets you run many containers simultaneously on a given host."
+  },
+  {
+    "id": "forum-keyboard",
+    "url": "https://example-forum.net/t/mechanical-keyboards",
+    "pageTitle": "Are mechanical keyboards worth it?",
+    "lang": "en",
+    "text": "Honestly after three years on a mechanical board I can't go back. It's not about typing speed — mine made me maybe 2% faster at best. It's that typing stopped being something I noticed. Get hot-swap sockets for your first board so you can try different switches without soldering, ignore anyone who tells you there's one correct switch, and budget for a decent keycap set because the stock ones on cheap boards feel like wet cardboard."
+  },
+  {
+    "id": "readme-sqlite",
+    "url": "https://github.com/example/sqlite-backup",
+    "pageTitle": "sqlite-backup — streaming online backups for SQLite",
+    "lang": "en",
+    "text": "sqlite-backup performs online backups of live SQLite databases without blocking writers. It uses the SQLite Online Backup API to copy pages incrementally, retries automatically when the source database is busy, and verifies the resulting snapshot with a full integrity check. Backups can be streamed to local disk, S3-compatible object storage, or any writable stream. Requires Node 18+. Install with npm install sqlite-backup, then run npx sqlite-backup ./data.db ./snapshots/."
+  },
+  {
+    "id": "paper-sleep",
+    "url": "https://example-journal.org/sleep-memory",
+    "pageTitle": "Sleep-dependent memory consolidation",
+    "lang": "en",
+    "text": "A growing body of evidence indicates that sleep plays a causal role in memory consolidation. During slow-wave sleep, hippocampal replay of recently encoded experiences coordinates with neocortical slow oscillations and thalamocortical spindles, a dialogue thought to transfer labile memory traces into stable cortical networks. Targeted memory reactivation experiments, in which learning-associated cues are re-presented during sleep, reliably bias which memories are strengthened, providing causal evidence for the replay hypothesis."
+  },
+  {
+    "id": "tutorial-git",
+    "url": "https://example-tutorials.io/git-rebase",
+    "pageTitle": "A practical guide to git rebase",
+    "lang": "en",
+    "text": "Rebase rewrites history by replaying your commits on top of a new base commit. Used well, it produces a linear, readable history; used carelessly, it rewrites commits your teammates already depend on. The golden rule: never rebase commits that have been pushed to a shared branch. For local cleanup before opening a pull request, interactive rebase lets you squash fixup commits, reword messages, and reorder changes so reviewers see a coherent story instead of your actual chaotic process."
+  },
+  {
+    "id": "zh-news-rain",
+    "url": "https://example-news.tw/typhoon-rain",
+    "pageTitle": "颱風外圍環流影響 北部山區豪雨特報",
+    "lang": "zh-TW",
+    "text": "受到颱風外圍環流影響，氣象署今日針對北部山區發布豪雨特報，提醒民眾防範坍方與落石。氣象署指出，這波降雨預計持續到週五清晨，山區累積雨量可能達三百毫米，河川上游地區民眾應避免前往溪邊活動。市政府已預先開設應變中心，並要求各區公所檢查抽水站與側溝，避免低窪地區重演積水災情。"
+  },
+  {
+    "id": "zh-tech-battery",
+    "url": "https://example-tech.tw/solid-state-battery",
+    "pageTitle": "固態電池量產進度",
+    "lang": "zh-TW",
+    "text": "固態電池被視為下一代電動車的關鍵技術，以固態電解質取代傳統鋰電池的液態電解液，理論上能同時提升能量密度與安全性。不過量產仍面臨兩大瓶頸：一是固態電解質與電極介面的阻抗問題，二是製程良率遠低於現有產線。多家廠商宣稱將在二〇二七年前後啟動小規模量產，但分析師普遍認為，成本要降到與液態鋰電池相當，至少還需要十年。"
+  },
+  {
+    "id": "zh-essay-reading",
+    "url": "https://example-essays.tw/slow-reading",
+    "pageTitle": "慢讀的必要",
+    "lang": "zh-TW",
+    "text": "資訊爆炸的年代，我們習慣用瀏覽取代閱讀，用摘要取代思考。慢讀不是懷舊，而是一種抵抗：抵抗演算法替你決定什麼值得注意，抵抗把知識壓縮成三行重點的誘惑。真正改變一個人的書，往往需要在某一頁停下來，反覆讀同一段話，讓它跟你既有的經驗互相摩擦。這種摩擦無法加速，也不該加速。"
+  },
+  {
+    "id": "zh-recipe-braise",
+    "url": "https://example-food.tw/braised-pork",
+    "pageTitle": "家常滷肉的三個關鍵",
+    "lang": "zh-TW",
+    "text": "滷肉要好吃，第一是選肉，帶皮五花切成兩公分見方，肥瘦相間才有口感；第二是炒糖色，冰糖小火炒到琥珀色再下肉，顏色自然紅亮，不必靠老抽；第三是火候，大火煮滾後轉小火慢滷四十分鐘，關火再燜二十分鐘讓肉吸回湯汁。醬油選純釀造的，加一點米酒和青蔥結，不要放八角以外太多香料，家常味重點在肉香不在藥膳味。"
+  },
+  {
+    "id": "mixed-api-error",
+    "url": "https://example-status.io/incident-2077",
+    "pageTitle": "Incident report: elevated API error rates",
+    "lang": "mixed",
+    "text": "本次事故起因於一次資料庫連線池設定變更。Between 14:02 and 14:47 UTC, the API returned elevated 503 rates (peak 18%) because the new pool size exceeded the database's max_connections limit, causing connection storms on failover. 我們已將連線池上限調回安全值，並新增部署前的組態檢查。Action items include adding a canary stage for configuration-only changes and alerting on connection-refused errors from the database, not just on HTTP error rates."
+  },
+  {
+    "id": "mixed-release-notes",
+    "url": "https://github.com/example/app/releases/v3.2.0",
+    "pageTitle": "v3.2.0 release notes",
+    "lang": "mixed",
+    "text": "v3.2.0 主要更新：新增離線模式，文件在無網路時仍可編輯，重新連線後自動同步。Breaking change: the plugins API now requires an explicit permissions manifest; plugins without one will fail to load with error PLUGIN_NO_MANIFEST. 效能方面，大型文件的開啟速度提升約 40%，記憶體用量降低 25%。See the migration guide for details on updating existing plugins before upgrading."
+  }
+]
