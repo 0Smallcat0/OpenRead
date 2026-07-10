@@ -1,0 +1,242 @@
+[
+  {
+    "key": "deepseek-r1:8b|engineered|coll-03",
+    "adequacy": 4,
+    "fluency": 2,
+    "localization": 1
+  },
+  {
+    "key": "qwen3:latest|naive|coll-02",
+    "adequacy": 5,
+    "fluency": 3,
+    "localization": 1
+  },
+  {
+    "key": "qwen3:latest|engineered|acad-04",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "qwen3.5:latest|naive|acad-03",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "deepseek-r1:8b|naive|tricky-05",
+    "adequacy": 4,
+    "fluency": 3,
+    "localization": 2
+  },
+  {
+    "key": "llama3.1:latest|naive|coll-04",
+    "adequacy": 5,
+    "fluency": 3,
+    "localization": 2
+  },
+  {
+    "key": "qwen3.5:latest|naive|news-04",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "llama3.1:latest|engineered|tech-04",
+    "adequacy": 2,
+    "fluency": 3,
+    "localization": 2
+  },
+  {
+    "key": "deepseek-r1:8b|naive|acad-03",
+    "adequacy": 3,
+    "fluency": 3,
+    "localization": 3
+  },
+  {
+    "key": "deepseek-r1:8b|engineered|tricky-01",
+    "adequacy": 2,
+    "fluency": 2,
+    "localization": 1
+  },
+  {
+    "key": "qwen3:latest|engineered|tech-02",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "qwen3:latest|naive|news-04",
+    "adequacy": 1,
+    "fluency": 1,
+    "localization": 2
+  },
+  {
+    "key": "deepseek-r1:8b|engineered|acad-01",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "qwen3:latest|engineered|acad-02",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 4
+  },
+  {
+    "key": "llama3.1:latest|engineered|tricky-05",
+    "adequacy": 3,
+    "fluency": 2,
+    "localization": 2
+  },
+  {
+    "key": "deepseek-r1:8b|naive|tricky-06",
+    "adequacy": 1,
+    "fluency": 1,
+    "localization": 1
+  },
+  {
+    "key": "qwen3.5:latest|naive|tech-03",
+    "adequacy": 4,
+    "fluency": 3,
+    "localization": 2
+  },
+  {
+    "key": "qwen3.5:latest|engineered|coll-04",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "deepseek-r1:8b|engineered|tricky-04",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "qwen3.5:latest|engineered|tricky-03",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "llama3.1:latest|naive|acad-03",
+    "adequacy": 4,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "llama3.1:latest|naive|coll-02",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "deepseek-r1:8b|naive|tricky-02",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 4
+  },
+  {
+    "key": "qwen3.5:latest|engineered|ui-04",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "qwen3.5:latest|naive|ui-02",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "qwen3:latest|engineered|coll-02",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "llama3.1:latest|engineered|tech-01",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "qwen3.5:latest|engineered|news-01",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "llama3.1:latest|naive|tricky-01",
+    "adequacy": 4,
+    "fluency": 3,
+    "localization": 1
+  },
+  {
+    "key": "deepseek-r1:8b|engineered|news-04",
+    "adequacy": 3,
+    "fluency": 5,
+    "localization": 3
+  },
+  {
+    "key": "qwen3:latest|naive|tricky-05",
+    "adequacy": 4,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "llama3.1:latest|naive|acad-02",
+    "adequacy": 4,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "qwen3:latest|naive|tech-01",
+    "adequacy": 4,
+    "fluency": 3,
+    "localization": 3
+  },
+  {
+    "key": "qwen3:latest|engineered|tech-03",
+    "adequacy": 3,
+    "fluency": 3,
+    "localization": 3
+  },
+  {
+    "key": "qwen3.5:latest|naive|acad-01",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "qwen3.5:latest|engineered|acad-04",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "deepseek-r1:8b|naive|ui-01",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "llama3.1:latest|engineered|tricky-03",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "qwen3:latest|naive|acad-03",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 5
+  },
+  {
+    "key": "llama3.1:latest|engineered|tricky-02",
+    "adequacy": 5,
+    "fluency": 5,
+    "localization": 4
+  }
+]

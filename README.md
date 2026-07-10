@@ -77,8 +77,11 @@ asks the opposite question against live models: **which model should you run,
 and what does each design choice cost?** 27 curated EN→zh-TW fixtures with
 Taiwan-convention references × 4 models × 2 prompt conditions, streamed
 through the exact shipped pipeline and scored with sacrebleu-cross-validated
-chrF, artifact detectors, latency probes, and a schema-constrained LLM judge
-(itself calibrated against human labels — Cohen's κ workflow included).
+chrF, artifact detectors, latency probes, and a schema-constrained LLM judge —
+itself calibrated against 40 blind human labels: quadratic-weighted Cohen's κ
+0.53 on adequacy (moderate — usable), 0.21–0.27 on fluency/localization (weak
+— so quality claims lean on chrF + adequacy, and the judge's localization
+scores are treated as an upper bound; [`eval/AGREEMENT.md`](eval/AGREEMENT.md)).
 
 | Model | chrF ↑ | TTFT-UI p50 | Tokens/s | Verdict |
 | --- | --- | --- | --- | --- |

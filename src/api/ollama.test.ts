@@ -3,7 +3,8 @@ import { extractChunk, translateStream } from './ollama';
 
 describe('extractChunk', () => {
   it('extracts content from a native NDJSON line', () => {
-    const line = '{"message":{"role":"assistant","content":"你好"},"done":false}';
+    const line =
+      '{"message":{"role":"assistant","content":"你好"},"done":false}';
     expect(extractChunk(line)).toEqual({
       content: '你好',
       thinking: '',
@@ -178,7 +179,10 @@ describe('translateStream', () => {
       vi
         .fn()
         .mockResolvedValue(
-          ndjsonResponse([ndjsonLine('鼠标和软件都很好用啊'), ndjsonLine('', true)]),
+          ndjsonResponse([
+            ndjsonLine('鼠标和软件都很好用啊'),
+            ndjsonLine('', true),
+          ]),
         ),
     );
 
