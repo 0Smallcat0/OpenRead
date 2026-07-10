@@ -39,7 +39,9 @@ export const REPLY_SHAPES: readonly ReplyShape[] = [
 function parsesAsObject(text: string): boolean {
   try {
     const parsed: unknown = JSON.parse(text);
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed);
+    return (
+      typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+    );
   } catch {
     return false;
   }

@@ -98,6 +98,16 @@ quadratically-weighted Cohen's κ per axis
 ([`eval/bench/kappa.ts`](../eval/bench/kappa.ts), verified against textbook
 cases). Results land in [`eval/AGREEMENT.md`](../eval/AGREEMENT.md).
 
+**Measured (40 blind human labels, 2026-07-10):** quadratic-weighted κ =
+**0.526 adequacy** (moderate — the judge's adequacy rankings are usable),
+**0.267 fluency** and **0.213 localization** (weak). The judge is
+systematically more lenient than the human on Taiwan-localization — it hands
+out 4s and 5s where a Taiwanese reader gives 1s and 2s — so the localization
+column in the judge table should be read as an upper bound, and cross-model
+quality claims in this report lean on chrF + adequacy, not on the judge's
+localization axis. Calibrating the judge didn't just validate it; it told us
+*which parts* of it to trust.
+
 ## 5. Conditions
 
 | Condition | Prompt | Pipeline |
@@ -169,7 +179,9 @@ Run of 2026-07-10 — 216/216 generations, 0 errors, all cells judged:
   are judged on raw output and `engineered` on pipeline output, so the small,
   consistent adequacy dip under `engineered` partly reflects the pipeline's
   clipping, and qwen3.5 grading its own family invites bias — hence the human
-  calibration step (§4).
+  calibration step (§4), which confirmed the judge is only moderately
+  trustworthy on adequacy (weighted κ 0.526) and weak on fluency/localization
+  (0.267 / 0.213).
 <!-- BENCH-SUMMARY:END -->
 
 ## 8. Structured-output study

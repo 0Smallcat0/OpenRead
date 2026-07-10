@@ -300,10 +300,7 @@ function judgePrompt(fixture: Fixture, candidate: string): string {
 }
 
 /** Judge one candidate via native /api/chat with a constrained JSON schema. */
-async function judge(
-  fixture: Fixture,
-  candidate: string,
-): Promise<JudgeScore> {
+async function judge(fixture: Fixture, candidate: string): Promise<JudgeScore> {
   const body: Record<string, unknown> = {
     model: judgeModel,
     messages: [{ role: 'user', content: judgePrompt(fixture, candidate) }],
@@ -367,7 +364,11 @@ interface CellAggregate {
   ttftNetP50: number | null;
   ttftUiP50: number | null;
   tokensPerSec: number | null;
-  judgeMeans: { adequacy: number; fluency: number; localization: number } | null;
+  judgeMeans: {
+    adequacy: number;
+    fluency: number;
+    localization: number;
+  } | null;
   judged: number;
 }
 
@@ -417,7 +418,10 @@ function aggregate(checkpoint: Checkpoint): CellAggregate[] {
         const fixture = byFixture.get(r.fixtureId);
         if (!fixture) continue;
         statsRaw = addStats(statsRaw, chrfStats(r.raw, fixture.reference));
-        statsPiped = addStats(statsPiped, chrfStats(r.piped, fixture.reference));
+        statsPiped = addStats(
+          statsPiped,
+          chrfStats(r.piped, fixture.reference),
+        );
         if (hasPreamble(r.raw)) preambleRaw++;
         if (hasPreamble(r.piped)) preamblePiped++;
         if (hasEcho(fixture.source, r.raw)) echoRaw++;
@@ -508,7 +512,9 @@ function writeReport(checkpoint: Checkpoint): void {
 
   lines.push('## Quality — corpus chrF against references');
   lines.push('');
-  lines.push('| Model | Prompt | chrF raw | chrF shipped pipeline | Δ pipeline |');
+  lines.push(
+    '| Model | Prompt | chrF raw | chrF shipped pipeline | Δ pipeline |',
+  );
   lines.push('| --- | --- | --- | --- | --- |');
   for (const c of cells) {
     lines.push(
@@ -563,7 +569,9 @@ function writeReport(checkpoint: Checkpoint): void {
       'for judge calibration against human labels._',
   );
   lines.push('');
-  lines.push('| Model | Prompt | Adequacy | Fluency | TW localization | Judged |');
+  lines.push(
+    '| Model | Prompt | Adequacy | Fluency | TW localization | Judged |',
+  );
   lines.push('| --- | --- | --- | --- | --- | --- |');
   for (const c of cells) {
     lines.push(
@@ -626,9 +634,7 @@ async function main(): Promise<void> {
           done++;
           const existing = checkpoint.generations[key];
           if (existing && !existing.error) continue;
-          process.stdout.write(
-            `[${done}/${totalCells}] ${key} ... `,
-          );
+          process.stdout.write(`[${done}/${totalCells}] ${key} ... `);
           const record = await generate(model, condition, fixture);
           checkpoint.generations[key] = record;
           saveCheckpoint(checkpoint);
@@ -653,7 +659,9 @@ async function main(): Promise<void> {
       for (const record of pending) {
         const key = cellKey(record.model, record.condition, record.fixtureId);
         judgedCount++;
-        process.stdout.write(`[judge ${judgedCount}/${pending.length}] ${key} ... `);
+        process.stdout.write(
+          `[judge ${judgedCount}/${pending.length}] ${key} ... `,
+        );
         try {
           const score = await judge(
             fixtures.find((f) => f.id === record.fixtureId)!,
