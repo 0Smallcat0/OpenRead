@@ -19,7 +19,10 @@ reasoning-model bug.
   TTFT-net/TTFT-UI latency, tokens/s, and a JSON-schema-constrained LLM judge
   → `eval/BENCHMARK-RESULTS.md`
 - Judge calibration workflow (`pnpm bench:agreement`): seeded blind labeling
-  page + Cohen's κ (plain & quadratic-weighted) judge↔human → `eval/AGREEMENT.md`
+  page + Cohen's κ (plain & quadratic-weighted) judge↔human → `eval/AGREEMENT.md`.
+  Measured over 40 human labels: weighted κ 0.526 adequacy (moderate),
+  0.267 fluency / 0.213 localization (weak — judge over-lenient on Taiwan
+  terminology; report reads those axes as upper bounds)
 - Structured-output study (`pnpm eval:structured`): prompt-only vs
   schema-constrained decoding across 4 models × 16 realistic capture excerpts,
   with a failure-shape taxonomy → `eval/STRUCTURED-RESULTS.md`

@@ -17,7 +17,9 @@ function buildConfusion(
   categories: number[],
 ): number[][] {
   if (a.length !== b.length) {
-    throw new Error(`Rating lists differ in length: ${a.length} vs ${b.length}`);
+    throw new Error(
+      `Rating lists differ in length: ${a.length} vs ${b.length}`,
+    );
   }
   if (a.length === 0) throw new Error('Cannot compute kappa on zero items');
   const index = new Map(categories.map((c, i) => [c, i]));

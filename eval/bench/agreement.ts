@@ -93,7 +93,9 @@ function makePage(sampleSize: number): void {
     .map(([key]) => key)
     .sort();
   if (judged.length === 0) {
-    console.error('No judged items in the checkpoint — run `pnpm bench` first.');
+    console.error(
+      'No judged items in the checkpoint — run `pnpm bench` first.',
+    );
     process.exitCode = 1;
     return;
   }
@@ -111,7 +113,11 @@ function makePage(sampleSize: number): void {
   }
   const sampled: string[] = [];
   const cells = [...byCell.values()];
-  for (let round = 0; sampled.length < Math.min(sampleSize, judged.length); round++) {
+  for (
+    let round = 0;
+    sampled.length < Math.min(sampleSize, judged.length);
+    round++
+  ) {
     let advanced = false;
     for (const keys of cells) {
       const key = keys[round];

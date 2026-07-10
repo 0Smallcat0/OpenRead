@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { classifyReply } from './taxonomy';
 
-const OBJ = '{"title": "固態電池", "summary": "量產瓶頸與時程。", "tags": ["電池"]}';
+const OBJ =
+  '{"title": "固態電池", "summary": "量產瓶頸與時程。", "tags": ["電池"]}';
 
 describe('classifyReply', () => {
   it('classifies clean JSON', () => {
@@ -24,9 +25,9 @@ describe('classifyReply', () => {
     expect(classifyReply(`Here is the metadata you asked for:\n${OBJ}`)).toBe(
       'json-with-prose',
     );
-    expect(classifyReply(`${OBJ}\nLet me know if you need anything else!`)).toBe(
-      'json-with-prose',
-    );
+    expect(
+      classifyReply(`${OBJ}\nLet me know if you need anything else!`),
+    ).toBe('json-with-prose');
   });
 
   it('classifies truncated JSON', () => {

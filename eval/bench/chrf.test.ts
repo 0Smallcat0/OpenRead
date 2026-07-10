@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { addStats, chrfFromStats, chrfScore, chrfStats, corpusChrf } from './chrf';
+import {
+  addStats,
+  chrfFromStats,
+  chrfScore,
+  chrfStats,
+  corpusChrf,
+} from './chrf';
 
 /**
  * Expected values cross-validated against Python sacrebleu 2.6.0
