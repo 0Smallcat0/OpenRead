@@ -29,7 +29,7 @@ interface Score {
 
 const baseUrl = process.env.OLLAMA_URL ?? 'http://localhost:11434';
 const endpoint = `${baseUrl.replace(/\/+$/, '')}/v1/chat/completions`;
-const judgeModel = process.argv[2] ?? 'qwen2.5';
+const judgeModel = process.argv[2] ?? 'qwen3.5:latest';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = JSON.parse(

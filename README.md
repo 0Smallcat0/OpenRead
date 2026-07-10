@@ -68,7 +68,40 @@ _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](eval/RESULTS.md)._
 
 The pure core carries **100% function coverage and ~94% line coverage** across
-85 unit tests (`pnpm test:cov`).
+120 unit tests (`pnpm test:cov`).
+
+## Which local model? — live benchmark
+
+The offline eval freezes model output to score the pipeline; `pnpm bench`
+asks the opposite question against live models: **which model should you run,
+and what does each design choice cost?** 27 curated EN→zh-TW fixtures with
+Taiwan-convention references × 4 models × 2 prompt conditions, streamed
+through the exact shipped pipeline and scored with sacrebleu-cross-validated
+chrF, artifact detectors, latency probes, and a schema-constrained LLM judge
+(itself calibrated against human labels — Cohen's κ workflow included).
+
+| Model | chrF ↑ | TTFT-UI p50 | Tokens/s | Verdict |
+| --- | --- | --- | --- | --- |
+| **qwen3** (default) | **46.3** | **451 ms** | 48 | best quality/latency balance |
+| qwen3.5 | 43.4 | 730 ms | 42 | no chrF edge, 1.6× the wait |
+| llama3.1 | 31.6 | 532 ms | 49 | fast, but ~13 chrF behind |
+| deepseek-r1:8b | 36.6 | 6,353 ms | — | 6-second "thinking tax" — wrong workload |
+
+_Engineered-prompt condition, seed 42; full tables in
+[`eval/BENCHMARK-RESULTS.md`](eval/BENCHMARK-RESULTS.md), methodology and
+limitations in [`docs/BENCHMARK.md`](docs/BENCHMARK.md)._
+
+Two findings worth calling out:
+
+- **The benchmark caught a product-breaking bug.** Through Ollama's
+  OpenAI-compat endpoint, reasoning models can spend the *entire* generation
+  on hidden chain-of-thought — one fixture: 99 s, 4,055 tokens, zero visible
+  characters. The client now uses the native `/api/chat` with `think: false`
+  (same fixture: 1.6 s).
+- **The reliability layer is a measured tradeoff, not free.** It zeroes
+  preamble on dirty outputs and halves deepseek-r1's Simplified leakage, but
+  costs ~200 ms of first paint and a fraction of a chrF point on clean
+  outputs — numbers, not vibes, either way.
 
 ## How it works
 
@@ -87,8 +120,13 @@ The pure core carries **100% function coverage and ~94% line coverage** across
 - **Cancellation-safe streaming**
   ([`src/api/ollama.ts`](src/api/ollama.ts) +
   [`src/entrypoints/background.ts`](src/entrypoints/background.ts)) — each
-  request owns an `AbortController`; a new selection or a closed panel aborts the
-  in-flight SSE with no shared mutable state to race on.
+  request owns an `AbortController`; a new selection or a closed panel aborts
+  the in-flight stream with no shared mutable state to race on.
+- **Reasoning-model safe** — the client uses Ollama's native `/api/chat` with
+  `think: false` because the benchmark caught the OpenAI-compat endpoint
+  burning entire generations as hidden reasoning with zero visible output on
+  qwen3-family and deepseek-r1 models
+  ([`docs/BENCHMARK.md`](docs/BENCHMARK.md) §6). Requires Ollama ≥ 0.9.
 - **Fully local** — no cloud, no key, no telemetry. The selected text is sent
   only to a local Ollama server on your machine; nothing leaves your device.
   The server URL lives in `chrome.storage` and is read only by the background
@@ -121,20 +159,20 @@ cheap, reliable part on-device and defers the expensive part — rather than
 re-implementing a knowledge base it has no business owning.
 
 Optionally, a small local model can pre-label a capture with a title, summary,
-and tags. Small models are unreliable at structured output, so this is strictly
-best-effort — and _measured_: `parseEnrichResponse` salvages usable metadata
-from fenced, preamble-wrapped, and trailing-prose replies that a naive
-`JSON.parse` drops.
+and tags. That pipeline is defense-in-depth, and every layer is _measured_:
 
-| Metric                                              | Rate       |
-| --------------------------------------------------- | ---------- |
-| Naive `JSON.parse` yields an object                 | 42.9%      |
-| Robust `parseEnrichResponse` yields usable metadata | **71.4%**  |
+| Layer | Evidence |
+| --- | --- |
+| Schema-constrained decoding (Ollama `format`) | took the one imperfect model (deepseek-r1) from 93.3% → **100%** usable metadata at zero latency cost — live study over 4 models × 16 excerpts ([`eval/STRUCTURED-RESULTS.md`](eval/STRUCTURED-RESULTS.md)) |
+| Tolerant `parseEnrichResponse` | salvages 71.4% vs naive parsing's 42.9% on an archive of 14 hostile reply shapes from older/thinking models ([`eval/CAPTURE-RESULTS.md`](eval/CAPTURE-RESULTS.md)); today it mostly does content hygiene — length caps, tag normalisation |
+| `status: raw` handoff | even a perfect-looking label is garnish; the raw capture stays the source of truth |
 
-_Offline, deterministic run over 14 real small-model reply shapes; regenerate
-with `pnpm eval:capture`, full report in
-[`eval/CAPTURE-RESULTS.md`](eval/CAPTURE-RESULTS.md). This is why enrichment is
-off by default — the raw capture is always the source of truth._
+The live study also produced an honest negative result: with the shipped
+prompt, temperature 0, and thinking disabled, **modern small models emit
+clean JSON ~100% of the time** — the dramatic salvage rates belong to older
+model generations. Enrichment stays off by default anyway: it adds a
+model round-trip per capture, and reasoning-class models take ~45 s to label
+a paragraph (measured), which no capture UX survives.
 
 Set your vault, capture folder, and the enrichment toggle in the popup; leave
 the vault blank to use whichever vault is currently open.
@@ -155,7 +193,8 @@ OpenRead translates through a local [Ollama](https://ollama.com/) server — no
 API key required.
 
 1. [Install Ollama](https://ollama.com/).
-2. Pull a model: `ollama pull qwen2.5`.
+2. Pull a model: `ollama pull qwen3` (the benchmarked default; see
+   [`docs/BENCHMARK.md`](docs/BENCHMARK.md) for how it was chosen).
 3. Start the server: `ollama serve`.
 4. Allow the extension's origin through Ollama's CORS by setting
    `OLLAMA_ORIGINS=chrome-extension://*` before starting it:
@@ -164,7 +203,7 @@ API key required.
    - **Windows**: set a user environment variable `OLLAMA_ORIGINS=chrome-extension://*`, then restart Ollama
 
 Open the toolbar popup and set the Ollama server URL (default
-`http://localhost:11434`) and model (default `qwen2.5`), plus a target
+`http://localhost:11434`) and model (default `qwen3:latest`), plus a target
 language.
 
 ## Usage
