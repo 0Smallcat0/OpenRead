@@ -16,19 +16,20 @@ _proving_ the taming works.
 
 ## Demo
 
-Select text on any page, click the floating **文**, and the
+Select a sentence on any page, click the floating **文**, and the
 Traditional-Chinese translation streams in. Recorded live on the
 [Wikipedia article for LLMs](https://en.wikipedia.org/wiki/Large_language_model)
-against a local `qwen3` via Ollama — end-to-end and unedited (played at 1.5×):
+against a local `qwen3` via Ollama — end-to-end, unedited, real time:
 
 ![OpenRead selecting text on Wikipedia and streaming a Traditional-Chinese translation from a local model](docs/screenshots/demo.gif)
 
-The same selection UI works on developer docs and on PDFs — local or remote —
-through a bundled PDF.js viewer (below: MDN, and a real arXiv paper):
+The same selection UI works on developer docs (dark pages included) and on
+PDFs — local or remote — through a bundled PDF.js viewer (below: MDN, and the
+Bitcoin whitepaper as a real-world PDF):
 
-| Developer docs (MDN) | Research PDF (arXiv) |
+| Developer docs (MDN) | Research PDF (PDF.js viewer) |
 | --- | --- |
-| ![Translating MDN docs](docs/screenshots/demo-mdn.png) | ![Translating an arXiv PDF](docs/screenshots/demo-arxiv-pdf.png) |
+| ![Translating MDN docs](docs/screenshots/demo-mdn.png) | ![Translating the Bitcoin whitepaper PDF](docs/screenshots/demo-pdf.png) |
 
 Everything is configured in a small popup — a local Ollama server URL, a model,
 and a target language. No account, no API key:
@@ -37,10 +38,9 @@ and a target language. No account, no API key:
   <img src="docs/screenshots/popup.png" alt="Popup settings" width="300" />
 </p>
 
-> All demos are real end-to-end runs against local models via Ollama (GIF:
-> `qwen3`; stills: `llama3.1`) — captured by the browser E2E harness, not
-> mock-ups. A ready-to-submit Chrome Web Store kit lives in
-> [`docs/store/`](docs/store/SUBMISSION.md).
+> All demos are real end-to-end runs against a local `qwen3` via Ollama —
+> captured by the browser E2E harness, not mock-ups. A ready-to-submit Chrome
+> Web Store kit lives in [`docs/store/`](docs/store/SUBMISSION.md).
 
 ## Why this exists
 
@@ -151,7 +151,7 @@ protocol-handler URL fall back to the clipboard.
 
 | Translate + one-tap capture on any page | …lands as a note in your Obsidian vault |
 | :---: | :---: |
-| ![Inline translation and the save-to-Obsidian button on MDN](docs/screenshots/capture-saved.png) | ![The captured note in Obsidian, its frontmatter rendered as Properties](docs/screenshots/capture-obsidian.png) |
+| ![Inline translation, the save-to-Obsidian button, and the saved toast on Wikipedia](docs/screenshots/capture-saved.png) | ![The captured note in Obsidian, its frontmatter rendered as Properties](docs/screenshots/capture-obsidian.png) |
 
 <sub>And the exact Markdown OpenRead writes — the frontmatter is the `status: raw` handoff contract:</sub>
 
