@@ -13,9 +13,9 @@ web-ext.config.ts
 !.env.example
 *.local
 
-# Eval harness artifacts (generated reports/caches)
+# Eval harness artifacts (generated checkpoints/pages; reports (.md) are committed)
 eval/.cache/
-eval/results/*.json
+eval/results/*
 !eval/results/.gitkeep
 
 # Editor / OS
