@@ -88,17 +88,17 @@ eval/
 ### Tier 1 — differentiators
 
 - [x] Eval harness: `eval/dataset/fixtures.json` + `run.ts` (metrics table) + `detectors.ts` + `judge.ts` (live, opt-in)
-- [~] Benchmark: N local Ollama models x latency/cost/quality — `judge.ts` written; run needs Ollama up
+- [x] Benchmark: live 4 models × 2 prompts × 27 fixtures (`eval/bench/`, `docs/BENCHMARK.md`); LLM judge calibrated vs 40 human labels (`eval/AGREEMENT.md`)
 - [x] Vitest coverage on core (100% funcs, ~92% lines, 57 tests)
 - [x] Architecture doc + streaming sequence diagram (`docs/ARCHITECTURE.md`)
 
 ### Tier 2 — packaging
 
 - [x] README rewrite (leads with the technical story + real eval numbers)
-- [ ] Demo GIF (needs a screen recording)
+- [x] Demo GIF — real E2E capture (live qwen3 via Ollama), `docs/screenshots/demo.gif`
 - [x] CHANGELOG + semver, MIT LICENSE, CONTRIBUTING, issue + PR templates
 - [x] GitHub Actions CI (`.github/workflows/ci.yml`: compile + test + lint + build)
-- [ ] (optional) Chrome Web Store listing / landing page
+- [x] Chrome Web Store submission kit — `docs/store/` (listing copy, 1280×800 screenshots, guide) + `PRIVACY.md`; only the $5 dev account + upload remain manual
 
 ## Bugs found in v1 (fix + cite as "what I improved")
 
@@ -109,22 +109,61 @@ eval/
 4. Manifest declared unused `scripting` + `declarativeNetRequest` permissions (store-review risk). Dropped.
 5. `content.js` <-> `pdf-integration.js` ~90% copy-paste duplication.
 
-## Resume bullets (real numbers from the eval harness)
+## Resume bullets (v2.2.0 — real numbers, EN)
 
 - Rebuilt a browser LLM-translation extension around a **pure, 100%-function-covered
-  reliability core** (TypeScript strict, 57 Vitest tests, ~92% line coverage), separating
-  all output-cleanup logic from Chrome/DOM so it is unit-testable and eval-measurable.
-- Built an **offline, deterministic eval harness** that cut, on a 23-fixture set,
+  reliability core** (TypeScript strict, 120 Vitest tests, ~94% line coverage on core),
+  separating all output-cleanup logic from Chrome/DOM so it is unit-testable and
+  eval-measurable; shipped with CI, an offline eval harness, and a live benchmark.
+- Built an **offline, deterministic eval harness** that cut, on a curated fixture set,
   **model-preamble leakage 34.8% → 0%**, **input-echo 17.4% → 0%**, and
   **Simplified-character leakage 38.1% → 0%** — before/after metrics reproducible in CI.
-- Engineered **cancellation-safe SSE streaming** over MV3 service-worker ports with a
+- Designed a **live 4-model × 2-prompt × 27-fixture streaming benchmark**
+  (chrF cross-validated against sacrebleu to 6 decimals; TTFT-network vs TTFT-UI
+  probes) and used it to pick the shipped default model; **calibrated a
+  schema-constrained LLM judge against 40 blind human labels** (quadratic-weighted
+  Cohen's κ = 0.53 adequacy) and reported the weak dimensions (fluency 0.27,
+  localization 0.21) instead of hiding them.
+- **The benchmark caught a product-breaking bug**: through Ollama's OpenAI-compat
+  endpoint, reasoning models can burn an entire generation as hidden chain-of-thought
+  (measured: 99 s, 4,055 tokens, zero visible output). Migrated the client to the
+  native `/api/chat` with `think: false` — same fixture: 1.6 s.
+- Engineered **cancellation-safe streaming** over MV3 service-worker ports with a
   per-request `AbortController` (removing v1's shared-global-controller race) and a
-  reluctant-buffer stream assembler that strips preamble without delaying first paint.
-- Replaced a buggy hand-rolled SC→TC map (corrupted `界面→界麵`, `公里→公裡`) with OpenCC
-  phrase-level conversion (`s2twp`); collapsed ~90% duplicated web/PDF UI into one module.
+  reluctant-buffer assembler that strips preamble without delaying first paint;
+  quantified the reliability layer as a **measured tradeoff** (~200 ms first paint,
+  −0.3–0.5 chrF on clean output) rather than a free win.
+- Added a **capture-to-Obsidian bridge** with an eval-backed enrichment stage:
+  tolerant parsing salvages 71.4% vs naive 42.9% on hostile reply shapes, and
+  schema-constrained decoding takes the worst model from 93.3% → 100% usable
+  metadata — plus an honest negative result (modern small models emit clean JSON
+  ~100% of the time prompt-only).
 
-## Deferred (need the user's key / machine — not code)
+## Resume bullets (v2.2.0 — zh-TW)
 
-- Multi-model latency/cost/quality benchmark and live LLM-as-judge run
-  (`eval/judge.ts` is written; both need a running local Ollama server).
-- Demo GIF (screen recording) and optional Chrome Web Store listing.
+- 以**純函式、100% 函式覆蓋的可靠性核心**重建瀏覽器 LLM 翻譯擴充功能
+  （TypeScript strict、120 個 Vitest 測試、核心行覆蓋 ~94%），將輸出清理邏輯與
+  Chrome/DOM 完全解耦，使其可單元測試、可評測；附 CI、離線評測與實機基準。
+- 建立**離線、確定性的評測框架**：模型前言洩漏 34.8%→0%、原文回聲 17.4%→0%、
+  簡體字洩漏 38.1%→0%，前後對照數據可在 CI 重現。
+- 設計 **4 模型 × 2 提示 × 27 題的實機串流基準**（chrF 與 sacrebleu 交叉驗證至
+  小數 6 位；TTFT-network 與 TTFT-UI 分離量測），據此選定預設模型；並以
+  **40 筆盲標人工標註校準 schema 約束的 LLM 評審**（quadratic-weighted κ：
+  adequacy 0.53），同時誠實揭露弱項（fluency 0.27、localization 0.21）。
+- **基準測出產品級 bug**：經 Ollama OpenAI 相容端點，推理型模型可能把整段生成
+  耗在隱藏思考鏈（實測 99 秒、4,055 tokens、可見輸出 0 字）；將客戶端遷移到原生
+  `/api/chat` 並設 `think: false`，同題降至 1.6 秒。
+- 實作 **MV3 service worker 上可取消的串流管線**：每請求獨立 `AbortController`
+  （移除 v1 全域控制器競態）、reluctant-buffer 串流組裝器在不延遲首繪的前提下
+  剝除前言；並將可靠性層量化為**有代價的取捨**（首繪 +~200ms、乾淨輸出
+  −0.3–0.5 chrF），而非宣稱免費優化。
+- 加入 **Obsidian 擷取橋接**與評測背書的 enrich 階段：容錯解析在惡意回覆形狀上
+  由 42.9% 提升到 71.4% 可用率；schema 約束解碼把最差模型從 93.3% 提到 100%；
+  並保留誠實的負面結果（現代小模型 prompt-only 即 ~100% 輸出乾淨 JSON）。
+
+## Remaining manual steps (not code)
+
+- Chrome Web Store: create the $5 developer account and upload
+  `.output/openread-<version>-chrome.zip` following
+  [`docs/store/SUBMISSION.md`](store/SUBMISSION.md); after approval, add the
+  store link to the README and the resume bullets.
