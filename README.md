@@ -17,11 +17,11 @@ _proving_ the taming works.
 ## Demo
 
 Select text on any page, click the floating **文**, and the
-Traditional-Chinese translation streams in — here on the
-[Wikipedia article for LLMs](https://en.wikipedia.org/wiki/Large_language_model),
-translated by a local model:
+Traditional-Chinese translation streams in. Recorded live on the
+[Wikipedia article for LLMs](https://en.wikipedia.org/wiki/Large_language_model)
+against a local `qwen3` via Ollama — end-to-end and unedited (played at 1.5×):
 
-![Web translation on Wikipedia](docs/screenshots/demo-wikipedia.png)
+![OpenRead selecting text on Wikipedia and streaming a Traditional-Chinese translation from a local model](docs/screenshots/demo.gif)
 
 The same selection UI works on developer docs and on PDFs — local or remote —
 through a bundled PDF.js viewer (below: MDN, and a real arXiv paper):
@@ -37,8 +37,10 @@ and a target language. No account, no API key:
   <img src="docs/screenshots/popup.png" alt="Popup settings" width="300" />
 </p>
 
-> All screenshots are real end-to-end runs against a local `llama3.1` via Ollama —
-> captured by the browser E2E harness, not mock-ups.
+> All demos are real end-to-end runs against local models via Ollama (GIF:
+> `qwen3`; stills: `llama3.1`) — captured by the browser E2E harness, not
+> mock-ups. A ready-to-submit Chrome Web Store kit lives in
+> [`docs/store/`](docs/store/SUBMISSION.md).
 
 ## Why this exists
 
