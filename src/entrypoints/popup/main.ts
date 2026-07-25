@@ -53,11 +53,19 @@ if (
         folderInput.value.trim() || DEFAULT_SETTINGS.obsidianFolder,
       enrichOnCapture: enrichInput.checked,
     };
-    void saveSettings(settings).then(() => {
-      status.textContent = 'Saved ✓';
-      window.setTimeout(() => {
-        status.textContent = '';
-      }, 1500);
-    });
+    void saveSettings(settings)
+      .then(() => {
+        status.classList.remove('error');
+        status.textContent = 'Saved ✓';
+        window.setTimeout(() => {
+          status.textContent = '';
+        }, 1500);
+      })
+      .catch(() => {
+        // Without this the failure is silent: the status line simply stays
+        // blank, which reads exactly like "nothing happened yet".
+        status.classList.add('error');
+        status.textContent = 'Save failed';
+      });
   });
 }
