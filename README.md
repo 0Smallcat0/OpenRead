@@ -56,9 +56,11 @@ scored by an offline eval harness so improvements are quantified, not vibes.
 
 ## Reliability eval
 
-`pnpm eval` runs the pure reliability layer over a curated set of real failure
-modes and reports before/after rates. Fully offline and deterministic — no
-Ollama server, no network — so the numbers are reproducible in CI.
+`pnpm eval` replays a curated set of real failure modes through the **shipped
+streaming pipeline** and reports before/after rates. Fully offline and
+deterministic — no Ollama server, no network — so the numbers are reproducible
+in CI. Deltas are replayed in 3-character slices, so chunk boundaries land
+mid-artifact exactly as they do in a live stream.
 
 | Metric                                             | Before | After    | Reduction |
 | -------------------------------------------------- | ------ | -------- | --------- |
@@ -115,7 +117,12 @@ Two findings worth calling out:
   anchored preamble/thinking filters, echo removal, quote unwrapping.
 - **Streaming assembler** ([`src/core/stream.ts`](src/core/stream.ts)) — a
   "reluctant buffer" holds only the opening tokens (where preamble hides) so the
-  translation still paints fast, then streams the rest straight through.
+  translation still paints fast, then streams the rest straight through. The
+  hold is _adaptive_: it extends only while something is actually resolving — a
+  preamble that has not reached its colon, an unclosed `<think>` block, an echo
+  of the selection still arriving — and is capped so first paint cannot stall.
+  Measured on real qwen3 output, clean translations are held for exactly as
+  many characters as before; only artifact-shaped openings wait longer.
 - **Taiwan localization** ([`src/core/zh-convert.ts`](src/core/zh-convert.ts)) —
   OpenCC `s2twp` phrase-level Simplified→Traditional conversion, replacing v1's
   hand-rolled character map that corrupted `界面→界麵` and `公里→公裡`. Because
