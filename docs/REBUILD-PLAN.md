@@ -109,10 +109,10 @@ eval/
 4. Manifest declared unused `scripting` + `declarativeNetRequest` permissions (store-review risk). Dropped.
 5. `content.js` <-> `pdf-integration.js` ~90% copy-paste duplication.
 
-## Resume bullets (v2.2.0 — real numbers, EN)
+## Resume bullets (v2.2.1 — real numbers, EN)
 
 - Rebuilt a browser LLM-translation extension around a **pure, 100%-function-covered
-  reliability core** (TypeScript strict, 120 Vitest tests, ~94% line coverage on core),
+  reliability core** (TypeScript strict, 150 Vitest tests, ~95% line coverage on core),
   separating all output-cleanup logic from Chrome/DOM so it is unit-testable and
   eval-measurable; shipped with CI, an offline eval harness, and a live benchmark.
 - Built an **offline, deterministic eval harness** that cut, on a curated fixture set,
@@ -138,11 +138,21 @@ eval/
   schema-constrained decoding takes the worst model from 93.3% → 100% usable
   metadata — plus an honest negative result (modern small models emit clean JSON
   ~100% of the time prompt-only).
+- **Falsified my own bug report with a replay harness, and found the real bug
+  underneath.** A benchmark line item ("residual 7.4% Simplified leakage,
+  probably a chunk-boundary problem") turned out to be two separate defects,
+  neither of them the one filed: the metric's character set wrongly classified
+  merged forms (系, 游) that are ordinary Traditional characters, and the actual
+  chunk-boundary bug damaged **Taiwan localization** instead (`数据`+`库` →
+  `數據庫`, not `資料庫`). Replaying 216 recorded generations at 8 chunk sizes
+  put a number on it — **13.0% of generations converted differently, 0.0%
+  after** — and the fix carries a proof obligation in code: emit only where
+  `convert(head) + convert(tail) === convert(whole)`.
 
-## Resume bullets (v2.2.0 — zh-TW)
+## Resume bullets (v2.2.1 — zh-TW)
 
 - 以**純函式、100% 函式覆蓋的可靠性核心**重建瀏覽器 LLM 翻譯擴充功能
-  （TypeScript strict、120 個 Vitest 測試、核心行覆蓋 ~94%），將輸出清理邏輯與
+  （TypeScript strict、150 個 Vitest 測試、核心行覆蓋 ~95%），將輸出清理邏輯與
   Chrome/DOM 完全解耦，使其可單元測試、可評測；附 CI、離線評測與實機基準。
 - 建立**離線、確定性的評測框架**：模型前言洩漏 34.8%→0%、原文回聲 17.4%→0%、
   簡體字洩漏 42.9%→0%，前後對照數據可在 CI 重現。
@@ -160,6 +170,13 @@ eval/
 - 加入 **Obsidian 擷取橋接**與評測背書的 enrich 階段：容錯解析在惡意回覆形狀上
   由 42.9% 提升到 71.4% 可用率；schema 約束解碼把最差模型從 93.3% 提到 100%；
   並保留誠實的負面結果（現代小模型 prompt-only 即 ~100% 輸出乾淨 JSON）。
+- **用重放框架推翻自己開的 bug 單，挖出底下真正的問題**：基準報告寫的
+  「殘留 7.4% 簡體洩漏，疑似 chunk 邊界問題」實際上是兩個各自獨立、且都不是
+  單上那個的缺陷 —— 指標的字元集把合併字形（系、游，本來就是繁體字）誤判成
+  簡體；而真正的 chunk 邊界 bug 壞的是**台灣在地化**（`数据`+`库` 得到
+  `數據庫` 而非 `資料庫`）。以 216 筆錄製輸出 × 8 種 chunk 大小重放量化：
+  **13.0% 的輸出轉換結果不同，修後 0.0%**；修法在程式碼中帶著證明義務 ——
+  只在 `convert(head) + convert(tail) === convert(whole)` 成立處輸出。
 
 ## Chrome Web Store — intentionally not published
 
