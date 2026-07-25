@@ -1,6 +1,6 @@
 {
   "name": "openread",
-  "version": "2.2.7",
+  "version": "2.2.8",
   "description": "Local-first, evaluation-driven LLM translation for web & PDF via Ollama — a case study in making streaming LLM output reliable.",
   "type": "module",
   "license": "MIT",

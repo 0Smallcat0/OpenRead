@@ -10,6 +10,18 @@ export default defineConfig({
     // used them (store-review red flag). Dropped. We only need storage + the
     // broad host access required to inject the selection UI on any page/PDF.
     permissions: ['storage', 'activeTab'],
+    // A keyboard user can select text but never produces a mouseup, so the
+    // floating 文 icon is not a route they can take. This is: remappable at
+    // chrome://extensions/shortcuts, and it needs no extra permission.
+    commands: {
+      'translate-selection': {
+        suggested_key: {
+          default: 'Ctrl+Shift+Y',
+          mac: 'Command+Shift+Y',
+        },
+        description: 'Translate the current selection',
+      },
+    },
     host_permissions: ['<all_urls>'],
     web_accessible_resources: [
       {

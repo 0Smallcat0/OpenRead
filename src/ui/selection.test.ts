@@ -45,6 +45,8 @@ class FakePort {
 
 let ports: FakePort[] = [];
 let teardown: (() => void) | undefined;
+/** Listeners the controller registered on chrome.runtime.onMessage. */
+let runtimeListeners: ((message: unknown) => void)[] = [];
 
 const RECT = {
   top: 100,
@@ -93,8 +95,17 @@ async function settle(): Promise<void> {
 
 beforeEach(() => {
   ports = [];
+  runtimeListeners = [];
   vi.stubGlobal('chrome', {
     runtime: {
+      onMessage: {
+        addListener: (fn: (message: unknown) => void) => {
+          runtimeListeners.push(fn);
+        },
+        removeListener: (fn: (message: unknown) => void) => {
+          runtimeListeners = runtimeListeners.filter((f) => f !== fn);
+        },
+      },
       connect: (info: { name: string }) => {
         expect(info.name).toBe(STREAM_PORT_NAME);
         const port = new FakePort();
@@ -263,6 +274,86 @@ describe('keyboard access', () => {
     const panel = document.getElementById('oit-translate-panel');
     expect(panel).not.toBeNull();
     expect(document.activeElement).toBe(panel);
+  });
+});
+
+describe('selecting without a mouse', () => {
+  /** Select text the way Shift+Arrow does: no mouseup ever fires. */
+  async function keyboardSelect(text: string): Promise<void> {
+    vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => text,
+      rangeCount: 1,
+      getRangeAt: () => ({ getBoundingClientRect: () => RECT }),
+    } as unknown as Selection);
+    document.dispatchEvent(
+      new KeyboardEvent('keyup', {
+        key: 'ArrowRight',
+        shiftKey: true,
+        bubbles: true,
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 70));
+  }
+
+  it('offers the icon after a Shift+Arrow selection', async () => {
+    // Without this the icon only ever appeared on mouseup, so the button's own
+    // keyboard support was unreachable for the people who needed it.
+    await keyboardSelect('Hello, world!');
+
+    expect(document.getElementById('oit-translate-icon')).not.toBeNull();
+  });
+
+  it('offers the icon after Ctrl+A', async () => {
+    vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'Hello, world!',
+      rangeCount: 1,
+      getRangeAt: () => ({ getBoundingClientRect: () => RECT }),
+    } as unknown as Selection);
+    document.dispatchEvent(
+      new KeyboardEvent('keyup', { key: 'a', ctrlKey: true, bubbles: true }),
+    );
+    await new Promise((r) => setTimeout(r, 70));
+
+    expect(document.getElementById('oit-translate-icon')).not.toBeNull();
+  });
+
+  it('ignores keys that cannot change the selection', async () => {
+    vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'Hello, world!',
+      rangeCount: 1,
+      getRangeAt: () => ({ getBoundingClientRect: () => RECT }),
+    } as unknown as Selection);
+    document.dispatchEvent(
+      new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }),
+    );
+    await new Promise((r) => setTimeout(r, 70));
+
+    expect(document.getElementById('oit-translate-icon')).toBeNull();
+  });
+
+  it('translates the current selection on the keyboard shortcut', async () => {
+    // The command lands as a runtime message from the background worker.
+    await keyboardSelect('Hello, world!');
+    runtimeListeners.forEach((fn) => fn({ type: 'TRANSLATE_SELECTION' }));
+    await settle();
+
+    expect(panelText()).toBe('Translating…');
+    expect(ports).toHaveLength(1);
+    expect(document.activeElement).toBe(
+      document.getElementById('oit-translate-panel'),
+    );
+  });
+
+  it('does nothing on the shortcut when nothing is selected', async () => {
+    vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => '',
+      rangeCount: 0,
+    } as unknown as Selection);
+    runtimeListeners.forEach((fn) => fn({ type: 'TRANSLATE_SELECTION' }));
+    await settle();
+
+    expect(document.getElementById('oit-translate-panel')).toBeNull();
+    expect(ports).toHaveLength(0);
   });
 });
 

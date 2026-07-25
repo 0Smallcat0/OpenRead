@@ -49,7 +49,20 @@ export interface EnrichCaptureMessage {
   model: string;
 }
 
-export type RuntimeRequest = OpenPdfViewerMessage | EnrichCaptureMessage;
+/**
+ * background -> content one-shot: the user pressed the keyboard shortcut, so
+ * translate whatever is selected. Broadcast to every frame; only the one
+ * holding a selection acts.
+ */
+export interface TranslateSelectionMessage {
+  type: 'TRANSLATE_SELECTION';
+}
+
+/** The command id declared in the manifest, and the message it produces. */
+export const TRANSLATE_SELECTION_COMMAND = 'translate-selection';
+
+export type RuntimeRequest =
+  OpenPdfViewerMessage | EnrichCaptureMessage | TranslateSelectionMessage;
 
 export type OpenPdfViewerResponse =
   { success: true } | { error: 'PERMISSION_DENIED' };
