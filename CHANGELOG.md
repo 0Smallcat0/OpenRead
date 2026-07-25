@@ -5,6 +5,44 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.7] - 2026-07-25
+
+The offline eval was scoring a code path the product does not run. Fixing the
+measurement exposed real leaks in the shipped one.
+
+### Fixed
+
+- **The reluctant buffer flushed mid-artifact.** Twelve characters is shorter
+  than the things it exists to catch, so `Here is the translation: 關閉前…`
+  flushed at `Here is the`, the cleaner never saw the colon it splits on, and
+  `translation: 關閉前…` streamed to the panel. Likewise `<think>The user is
+asking…` flushed at `<think>The u` and leaked the rest of the thinking. The
+  hold is now **adaptive**: it extends only while a preamble has not reached its
+  delimiter, a `<think>` block is unclosed, or an echo of the selection is still
+  arriving — and is capped at 400 characters so first paint cannot stall.
+  Measured on real qwen3 output, **clean translations are held for exactly as
+  many characters as before** (15, 15, 15, 3, 5 — identical with the check on
+  and off); only artifact-shaped openings wait longer.
+- **Input echo was never removed in production.** `stripEcho` lived in
+  `cleanTranslationOutput`, which the streaming path does not call — the panel
+  showed `Hello world 你好世界` in full. `StreamAssembler` now takes the source
+  and strips a leading echo of it, along with the whitespace the removal leaves
+  behind.
+- **Quote unwrapping never ran either.** The cleaner was invoked only when
+  `isAIThinking` fired; it now runs unconditionally on the opening, which is a
+  no-op when no narration pattern matches.
+- A line break falling exactly at the flush point is preserved. Both cleaners
+  trim, so a multi-line translation used to lose its first newline.
+
+### Changed
+
+- **`pnpm eval` replays fixtures through the shipped `StreamAssembler`** in
+  3-character deltas instead of calling a whole-output cleaner the extension
+  never executes. Scored against the real path, the previous code left 8.7%
+  preamble and 8.7% echo — both of which the eval reported as 0%. With the fixes
+  above the shipped path reaches 0% on all three metrics, and the number now
+  describes the product.
+
 ## [2.2.6] - 2026-07-25
 
 ### Changed

@@ -206,6 +206,9 @@ async function generate(
   };
 
   const assembler = new StreamAssembler({
+    // The shipped client passes the selection, which is what enables echo
+    // removal; omitting it here would score a weaker pipeline than we ship.
+    source: fixture.source,
     transform: new TraditionalTWTransform(),
   });
   const emitted: string[] = [];

@@ -13,8 +13,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cleanTranslationOutput } from '../src/core/sanitize';
-import { toTraditionalTW } from '../src/core/zh-convert';
+import { StreamAssembler } from '../src/core/stream';
+import { TraditionalTWTransform } from '../src/core/zh-convert';
 import { hasPreamble, hasSimplifiedLeak, hasEcho } from './detectors';
 
 interface Fixture {
@@ -38,12 +38,30 @@ function wantsTraditional(targetLang: string): boolean {
   );
 }
 
-/** The exact transform the production pipeline applies to a completed output. */
+/**
+ * Replay a fixture through the shipped streaming pipeline.
+ *
+ * This used to call `cleanTranslationOutput`, a whole-output cleaner that the
+ * extension does not run — the product streams, and streams through
+ * `StreamAssembler`. Scoring the convenient function instead of the shipped one
+ * overstated the result: the eval reported echo removal the streaming path had
+ * no way to perform. Deltas are replayed in small slices so chunk boundaries
+ * land mid-artifact, exactly as a real stream does.
+ */
+const DELTA = 3;
+
 function applyReliabilityLayer(fixture: Fixture): string {
-  const cleaned = cleanTranslationOutput(fixture.source, fixture.rawOutput);
-  return wantsTraditional(fixture.targetLang)
-    ? toTraditionalTW(cleaned)
-    : cleaned;
+  const assembler = new StreamAssembler({
+    source: fixture.source,
+    transform: wantsTraditional(fixture.targetLang)
+      ? new TraditionalTWTransform()
+      : undefined,
+  });
+  let out = '';
+  for (let i = 0; i < fixture.rawOutput.length; i += DELTA) {
+    out += assembler.push(fixture.rawOutput.slice(i, i + DELTA));
+  }
+  return out + assembler.end();
 }
 
 interface Metric {
@@ -110,8 +128,11 @@ for (const m of metrics) {
 }
 lines.push('');
 lines.push(
-  '_Before = raw model output. After = output passed through the pure ' +
-    'reliability layer (`cleanTranslationOutput` + OpenCC `s2twp`)._',
+  '_Before = raw model output. After = the same output replayed through the ' +
+    '**shipped streaming pipeline** — `StreamAssembler` (reluctant buffer, ' +
+    'preamble and echo removal) plus the OpenCC `s2twp` transform — in ' +
+    `${DELTA}-character deltas, so chunk boundaries fall mid-artifact exactly ` +
+    'as they do in a live stream._',
 );
 lines.push('');
 
