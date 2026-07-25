@@ -160,13 +160,18 @@ Run of 2026-07-10 — 216/216 generations, 0 errors, all cells judged:
   system-prompt + few-shot lifts qwen3 (+1.7 chrF raw) and deepseek-r1
   (+3.6), does nothing for qwen3.5, and nothing for llama3.1 — which sits
   ~13 chrF below the qwen family regardless of prompting.
-- **The reliability layer's value concentrates on dirty outputs.** It zeroed
-  llama3.1's naive-prompt preamble (7.4% → 0%) and halved deepseek-r1's
-  Simplified leakage (18.5% → 7.4%), while on already-clean outputs it costs
-  a small amount of legitimate text (llama3.1: −0.3 to −0.5 chrF) plus
-  ~200 ms of TTFT — the reluctant buffer's measured price.
-- **The "residual Simplified leakage (~7%)" this run reported was a detector
-  bug, and chasing it found a real one.** The hypothesis was that the per-delta
+- **The reliability layer's value concentrates on dirty outputs, and it is no
+  longer a tradeoff.** Re-scored through the current pipeline
+  (`pnpm bench -- --repipe`, same recorded generations), it zeroes llama3.1's
+  naive-prompt preamble (7.4% → 0%) and deepseek-r1's Simplified leakage
+  (14.8% → 0%) — and it now _adds_ chrF on six of eight cells, including the
+  case that used to cost the most: llama3.1 naive went from **−0.3 to +1.0**,
+  deepseek-r1 naive from +2.4 to **+3.3**. The worst cell is −0.1. The earlier
+  −0.3 to −0.5 figures were the price of a buffer that flushed mid-artifact and
+  a converter that broke phrases at chunk boundaries; both are fixed, so the
+  price went with them. The ~200 ms TTFT gap of the reluctant buffer remains.
+- **The "residual Simplified leakage (~7%)" this run originally reported was a
+  detector bug, and chasing it found a real one.** The hypothesis was that the per-delta
   OpenCC transform could not convert a phrase split across two stream chunks.
   Replaying all 216 recorded generations falsified it: not one leak came from a
   chunk boundary. The flagged characters were 系 (系統) and 游 (下游) — ordinary
