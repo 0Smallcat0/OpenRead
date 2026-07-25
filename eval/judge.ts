@@ -12,8 +12,8 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cleanTranslationOutput } from '../src/core/sanitize';
-import { toTraditionalTW } from '../src/core/zh-convert';
+import { StreamAssembler } from '../src/core/stream';
+import { TraditionalTWTransform } from '../src/core/zh-convert';
 
 interface Fixture {
   id: string;
@@ -40,11 +40,19 @@ function wantsTraditional(targetLang: string): boolean {
   return targetLang.includes('Traditional') || targetLang.includes('繁體');
 }
 
+/** Replay through the shipped streaming pipeline, as `eval/run.ts` does. */
 function applyReliabilityLayer(fixture: Fixture): string {
-  const cleaned = cleanTranslationOutput(fixture.source, fixture.rawOutput);
-  return wantsTraditional(fixture.targetLang)
-    ? toTraditionalTW(cleaned)
-    : cleaned;
+  const assembler = new StreamAssembler({
+    source: fixture.source,
+    transform: wantsTraditional(fixture.targetLang)
+      ? new TraditionalTWTransform()
+      : undefined,
+  });
+  let out = '';
+  for (let i = 0; i < fixture.rawOutput.length; i += 3) {
+    out += assembler.push(fixture.rawOutput.slice(i, i + 3));
+  }
+  return out + assembler.end();
 }
 
 async function grade(

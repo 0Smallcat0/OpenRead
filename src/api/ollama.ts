@@ -204,6 +204,9 @@ export async function translateStream(params: StreamParams): Promise<void> {
   if (!response.body) throw new Error('Ollama returned no response body');
 
   const assembler = new StreamAssembler({
+    // The source enables echo removal: some models restate the selection
+    // before translating it, and the echo is only recognisable against it.
+    source: text,
     transform: wantsTraditional(targetLang)
       ? new TraditionalTWTransform()
       : undefined,
