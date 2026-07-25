@@ -32,6 +32,9 @@ src/
     popup/                settings UI (index.html + main.ts)
 scripts/
   gen-zh-markers.ts       derives the script-marker sets from the OpenCC dictionaries
+tests/
+  background.test.ts      the one test that cannot sit beside its module: WXT
+                          treats every file under src/entrypoints/ as an entrypoint
 public/
   pdfjs/                  vendored PDF.js viewer (worker path fixed to .mjs)
 eval/
