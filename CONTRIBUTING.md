@@ -73,6 +73,21 @@ after an `opencc-js` bump; a test fails if the committed file has drifted:
 pnpm gen:markers
 ```
 
+## Manual UI harness
+
+jsdom computes no geometry, so the unit tests can prove the selection UI's
+control flow and none of the things that only exist once a rendering engine is
+involved. `pnpm harness` mounts the UI on a plain Vite page with `chrome`
+stubbed and the translation faked, for checking layout, focus and
+`prefers-color-scheme` by hand:
+
+```sh
+pnpm harness
+```
+
+It is not the extension — the keyboard shortcut and the content-script wiring
+still need `pnpm build` plus a real unpacked load.
+
 ## Project layout
 
 - `src/core` — pure, tested translation/reliability logic (no browser APIs)
@@ -81,6 +96,7 @@ pnpm gen:markers
 - `src/entrypoints` — background worker, content script, popup, PDF viewer
 - `eval/` — offline reliability eval harness and dataset
 - `scripts/` — code generators (script markers)
+- `harness/` — manual browser harness for the selection UI (`pnpm harness`)
 - `tests/` — the one test that cannot sit beside its module: WXT treats every
   file under `src/entrypoints/` as an entrypoint, so `background.test.ts` there
   would collide with `background.ts`
