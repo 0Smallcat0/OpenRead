@@ -21,8 +21,7 @@
  * never race.
  */
 import { generateSystemPrompt, getFewShotMessages } from '../core/prompt';
-import { cleanTranslationOutput } from '../core/sanitize';
-import { toTraditionalTW, TraditionalTWTransform } from '../core/zh-convert';
+import { TraditionalTWTransform } from '../core/zh-convert';
 import { StreamAssembler } from '../core/stream';
 import {
   buildEnrichMessages,
@@ -240,54 +239,6 @@ export async function translateStream(params: StreamParams): Promise<void> {
     // cancelling tears it down instead of leaking it for the worker's lifetime.
     await reader.cancel().catch(() => undefined);
   }
-}
-
-export interface TranslateParams {
-  text: string;
-  baseUrl: string;
-  model: string;
-  targetLang: string;
-  context?: TranslationContext;
-  signal?: AbortSignal;
-  /** Total timeout; defaults to `DEFAULT_IDLE_TIMEOUT_MS`. */
-  timeoutMs?: number;
-}
-
-/** Single non-streamed translation. Used as the sequential retry fallback. */
-export async function translateText(params: TranslateParams): Promise<string> {
-  const { text, baseUrl, model, targetLang, context, signal } = params;
-  const timeoutMs = params.timeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
-  if (!text) return '';
-  if (!baseUrl) throw new Error('Ollama server URL is missing');
-
-  // Non-streamed, so there is no progress to reset against: one whole-request
-  // budget is the only meaningful bound.
-  const response = await withTimeout(
-    fetch(endpoint(baseUrl), {
-      method: 'POST',
-      signal,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        messages: buildMessages(text, targetLang, context),
-        stream: false,
-        think: false,
-        options: { temperature: 0.3 },
-      }),
-    }),
-    timeoutMs,
-    'waiting for the translation',
-  );
-  await assertOk(response);
-
-  const data = (await response.json()) as {
-    message?: { content?: string };
-  };
-  const content = data.message?.content;
-  if (!content) throw new Error('Ollama returned an empty message');
-
-  const cleaned = cleanTranslationOutput(text, content);
-  return wantsTraditional(targetLang) ? toTraditionalTW(cleaned) : cleaned;
 }
 
 export interface EnrichParams {

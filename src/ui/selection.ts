@@ -432,10 +432,15 @@ export function mountSelectionTranslator(
 
         void captureNote(note, captureConfig).then((outcome) => {
           if (outcome.ok) {
+            // "Sent", not "Saved": handing a URL to the OS protocol handler
+            // gives no completion signal back, so if Obsidian is not installed
+            // — or declines the URL — nothing happens and the page is never
+            // told. Claiming a save we cannot observe is the one thing worse
+            // than saying less.
             hint.textContent =
               outcome.method === 'clipboard'
                 ? 'Copied — paste into Obsidian'
-                : 'Saved ✓';
+                : 'Sent to Obsidian ↗';
           } else {
             hint.textContent = 'Save failed';
             btn.disabled = false;
