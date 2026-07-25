@@ -27,6 +27,8 @@ const Z = '2147483647';
  *  hardcode 320 against a 400px panel, so a selection near the right margin was
  *  judged to fit and then overflowed. */
 const PANEL_MIN_WIDTH = 400;
+/** How long "Translating…" may stand alone before it explains itself. */
+const SLOW_HINT_MS = 4000;
 
 /**
  * The panel is injected into arbitrary pages, so it cannot assume a white host:
@@ -68,6 +70,7 @@ export function mountSelectionTranslator(
   let panel: HTMLDivElement | null = null;
   let activePort: chrome.runtime.Port | null = null;
   let lastRect: DOMRect | null = null;
+  let slowHintTimer: number | undefined;
 
   function removeIcon(): void {
     icon?.remove();
@@ -77,6 +80,7 @@ export function mountSelectionTranslator(
   function removePanel(): void {
     activePort?.disconnect();
     activePort = null;
+    window.clearTimeout(slowHintTimer);
     panel?.remove();
     panel = null;
   }
@@ -242,11 +246,26 @@ export function mountSelectionTranslator(
     let firstChunk = true;
     let full = '';
 
+    // A first request after the browser starts has to load the model into
+    // VRAM — measured at ~12 s on the benchmark rig, and slower on a cold
+    // disk. An unchanging "Translating…" through all of that reads as broken,
+    // so say what the wait is for rather than leaving the user guessing.
+    window.clearTimeout(slowHintTimer);
+    slowHintTimer = window.setTimeout(() => {
+      if (firstChunk && panel) {
+        setPanelText(
+          content,
+          `Translating… still waiting on ${settings.modelId} — the first request after a restart loads the model into memory.`,
+        );
+      }
+    }, SLOW_HINT_MS);
+
     activePort?.disconnect();
     const port = chrome.runtime.connect({ name: STREAM_PORT_NAME });
     activePort = port;
 
     port.onMessage.addListener((res: StreamResponse) => {
+      window.clearTimeout(slowHintTimer);
       if (res.status === 'streaming') {
         if (firstChunk) {
           setPanelText(content, '');

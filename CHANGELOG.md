@@ -5,7 +5,31 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.2.2] - 2026-07-25
+## [2.2.3] - 2026-07-25
+
+Found by driving the shipped pipeline against a live Ollama over the kinds of
+text a user actually selects, and watching what the panel would show.
+
+### Fixed
+
+- **A wedged server left the panel translating forever.** `translateStream` had
+  no timeout of its own — only the port's `AbortController`, which fires on
+  disconnect, not on a stalled server. Measured against a server that accepts
+  the connection and then sends nothing: still pending after 20 s, and it would
+  have stayed pending for the lifetime of the service worker. Both the request
+  and each stream read are now bounded by an **idle** timeout
+  (`DEFAULT_IDLE_TIMEOUT_MS`, 60 s) that resets on every chunk, so a long
+  selection may stream for minutes while a silent server is caught in one
+  window. The failure is reported as an error the user can act on rather than
+  being swallowed as a cancellation.
+- **A timed-out stream leaked its socket.** The reader was released but never
+  cancelled, leaving the underlying connection open; it is now cancelled on
+  every exit path.
+- **"Translating…" no longer sits there unexplained.** The first request after
+  a browser restart loads the model into VRAM — measured at **12.3 s** on the
+  benchmark rig against ~180 ms for every request after it. After 4 seconds
+  without a chunk the panel now says what it is waiting for and why, instead of
+  reading as a hang.
 
 ### Fixed
 
