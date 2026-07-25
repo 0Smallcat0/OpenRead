@@ -450,28 +450,66 @@ export function mountSelectionTranslator(
     }
   }
 
-  function onMouseUp(event: MouseEvent): void {
-    // Ignore clicks originating inside our own UI.
-    const target = event.target as Node | null;
-    if (target && (icon?.contains(target) || panel?.contains(target))) return;
+  /** The current selection, if it is something worth offering to translate. */
+  function usableSelection(): { text: string; rect: DOMRect } | null {
+    const selection = window.getSelection();
+    const text = selection?.toString().trim() ?? '';
+    if (
+      text.length > 1 &&
+      text.length < MAX_SELECTION_CHARS &&
+      selection &&
+      selection.rangeCount > 0
+    ) {
+      return { text, rect: selection.getRangeAt(0).getBoundingClientRect() };
+    }
+    return null;
+  }
 
+  /** Offer the 文 icon for whatever is selected now, or take it away. */
+  function refreshIcon(): void {
     // Let the selection settle (PDF text layers lag a frame).
     window.setTimeout(() => {
-      const selection = window.getSelection();
-      const text = selection?.toString().trim() ?? '';
-      if (
-        text.length > 1 &&
-        text.length < MAX_SELECTION_CHARS &&
-        selection &&
-        selection.rangeCount > 0
-      ) {
-        const rect = selection.getRangeAt(0).getBoundingClientRect();
-        lastRect = rect;
-        showIcon(rect, text);
+      const found = usableSelection();
+      if (found) {
+        lastRect = found.rect;
+        showIcon(found.rect, found.text);
       } else {
         removeIcon();
       }
     }, 50);
+  }
+
+  function onMouseUp(event: MouseEvent): void {
+    // Ignore clicks originating inside our own UI.
+    const target = event.target as Node | null;
+    if (target && (icon?.contains(target) || panel?.contains(target))) return;
+    refreshIcon();
+  }
+
+  /**
+   * Text can be selected with the keyboard too — Shift with an arrow or
+   * Home/End/PageUp/PageDown, or Ctrl+A — and none of that produces a mouseup.
+   * Without this the icon simply never appeared for a keyboard user, which made
+   * the button's own keyboard support unreachable.
+   */
+  function onKeyUp(event: KeyboardEvent): void {
+    const selectionKey =
+      (event.shiftKey &&
+        /^(Arrow(Left|Right|Up|Down)|Home|End|Page(Up|Down))$/.test(
+          event.key,
+        )) ||
+      ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a');
+    if (selectionKey) refreshIcon();
+  }
+
+  /** Translate what is selected right now — the toolbar-free entry point. */
+  function translateCurrentSelection(): void {
+    const found = usableSelection();
+    if (!found) return;
+    lastRect = found.rect;
+    // Focus moves into the panel: the request came from the keyboard, so there
+    // is no pointer to carry the user's attention there.
+    void translate(found.text, found.rect, true);
   }
 
   function onMouseDown(event: MouseEvent): void {
@@ -490,14 +528,25 @@ export function mountSelectionTranslator(
     removePanel();
   }
 
+  /** The keyboard shortcut arrives from the background worker. */
+  function onRuntimeMessage(message: unknown): void {
+    if ((message as { type?: string } | null)?.type === 'TRANSLATE_SELECTION') {
+      translateCurrentSelection();
+    }
+  }
+
   document.addEventListener('mouseup', onMouseUp, true);
   document.addEventListener('mousedown', onMouseDown, true);
   document.addEventListener('keydown', onKeyDown, true);
+  document.addEventListener('keyup', onKeyUp, true);
+  chrome.runtime?.onMessage?.addListener(onRuntimeMessage);
 
   return () => {
     document.removeEventListener('mouseup', onMouseUp, true);
     document.removeEventListener('mousedown', onMouseDown, true);
     document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('keyup', onKeyUp, true);
+    chrome.runtime?.onMessage?.removeListener(onRuntimeMessage);
     removeIcon();
     removePanel();
     void lastRect;

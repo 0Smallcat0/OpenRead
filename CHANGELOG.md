@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.8] - 2026-07-25
+
+### Added
+
+- **A keyboard shortcut — `Ctrl+Shift+Y` (`Cmd+Shift+Y` on macOS) — translates
+  the current selection.** Remappable at `chrome://extensions/shortcuts`, and it
+  needs no extra permission. It exists because the floating 文 icon is not a
+  route a keyboard user can take: reaching it means tabbing to an element
+  appended at the end of `<body>`, past everything else on the page.
+
+### Fixed
+
+- **The 文 icon never appeared for a selection made with the keyboard.**
+  Shift+Arrow, Shift+Home/End/PageUp/PageDown and Ctrl+A change the selection
+  without ever producing a `mouseup`, which was the only thing that offered the
+  icon — so the button's own keyboard support, added in 2.2.2, was unreachable
+  by exactly the people who needed it. Those keys now offer the icon too.
+
 ## [2.2.7] - 2026-07-25
 
 The offline eval was scoring a code path the product does not run. Fixing the
