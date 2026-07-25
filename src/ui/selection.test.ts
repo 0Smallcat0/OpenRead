@@ -182,6 +182,39 @@ describe('a generation that produces nothing', () => {
   });
 });
 
+describe('a selection longer than the model should be handed', () => {
+  it('still offers the icon, instead of silently ignoring the selection', async () => {
+    // The old guard hid the icon above 5,000 characters, so selecting a whole
+    // page looked like the extension had stopped working.
+    const icon = await select('word '.repeat(2000));
+
+    expect(icon.tagName).toBe('BUTTON');
+  });
+
+  it('translates the leading passage and says how much it took', async () => {
+    await selectAndTranslate('word '.repeat(2000)); // 10,000 characters
+
+    const notice = document
+      .getElementById('oit-translate-panel')
+      ?.querySelector('.oit-notice')?.textContent;
+    expect(notice).toContain('9,999 characters'); // trailing space trimmed
+    expect(notice).toContain('first 5,000');
+
+    const sent = ports[0]?.posted[0] as { text: string };
+    expect(sent.text).toHaveLength(5000);
+  });
+
+  it('says nothing when the whole selection fits', async () => {
+    await selectAndTranslate('Hello, world!');
+
+    expect(
+      document
+        .getElementById('oit-translate-panel')
+        ?.querySelector('.oit-notice'),
+    ).toBeNull();
+  });
+});
+
 describe('same-language selection', () => {
   it('shows the text verbatim without opening a port', async () => {
     await selectAndTranslate('這是一段已經是繁體中文的內容。');
