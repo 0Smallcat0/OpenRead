@@ -218,4 +218,91 @@ describe('translateStream', () => {
       }),
     ).rejects.toThrow('Ollama 404: model not found');
   });
+
+  it('gives up when the server accepts the request and then goes silent', async () => {
+    // A wedged model load looks exactly like this from the client: headers
+    // arrive, then nothing. Without a bound the panel sits on "Translating…"
+    // for the lifetime of the service worker.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          new ReadableStream({
+            start() {
+              /* never enqueues, never closes */
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    await expect(
+      translateStream({
+        text: 'Hello',
+        baseUrl: BASE_URL,
+        model: 'qwen3',
+        targetLang: 'Traditional Chinese',
+        timeoutMs: 20,
+        onChunk: () => {},
+      }),
+    ).rejects.toThrow(/sent nothing for .* streaming the translation/);
+  });
+
+  it('gives up when the server never sends response headers', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockReturnValue(new Promise(() => undefined)),
+    );
+
+    await expect(
+      translateStream({
+        text: 'Hello',
+        baseUrl: BASE_URL,
+        model: 'qwen3',
+        targetLang: 'Traditional Chinese',
+        timeoutMs: 20,
+        onChunk: () => {},
+      }),
+    ).rejects.toThrow(/sent nothing for .* opening the stream/);
+  });
+
+  it('resets the idle budget on every chunk, so a slow stream is not cut off', async () => {
+    // Three chunks, each arriving just inside the window: the total run exceeds
+    // the timeout but no single gap does.
+    let sent = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        return new Promise<void>((resolve) => {
+          setTimeout(() => {
+            if (sent === 3) controller.close();
+            else
+              controller.enqueue(
+                new TextEncoder().encode(
+                  `${JSON.stringify({ message: { content: '字' }, done: false })}\n`,
+                ),
+              );
+            sent++;
+            resolve();
+          }, 30);
+        });
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(stream, { status: 200 })),
+    );
+
+    const chunks: string[] = [];
+    await translateStream({
+      text: 'Hello',
+      baseUrl: BASE_URL,
+      model: 'qwen3',
+      targetLang: 'Traditional Chinese',
+      timeoutMs: 80,
+      onChunk: (c) => chunks.push(c),
+    });
+
+    expect(chunks.join('')).toBe('字字字');
+  });
 });
