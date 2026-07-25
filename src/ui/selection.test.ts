@@ -215,6 +215,19 @@ describe('a selection longer than the model should be handed', () => {
     expect(sent.text).toHaveLength(5000);
   });
 
+  it('sizes the panel border-box so padding cannot push it off-screen', async () => {
+    // jsdom computes no geometry, so this can only assert the declaration — but
+    // its absence is exactly the bug: with content-box sizing the 30px of
+    // horizontal padding lands on top of the 90vw cap, and a real browser put
+    // the panel at left:-14px in a 375px viewport.
+    await selectAndTranslate('Hello, world!');
+
+    const style = document.getElementById('oit-translate-panel')?.style;
+    expect(style?.boxSizing).toBe('border-box');
+    expect(style?.minWidth).toBe('min(400px,90vw)');
+    expect(style?.maxWidth).toBe('min(600px,90vw)');
+  });
+
   it('says nothing when the whole selection fits', async () => {
     await selectAndTranslate('Hello, world!');
 

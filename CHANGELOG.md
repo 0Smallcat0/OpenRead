@@ -5,6 +5,40 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.11] - 2026-07-26
+
+Everything below was found by running the UI in a real browser. The unit tests
+were green throughout — jsdom computes no geometry, so no test in the suite
+could have seen any of it.
+
+### Added
+
+- **A manual harness for the selection UI** (`pnpm harness`). It mounts
+  `mountSelectionTranslator` on a plain Vite page with `chrome` stubbed and the
+  translation faked, so the parts that only exist once a rendering engine is
+  involved — layout, focus, `prefers-color-scheme` — can be exercised by hand.
+  Not the extension: the shortcut and the content-script wiring still need the
+  real thing loaded.
+
+### Fixed
+
+- **The panel hung off the left edge of a narrow viewport.** `min-width` and
+  `max-width` are content-box by default, so the 30px of horizontal padding was
+  added on top of the 90vw cap: measured at **370px wide in a 375px viewport**,
+  and once the right-edge branch pushed it back it sat at **left: -14px**. With
+  `box-sizing: border-box` it measures 338px and sits at left: 18px. Desktop is
+  unchanged (400px, on-screen in both the normal and right-edge cases).
+
+### Verified
+
+- Enter on the 文 button opens the panel and **moves focus into it**; Escape
+  closes both panel and icon; the panel is a `role="dialog"` whose content is an
+  `aria-live` region — all confirmed with real key events, not synthesised ones.
+- The dark palette actually applies under `prefers-color-scheme: dark`
+  (`#1f1f1f` / `#e8e8e8`), and its contrast ratios were **computed from the
+  rendered colours** rather than trusted from a comment: body text 13.45:1,
+  close button 6.27:1.
+
 ## [2.2.10] - 2026-07-26
 
 ### Added
