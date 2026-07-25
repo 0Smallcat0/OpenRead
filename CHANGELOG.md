@@ -5,6 +5,28 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.9] - 2026-07-25
+
+### Added
+
+- **Tests for the background service worker**, the last part of the extension
+  with real behaviour and no coverage. It is thin but not trivial: it owns the
+  streaming broker's cancellation, the only place a network failure becomes
+  something a user can act on, PDF routing, and the keyboard command. Twenty
+  cases drive the listeners it registers — chunk relay and `done`, the base URL
+  being read from storage rather than taken off the message bus, a `TypeError`
+  turning into the "is Ollama running, is `OLLAMA_ORIGINS` set" message, other
+  errors passing through verbatim, an abort staying silent so a replaced
+  selection does not put a warning in the panel, a new request aborting the
+  previous one, a disconnect aborting in-flight work, `.pdf` redirection
+  including the file-scheme permission check and the don't-redirect-the-viewer
+  case, the command reaching the active tab and surviving a tab with no
+  listener, and the enrichment round-trip falling back to `null` so a capture is
+  never lost to it.
+- Coverage now includes `src/entrypoints/background.ts`: **211 tests**, 95%
+  function and 94% line coverage overall, with the background worker itself at
+  100% function / 98% line.
+
 ## [2.2.8] - 2026-07-25
 
 ### Added
