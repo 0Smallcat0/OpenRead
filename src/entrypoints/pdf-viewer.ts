@@ -20,8 +20,5 @@ export default defineUnlistedScript(() => {
         enrichOnCapture: s.enrichOnCapture,
       };
     },
-    // The PDF viewer's overlay CSS targets this class to keep the close button
-    // above the rendered page.
-    closeButtonClass: 'oit-close-btn',
   });
 });
