@@ -31,6 +31,16 @@ const PANEL_MIN_WIDTH = 400;
 const SLOW_HINT_MS = 4000;
 /** Streaming attempts before an empty generation is reported as a failure. */
 const MAX_ATTEMPTS = 2;
+/**
+ * Longest selection actually sent to the model. 4,700 characters already takes
+ * ~21 s on the benchmark rig, so a whole-page selection is not something to run
+ * silently. Beyond this the panel translates the leading passage and says so —
+ * the old behaviour was for the 文 icon simply never to appear, which reads as
+ * the extension being broken rather than as a limit.
+ */
+const MAX_TRANSLATE_CHARS = 5000;
+/** Beyond this a "selection" is a stray Ctrl-A, not something to read. */
+const MAX_SELECTION_CHARS = 50000;
 
 /**
  * The panel is injected into arbitrary pages, so it cannot assume a white host:
@@ -228,14 +238,36 @@ export function mountSelectionTranslator(
     if (panel) panel.scrollTop = panel.scrollHeight;
   }
 
+  /** A line above the translation explaining something about the request. */
+  function mountNotice(host: HTMLDivElement, message: string): void {
+    const skin = palette();
+    const notice = document.createElement('div');
+    notice.className = 'oit-notice';
+    notice.textContent = message;
+    notice.style.cssText =
+      `font-size:12px;color:${skin.dim};margin:0 0 8px;` +
+      `padding-bottom:8px;border-bottom:1px solid ${skin.rule}`;
+    host.prepend(notice);
+  }
+
   async function translate(
-    text: string,
+    selected: string,
     rect: DOMRect,
     viaKeyboard = false,
   ): Promise<void> {
     removeIcon();
     const settings = await options.getSettings();
     const content = showPanel(rect, viaKeyboard);
+
+    // Only the leading passage goes to the model, but say so rather than
+    // quietly translating part of what the user highlighted.
+    const text = selected.slice(0, MAX_TRANSLATE_CHARS);
+    if (selected.length > MAX_TRANSLATE_CHARS && panel) {
+      mountNotice(
+        panel,
+        `Selection is ${selected.length.toLocaleString()} characters — translating the first ${MAX_TRANSLATE_CHARS.toLocaleString()}.`,
+      );
+    }
 
     // Same-language selection: show it verbatim, no API round-trip.
     if (shouldBypassAI(text, settings.targetLang)) {
@@ -424,7 +456,7 @@ export function mountSelectionTranslator(
       const text = selection?.toString().trim() ?? '';
       if (
         text.length > 1 &&
-        text.length < 5000 &&
+        text.length < MAX_SELECTION_CHARS &&
         selection &&
         selection.rangeCount > 0
       ) {

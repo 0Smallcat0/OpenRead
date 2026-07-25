@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.5] - 2026-07-25
+
+### Fixed
+
+- **A selection over 5,000 characters made the 文 icon simply not appear.** No
+  icon, no panel, no message — selecting a whole page or a full PDF column read
+  as the extension having stopped working. The icon now appears for any
+  realistic selection; above 5,000 characters the panel translates the leading
+  passage and says exactly how much of the selection that was, and a capture
+  records the passage that was actually translated. Measured for context: a
+  4,700-character selection already takes ~21 s end to end, so translating a
+  whole page silently was never the right default either.
+
 ## [2.2.4] - 2026-07-25
 
 ### Fixed
