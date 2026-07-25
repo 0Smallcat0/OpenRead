@@ -7,6 +7,21 @@ export interface ChatMessage {
 }
 
 /**
+ * A stateful transform applied to a stream of text chunks.
+ *
+ * Stateful because some conversions read more than one character at a time —
+ * phrase-level Simplified->Traditional, for one — and so cannot treat a chunk
+ * in isolation: a phrase split across two chunks would convert wrongly. Such a
+ * transform holds the ambiguous tail back and gives it up on `end()`.
+ */
+export interface ChunkTransform {
+  /** Transform what is safe to emit now; '' while text is still held back. */
+  push(chunk: string): string;
+  /** Flush anything still held. Called once, when the stream closes. */
+  end(): string;
+}
+
+/**
  * Optional surrounding text used to disambiguate a translation. The model is
  * instructed to translate only `target`, using the neighbours for context.
  */

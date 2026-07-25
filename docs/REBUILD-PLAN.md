@@ -117,7 +117,7 @@ eval/
   eval-measurable; shipped with CI, an offline eval harness, and a live benchmark.
 - Built an **offline, deterministic eval harness** that cut, on a curated fixture set,
   **model-preamble leakage 34.8% → 0%**, **input-echo 17.4% → 0%**, and
-  **Simplified-character leakage 38.1% → 0%** — before/after metrics reproducible in CI.
+  **Simplified-character leakage 42.9% → 0%** — before/after metrics reproducible in CI.
 - Designed a **live 4-model × 2-prompt × 27-fixture streaming benchmark**
   (chrF cross-validated against sacrebleu to 6 decimals; TTFT-network vs TTFT-UI
   probes) and used it to pick the shipped default model; **calibrated a
@@ -145,7 +145,7 @@ eval/
   （TypeScript strict、120 個 Vitest 測試、核心行覆蓋 ~94%），將輸出清理邏輯與
   Chrome/DOM 完全解耦，使其可單元測試、可評測；附 CI、離線評測與實機基準。
 - 建立**離線、確定性的評測框架**：模型前言洩漏 34.8%→0%、原文回聲 17.4%→0%、
-  簡體字洩漏 38.1%→0%，前後對照數據可在 CI 重現。
+  簡體字洩漏 42.9%→0%，前後對照數據可在 CI 重現。
 - 設計 **4 模型 × 2 提示 × 27 題的實機串流基準**（chrF 與 sacrebleu 交叉驗證至
   小數 6 位；TTFT-network 與 TTFT-UI 分離量測），據此選定預設模型；並以
   **40 筆盲標人工標註校準 schema 約束的 LLM 評審**（quadratic-weighted κ：

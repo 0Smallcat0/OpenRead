@@ -19,6 +19,7 @@
     "test:cov": "vitest run --coverage",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "gen:markers": "tsx scripts/gen-zh-markers.ts",
     "eval": "tsx eval/run.ts",
     "eval:capture": "tsx eval/capture-run.ts",
     "eval:structured": "tsx eval/structured/run.ts",

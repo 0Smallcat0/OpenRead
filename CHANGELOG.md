@@ -5,6 +5,40 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Phrase-safe streaming Simplified→Traditional conversion.** `s2twp` maps
+  whole phrases, so converting each stream chunk independently mistranslated
+  any phrase a chunk boundary split — `数据` + `库` became `數據庫` instead of
+  `資料庫`, `端口` stayed `端口` instead of `埠`, and `下游` split in half became
+  `下遊`. `TraditionalTWTransform` (`src/core/zh-convert.ts`) holds the
+  ambiguous tail back until enough context has arrived, so streamed output is
+  byte-identical to converting the finished text in one call. Replaying the 216
+  recorded benchmark generations at chunk sizes 1–8: **13.0% of generations
+  converted differently before the fix, 0.0% after.**
+- **Script-marker sets are now derived from the OpenCC dictionaries** rather
+  than hand-written, fixing errors in both directions. Simplified merged
+  系/係/繫 and 游/遊 (among others) into single forms that are ordinary
+  Traditional characters, so correct output such as `系統` and `下游` scored as
+  Simplified leakage — the source of the benchmark's "residual 7.4%" — and
+  `shouldBypassAI` sent already-Traditional selections to the model for no
+  reason. In the other direction, common Simplified characters (发, 时, 们, 开,
+  软, 机) were missing outright, so `计算机软件开发` was not detected as
+  Simplified at all. `pnpm gen:markers` regenerates
+  `src/core/zh-markers.generated.ts` (3,797 Simplified-only and 3,195
+  Traditional-only characters); `language.test.ts` fails if it drifts from the
+  installed dictionaries. Offline eval Simplified-leakage detection rises from
+  38.1% to **42.9%** of applicable fixtures, still fully removed by the
+  pipeline.
+
+### Changed
+
+- `StreamAssembler`'s `transform` option takes a stateful `ChunkTransform`
+  (`push`/`end`) instead of a pure function, so a transform can hold text back
+  across chunk boundaries; `StreamAssembler.end()` flushes it.
+
 ## [2.2.0] - 2026-07-10
 
 Research-grade evaluation: live model benchmark, judge calibration, and a
