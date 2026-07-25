@@ -92,16 +92,16 @@ scores are treated as an upper bound; [`eval/AGREEMENT.md`](eval/AGREEMENT.md)).
 
 | Model               | chrF ↑   | TTFT-UI p50 | Tokens/s | Verdict                                  |
 | ------------------- | -------- | ----------- | -------- | ---------------------------------------- |
-| **qwen3** (default) | **46.3** | **451 ms**  | 48       | best quality/latency balance             |
+| **qwen3** (default) | **46.4** | **451 ms**  | 48       | best quality/latency balance             |
 | qwen3.5             | 43.4     | 730 ms      | 42       | no chrF edge, 1.6× the wait              |
-| llama3.1            | 31.6     | 532 ms      | 49       | fast, but ~13 chrF behind                |
-| deepseek-r1:8b      | 36.6     | 6,353 ms    | —        | 6-second "thinking tax" — wrong workload |
+| llama3.1            | 31.9     | 532 ms      | 49       | fast, but ~13 chrF behind                |
+| deepseek-r1:8b      | 36.4     | 6,353 ms    | —        | 6-second "thinking tax" — wrong workload |
 
 _Engineered-prompt condition, seed 42; full tables in
 [`eval/BENCHMARK-RESULTS.md`](eval/BENCHMARK-RESULTS.md), methodology and
 limitations in [`docs/BENCHMARK.md`](docs/BENCHMARK.md)._
 
-Two findings worth calling out:
+Three findings worth calling out:
 
 - **The benchmark caught a product-breaking bug.** Through Ollama's
   OpenAI-compat endpoint, reasoning models can spend the _entire_ generation
@@ -115,6 +115,16 @@ Two findings worth calling out:
   assembler stopped flushing mid-artifact. Its remaining price is ~200 ms of
   first paint. Same recorded generations, re-scored through the current
   pipeline (`pnpm bench -- --repipe`), so the change is the code, not sampling.
+- **The eval was scoring a function the product does not call.** `pnpm eval`
+  ran `cleanTranslationOutput` and called it "the exact transform the
+  production pipeline applies" — but the product streams, through
+  `StreamAssembler`, which never touched it. Replayed through the real path,
+  the reported 0% preamble and 0% echo were actually **8.7% and 8.7%**. Both
+  leaks traced to one cause: the reluctant buffer's 12 characters is shorter
+  than the artifacts it exists to catch, so `Here is the translation: …`
+  flushed at `Here is the` and the rest streamed to the panel. The buffer is
+  now adaptive and every harness replays the shipped assembler. A convenient
+  function is how an eval starts lying about the thing it is meant to prove.
 
 ## How it works
 

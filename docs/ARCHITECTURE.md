@@ -99,7 +99,7 @@ sequenceDiagram
         B->>O: POST /api/chat (stream:true, think:false, signal)
         loop each NDJSON chunk
             O-->>B: {message:{content}, done:false}
-            B->>B: StreamAssembler.push (buffer opening,<br/>strip preamble, SC→TC)
+            B->>B: StreamAssembler.push (hold while an artifact<br/>resolves, strip preamble/echo, SC→TC)
             B-->>C: {status:"streaming", chunk}
             C-->>U: append chunk to panel
         end

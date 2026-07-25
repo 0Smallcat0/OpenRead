@@ -57,6 +57,22 @@ server URL from the `OLLAMA_URL` env var (default `http://localhost:11434`);
 no API key required. See [`docs/BENCHMARK.md`](docs/BENCHMARK.md) for the
 methodology.
 
+After changing anything in the streaming pipeline, re-score the recorded
+generations instead of re-running the models — same model output, so the
+pipeline's effect is isolated from sampling noise:
+
+```sh
+pnpm bench -- --repipe
+```
+
+The Simplified/Traditional marker sets in `src/core/zh-markers.generated.ts`
+are derived from the OpenCC dictionaries, not hand-written. Regenerate them
+after an `opencc-js` bump; a test fails if the committed file has drifted:
+
+```sh
+pnpm gen:markers
+```
+
 ## Project layout
 
 - `src/core` — pure, tested translation/reliability logic (no browser APIs)
@@ -64,6 +80,10 @@ methodology.
 - `src/ui` — shared selection UI used by both web and PDF
 - `src/entrypoints` — background worker, content script, popup, PDF viewer
 - `eval/` — offline reliability eval harness and dataset
+- `scripts/` — code generators (script markers)
+- `tests/` — the one test that cannot sit beside its module: WXT treats every
+  file under `src/entrypoints/` as an entrypoint, so `background.test.ts` there
+  would collide with `background.ts`
 - `public/pdfjs` — vendored PDF.js viewer
 
 ## Commit style

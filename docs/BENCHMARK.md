@@ -153,7 +153,7 @@ for:
 Run of 2026-07-10 — 216/216 generations, 0 errors, all cells judged:
 
 - **`qwen3` (engineered prompt) is the quality/latency sweet spot**: corpus
-  chrF 46.3, TTFT-UI p50 451 ms, ~48 tokens/s. `qwen3.5` matches it on judge
+  chrF 46.4, TTFT-UI p50 451 ms, ~48 tokens/s. `qwen3.5` matches it on judge
   scores but is no better on chrF and pays ~1.6× the TTFT. It is now the
   extension's default model.
 - **Prompt engineering is model-dependent, not free quality**: the shipped
