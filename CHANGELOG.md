@@ -5,6 +5,33 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.4] - 2026-07-25
+
+### Fixed
+
+- **A generation that produced nothing left the panel frozen on
+  "Translating…".** No chunk ever arrives, so the placeholder was never
+  replaced — and a whitespace-only generation showed an empty box instead. This
+  is a measured failure mode, not a hypothetical: the benchmark caught
+  reasoning models spending an entire generation on hidden thinking. An empty
+  result now retries once at a looser sampling temperature, and if the retry is
+  also empty the panel names the model and suggests what to change. Transport
+  errors are deliberately _not_ retried — their message is already actionable,
+  and retrying a timeout would only double the wait.
+
+### Added
+
+- **Tests for the selection and capture UI**, the two largest untested surfaces
+  in the repo and the only parts the user actually touches. They run against a
+  real DOM (jsdom) with a stubbed extension port, and assert on what the panel
+  shows and where a capture actually goes — streaming, empty-generation retry,
+  transport errors, same-language short-circuit, Escape and close-button
+  dismissal, keyboard activation and focus, ARIA wiring, the `obsidian://new`
+  URI, the clipboard fallback and its `execCommand` path, and the best-effort
+  enrichment round-trip.
+- Coverage now includes `src/ui` alongside `src/core`: 93% function and 92%
+  line coverage over 175 tests, up from 150 tests scoped to the core alone.
+
 ## [2.2.3] - 2026-07-25
 
 Found by driving the shipped pipeline against a live Ollama over the kinds of
@@ -30,6 +57,8 @@ text a user actually selects, and watching what the panel would show.
   benchmark rig against ~180 ms for every request after it. After 4 seconds
   without a chunk the panel now says what it is waiting for and why, instead of
   reading as a hang.
+
+## [2.2.2] - 2026-07-25
 
 ### Fixed
 

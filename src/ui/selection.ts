@@ -29,6 +29,8 @@ const Z = '2147483647';
 const PANEL_MIN_WIDTH = 400;
 /** How long "Translating…" may stand alone before it explains itself. */
 const SLOW_HINT_MS = 4000;
+/** Streaming attempts before an empty generation is reported as a failure. */
+const MAX_ATTEMPTS = 2;
 
 /**
  * The panel is injected into arbitrary pages, so it cannot assume a white host:
@@ -242,56 +244,88 @@ export function mountSelectionTranslator(
       return;
     }
 
-    setPanelText(content, 'Translating…');
-    let firstChunk = true;
-    let full = '';
+    /**
+     * One streaming attempt. A model that generates nothing is a real,
+     * measured failure mode — the benchmark caught reasoning models spending
+     * a whole generation on hidden thinking — and it used to surface as a
+     * panel frozen on "Translating…" (no chunk ever arrives, so the
+     * placeholder is never replaced) or as an empty box. `attempt` is passed
+     * through as `retryCount`, which loosens the sampling temperature on the
+     * second try. Only an empty result is retried: a transport error already
+     * carries an actionable message, and retrying a timeout would just double
+     * the wait.
+     */
+    const startAttempt = (attempt: number): void => {
+      let firstChunk = true;
+      let full = '';
 
-    // A first request after the browser starts has to load the model into
-    // VRAM — measured at ~12 s on the benchmark rig, and slower on a cold
-    // disk. An unchanging "Translating…" through all of that reads as broken,
-    // so say what the wait is for rather than leaving the user guessing.
-    window.clearTimeout(slowHintTimer);
-    slowHintTimer = window.setTimeout(() => {
-      if (firstChunk && panel) {
-        setPanelText(
-          content,
-          `Translating… still waiting on ${settings.modelId} — the first request after a restart loads the model into memory.`,
-        );
-      }
-    }, SLOW_HINT_MS);
+      setPanelText(
+        content,
+        attempt === 0 ? 'Translating…' : 'Empty response — trying again…',
+      );
 
-    activePort?.disconnect();
-    const port = chrome.runtime.connect({ name: STREAM_PORT_NAME });
-    activePort = port;
-
-    port.onMessage.addListener((res: StreamResponse) => {
+      // A first request after the browser starts has to load the model into
+      // VRAM — measured at ~12 s on the benchmark rig, and slower on a cold
+      // disk. An unchanging "Translating…" through all of that reads as
+      // broken, so say what the wait is for rather than leaving the user
+      // guessing.
       window.clearTimeout(slowHintTimer);
-      if (res.status === 'streaming') {
-        if (firstChunk) {
-          setPanelText(content, '');
-          firstChunk = false;
+      slowHintTimer = window.setTimeout(() => {
+        if (firstChunk && panel) {
+          setPanelText(
+            content,
+            `Translating… still waiting on ${settings.modelId} — the first request after a restart loads the model into memory.`,
+          );
         }
-        full += res.chunk;
-        appendChunk(content, res.chunk);
-      } else if (res.status === 'error') {
-        setPanelText(content, `⚠️ ${res.message}`);
-        port.disconnect();
-        if (activePort === port) activePort = null;
-      } else {
-        port.disconnect();
-        if (activePort === port) activePort = null;
-        if (full.trim()) mountCaptureButton(full, settings);
-      }
-    });
+      }, SLOW_HINT_MS);
 
-    const message: StartStreamMessage = {
-      type: 'START_STREAM',
-      text,
-      targetLang: settings.targetLang,
-      model: settings.modelId,
-      retryCount: 0,
+      activePort?.disconnect();
+      const port = chrome.runtime.connect({ name: STREAM_PORT_NAME });
+      activePort = port;
+
+      const close = (): void => {
+        port.disconnect();
+        if (activePort === port) activePort = null;
+      };
+
+      port.onMessage.addListener((res: StreamResponse) => {
+        window.clearTimeout(slowHintTimer);
+        if (res.status === 'streaming') {
+          if (firstChunk) {
+            setPanelText(content, '');
+            firstChunk = false;
+          }
+          full += res.chunk;
+          appendChunk(content, res.chunk);
+        } else if (res.status === 'error') {
+          setPanelText(content, `⚠️ ${res.message}`);
+          close();
+        } else {
+          close();
+          if (full.trim()) {
+            mountCaptureButton(full, settings);
+          } else if (attempt + 1 < MAX_ATTEMPTS) {
+            startAttempt(attempt + 1);
+          } else {
+            setPanelText(
+              content,
+              `⚠️ ${settings.modelId} returned nothing, twice. Try a shorter selection or a different model.`,
+            );
+          }
+        }
+      });
+
+      const message: StartStreamMessage = {
+        type: 'START_STREAM',
+        text,
+        targetLang: settings.targetLang,
+        model: settings.modelId,
+        retryCount: attempt,
+      };
+      port.postMessage(message);
     };
-    port.postMessage(message);
+
+    startAttempt(0);
 
     // Append a one-tap "save to Obsidian" control once a translation is ready.
     // Hoisted, so the same-language branch above can call it too.
