@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.2.10] - 2026-07-25
+## [2.2.10] - 2026-07-26
 
 ### Added
 
@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The "reliability costs 0.3–0.5 chrF" claim in the README and
   `docs/BENCHMARK.md` was true of the old assembler and is now retired.
 
-## [2.2.9] - 2026-07-25
+## [2.2.9] - 2026-07-26
 
 ### Added
 
@@ -52,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   function and 94% line coverage overall, with the background worker itself at
   100% function / 98% line.
 
-## [2.2.8] - 2026-07-25
+## [2.2.8] - 2026-07-26
 
 ### Added
 
@@ -70,7 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   icon — so the button's own keyboard support, added in 2.2.2, was unreachable
   by exactly the people who needed it. Those keys now offer the icon too.
 
-## [2.2.7] - 2026-07-25
+## [2.2.7] - 2026-07-26
 
 The offline eval was scoring a code path the product does not run. Fixing the
 measurement exposed real leaks in the shipped one.
@@ -108,7 +108,7 @@ asking…` flushed at `<think>The u` and leaked the rest of the thinking. The
   above the shipped path reaches 0% on all three metrics, and the number now
   describes the product.
 
-## [2.2.6] - 2026-07-25
+## [2.2.6] - 2026-07-26
 
 ### Changed
 
