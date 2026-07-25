@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import { buildMessages, extractChunk } from '../../src/api/ollama';
 import { StreamAssembler } from '../../src/core/stream';
-import { toTraditionalTW } from '../../src/core/zh-convert';
+import { TraditionalTWTransform } from '../../src/core/zh-convert';
 import { hasEcho, hasPreamble, hasSimplifiedLeak } from '../detectors';
 import { chrfStats, addStats, chrfFromStats, CHAR_ORDER } from './chrf';
 import type { ChatMessage } from '../../src/core/types';
@@ -205,7 +205,9 @@ async function generate(
     completionTokens: null,
   };
 
-  const assembler = new StreamAssembler({ transform: toTraditionalTW });
+  const assembler = new StreamAssembler({
+    transform: new TraditionalTWTransform(),
+  });
   const emitted: string[] = [];
   const t0 = performance.now();
 

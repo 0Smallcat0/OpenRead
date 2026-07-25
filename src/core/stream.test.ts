@@ -29,9 +29,30 @@ describe('StreamAssembler', () => {
   });
 
   it('applies the transform to both the opening and later chunks', () => {
-    const upper = { transform: (c: string) => c.toUpperCase() };
+    const upper = {
+      transform: {
+        push: (c: string) => c.toUpperCase(),
+        end: () => '',
+      },
+    };
     // First delta contains a newline, forcing an immediate flush.
     expect(run(['ab\n', 'cd'], upper)).toBe('AB\nCD');
+  });
+
+  it('flushes text the transform held back when the stream ends', () => {
+    // A phrase-aware transform withholds an ambiguous tail; end() must emit it.
+    let held = '';
+    const holdLast = {
+      transform: {
+        push: (c: string) => {
+          const out = held;
+          held = c;
+          return out;
+        },
+        end: () => held,
+      },
+    };
+    expect(run(['abcdefghijklm', 'nop'], holdLast)).toBe('abcdefghijklmnop');
   });
 
   it('emits nothing while still buffering below threshold', () => {

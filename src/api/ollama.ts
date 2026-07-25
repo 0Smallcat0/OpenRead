@@ -22,7 +22,7 @@
  */
 import { generateSystemPrompt, getFewShotMessages } from '../core/prompt';
 import { cleanTranslationOutput } from '../core/sanitize';
-import { toTraditionalTW } from '../core/zh-convert';
+import { toTraditionalTW, TraditionalTWTransform } from '../core/zh-convert';
 import { StreamAssembler } from '../core/stream';
 import {
   buildEnrichMessages,
@@ -152,7 +152,9 @@ export async function translateStream(params: StreamParams): Promise<void> {
   if (!response.body) throw new Error('Ollama returned no response body');
 
   const assembler = new StreamAssembler({
-    transform: wantsTraditional(targetLang) ? toTraditionalTW : undefined,
+    transform: wantsTraditional(targetLang)
+      ? new TraditionalTWTransform()
+      : undefined,
   });
   const reader = response.body.getReader();
   const decoder = new TextDecoder('utf-8');

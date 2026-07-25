@@ -7,5 +7,5 @@
     "verbatimModuleSyntax": true,
     "types": ["chrome", "vitest/globals"]
   },
-  "include": ["src", "eval", "*.ts", ".wxt/wxt.d.ts"]
+  "include": ["src", "eval", "scripts", "*.ts", ".wxt/wxt.d.ts"]
 }

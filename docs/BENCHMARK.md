@@ -17,12 +17,12 @@ not a lab approximation of it.
 OpenRead's thesis is that streaming-LLM output is an engineering material with
 measurable failure modes — preamble, input echo, Simplified-character leakage,
 hidden reasoning — not just "AI magic". The offline eval (`pnpm eval`) proves
-the sanitizer removes artifacts from a *fixed* fixture set; this benchmark
+the sanitizer removes artifacts from a _fixed_ fixture set; this benchmark
 asks the live questions the offline harness cannot:
 
 1. **Quality** — which local model translates EN→zh-TW best, and how much does
    prompt engineering move it?
-2. **Reliability** — how often do artifacts appear in *fresh* generations, and
+2. **Reliability** — how often do artifacts appear in _fresh_ generations, and
    does the shipped pipeline still catch them?
 3. **Latency** — what does the user actually wait, and what does the
    reliability layer cost in time-to-first-paint?
@@ -30,14 +30,14 @@ asks the live questions the offline harness cannot:
 
 ## 2. Setup
 
-| | |
-| --- | --- |
-| Hardware | NVIDIA GeForce RTX 4060 Laptop GPU, 8 GB VRAM |
-| Server | Ollama 0.31.1, Windows 11 |
-| Models | `qwen3.5:latest` (6.6 GB), `qwen3:latest` (5.2 GB), `llama3.1:latest` (4.9 GB), `deepseek-r1:8b` (5.2 GB) |
-| Decoding | temperature 0.3 (the extension's first-attempt setting), fixed seed 42 |
-| Endpoint | native `/api/chat`, `think: false` — the shipped client path |
-| Judge | `qwen3.5:latest`, temperature 0, JSON-schema-constrained output |
+|          |                                                                                                           |
+| -------- | --------------------------------------------------------------------------------------------------------- |
+| Hardware | NVIDIA GeForce RTX 4060 Laptop GPU, 8 GB VRAM                                                             |
+| Server   | Ollama 0.31.1, Windows 11                                                                                 |
+| Models   | `qwen3.5:latest` (6.6 GB), `qwen3:latest` (5.2 GB), `llama3.1:latest` (4.9 GB), `deepseek-r1:8b` (5.2 GB) |
+| Decoding | temperature 0.3 (the extension's first-attempt setting), fixed seed 42                                    |
+| Endpoint | native `/api/chat`, `think: false` — the shipped client path                                              |
+| Judge    | `qwen3.5:latest`, temperature 0, JSON-schema-constrained output                                           |
 
 **Product fidelity.** The runner imports the extension's own modules —
 `buildMessages` (prompt), `extractChunk` (stream parsing), `StreamAssembler`
@@ -58,10 +58,10 @@ conventions** — 升息一碼, 執行緒, 連接埠, 工作階段, 晶片 — s
 distinguish "Traditional script" from "actually Taiwanese usage", which is
 exactly the distinction v1's hand-rolled converter failed at.
 
-*Provenance & limitation:* references were drafted with a frontier LLM and
+_Provenance & limitation:_ references were drafted with a frontier LLM and
 human-reviewed; they represent one good translation, not the only one. chrF
 against a single reference therefore under-credits legitimate paraphrases —
-fine for *comparing systems on the same footing*, not an absolute quality
+fine for _comparing systems on the same footing_, not an absolute quality
 scale.
 
 ## 4. Metrics
@@ -83,9 +83,9 @@ scale.
   NDJSON chunk's `eval_count`.
 - **LLM judge** — reference-based grading on three 1–5 axes: adequacy,
   fluency, Taiwan localization. Constrained decoding (`format` = JSON schema)
-  + `think: false` + temperature 0 make it cheap and deterministic. Judged
-  end-to-end experiences: the `naive` baseline's raw output vs the
-  `engineered` condition's shipped-pipeline output.
+  - `think: false` + temperature 0 make it cheap and deterministic. Judged
+    end-to-end experiences: the `naive` baseline's raw output vs the
+    `engineered` condition's shipped-pipeline output.
 
 ### Judge calibration
 
@@ -106,18 +106,18 @@ out 4s and 5s where a Taiwanese reader gives 1s and 2s — so the localization
 column in the judge table should be read as an upper bound, and cross-model
 quality claims in this report lean on chrF + adequacy, not on the judge's
 localization axis. Calibrating the judge didn't just validate it; it told us
-*which parts* of it to trust.
+_which parts_ of it to trust.
 
 ## 5. Conditions
 
-| Condition | Prompt | Pipeline |
-| --- | --- | --- |
-| `naive` | one bare user instruction, no system prompt, no few-shot | scored raw *and* through the pipeline |
-| `engineered` | the shipped `buildMessages`: role/rules system prompt + anti-echo few-shot | scored raw *and* through the pipeline |
+| Condition    | Prompt                                                                     | Pipeline                              |
+| ------------ | -------------------------------------------------------------------------- | ------------------------------------- |
+| `naive`      | one bare user instruction, no system prompt, no few-shot                   | scored raw _and_ through the pipeline |
+| `engineered` | the shipped `buildMessages`: role/rules system prompt + anti-echo few-shot | scored raw _and_ through the pipeline |
 
 Two generations per model per fixture; the pipeline variants are free
-(post-processing the same stream), so the matrix separates *prompting* gains
-from *pipeline* gains.
+(post-processing the same stream), so the matrix separates _prompting_ gains
+from _pipeline_ gains.
 
 ## 6. Found bug: reasoning models × the OpenAI-compat endpoint
 
@@ -149,6 +149,7 @@ tables (quality, artifacts, latency, judge scores). Summary of what to look
 for:
 
 <!-- BENCH-SUMMARY:START -->
+
 Run of 2026-07-10 — 216/216 generations, 0 errors, all cells judged:
 
 - **`qwen3` (engineered prompt) is the quality/latency sweet spot**: corpus
@@ -164,10 +165,25 @@ Run of 2026-07-10 — 216/216 generations, 0 errors, all cells judged:
   Simplified leakage (18.5% → 7.4%), while on already-clean outputs it costs
   a small amount of legitimate text (llama3.1: −0.3 to −0.5 chrF) plus
   ~200 ms of TTFT — the reluctant buffer's measured price.
-- **Residual Simplified leakage (~7%) survives the pipeline** on several
-  models. Consistent with the per-delta OpenCC transform being unable to
-  convert a phrase split across two stream chunks — a concrete, testable
-  follow-up for the streaming layer.
+- **The "residual Simplified leakage (~7%)" this run reported was a detector
+  bug, and chasing it found a real one.** The hypothesis was that the per-delta
+  OpenCC transform could not convert a phrase split across two stream chunks.
+  Replaying all 216 recorded generations falsified it: not one leak came from a
+  chunk boundary. The flagged characters were 系 (系統) and 游 (下游) — ordinary
+  Traditional characters that `SC_MARKERS` wrongly listed as Simplified-only
+  because Simplified merged 系/係/繫 and 游/遊 into one form each. Corrected
+  detector: **0% residual leakage**, and `shouldBypassAI` no longer mistakes
+  Traditional selections for Simplified ones.
+
+  The chunk-boundary bug is real, but it damages _Taiwan localization_, not the
+  Simplified detector: splitting `数据库` into `数据` + `库` yields `數據庫`
+  instead of `資料庫`, `端口` stays `端口` instead of becoming `埠`, and `下游`
+  split in half becomes `下遊`. Replaying the same 216 generations at chunk
+  sizes 1–8, **13.0% of them (28/216) converted differently from a single
+  whole-text call**. `TraditionalTWTransform` holds the ambiguous tail back
+  until enough context has arrived, which takes that to **0.0%** — see
+  [`src/core/zh-convert.ts`](../src/core/zh-convert.ts).
+
 - **The thinking tax is disqualifying for interactive use**: deepseek-r1's
   TTFT is 6.4–6.6 **seconds** (vs 0.3–0.8 s for everything else) because it
   cannot stop reasoning even with `think: false`; its tokens/s figure is
@@ -182,6 +198,7 @@ Run of 2026-07-10 — 216/216 generations, 0 errors, all cells judged:
   calibration step (§4), which confirmed the judge is only moderately
   trustworthy on adequacy (weighted κ 0.526) and weak on fluency/localization
   (0.267 / 0.213).
+
 <!-- BENCH-SUMMARY:END -->
 
 ## 8. Structured-output study
@@ -201,6 +218,7 @@ taxonomy ([`eval/structured/taxonomy.ts`](../eval/structured/taxonomy.ts)) —
 clean / fenced / prose-wrapped / thinking-contaminated / truncated / no-JSON.
 
 <!-- STRUCTURED-SUMMARY:START -->
+
 Run of 2026-07-10 — 128 generations, and the result is an honest surprise:
 
 - **The 2024-era failure modes did not reproduce.** With the shipped prompt,
@@ -220,6 +238,7 @@ Run of 2026-07-10 — 128 generations, and the result is an honest surprise:
   (thinking through the whole labeling task) vs 1.1–1.8 s for the others —
   reinforcing the benchmark's conclusion that reasoning models are the wrong
   tool for interactive assist features, independent of output shape.
+
 <!-- STRUCTURED-SUMMARY:END -->
 
 ## 9. Limitations
