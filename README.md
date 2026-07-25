@@ -69,8 +69,9 @@ Ollama server, no network — so the numbers are reproducible in CI.
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](eval/RESULTS.md)._
 
-The pure core carries **100% function coverage and ~95% line coverage** across
-150 unit tests (`pnpm test:cov`).
+The pure core carries **100% function coverage and 95% line coverage**; the
+selection and capture UI — driven through jsdom with a stubbed extension port —
+adds another 90%. **175 unit tests** in total (`pnpm test:cov`).
 
 ## Which local model? — live benchmark
 

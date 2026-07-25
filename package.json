@@ -1,6 +1,6 @@
 {
   "name": "openread",
-  "version": "2.2.3",
+  "version": "2.2.4",
   "description": "Local-first, evaluation-driven LLM translation for web & PDF via Ollama — a case study in making streaming LLM output reliable.",
   "type": "module",
   "license": "MIT",
@@ -32,6 +32,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
+    "jsdom": "^29.1.1",
     "prettier": "^3.9.4",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3",
