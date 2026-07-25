@@ -27,8 +27,8 @@ The same selection UI works on developer docs (dark pages included) and on
 PDFs — local or remote — through a bundled PDF.js viewer (below: MDN, and the
 Bitcoin whitepaper as a real-world PDF):
 
-| Developer docs (MDN) | Research PDF (PDF.js viewer) |
-| --- | --- |
+| Developer docs (MDN)                                   | Research PDF (PDF.js viewer)                                             |
+| ------------------------------------------------------ | ------------------------------------------------------------------------ |
 | ![Translating MDN docs](docs/screenshots/demo-mdn.png) | ![Translating the Bitcoin whitepaper PDF](docs/screenshots/demo-pdf.png) |
 
 Everything is configured in a small popup — a local Ollama server URL, a model,
@@ -64,13 +64,13 @@ Ollama server, no network — so the numbers are reproducible in CI.
 | -------------------------------------------------- | ------ | -------- | --------- |
 | Preamble / thinking leakage                        | 34.8%  | **0.0%** | 100%      |
 | Input echo                                         | 17.4%  | **0.0%** | 100%      |
-| Simplified-character leakage (Traditional targets) | 38.1%  | **0.0%** | 100%      |
+| Simplified-character leakage (Traditional targets) | 42.9%  | **0.0%** | 100%      |
 
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](eval/RESULTS.md)._
 
-The pure core carries **100% function coverage and ~94% line coverage** across
-120 unit tests (`pnpm test:cov`).
+The pure core carries **100% function coverage and ~95% line coverage** across
+150 unit tests (`pnpm test:cov`).
 
 ## Which local model? — live benchmark
 
@@ -85,12 +85,12 @@ itself calibrated against 40 blind human labels: quadratic-weighted Cohen's κ
 — so quality claims lean on chrF + adequacy, and the judge's localization
 scores are treated as an upper bound; [`eval/AGREEMENT.md`](eval/AGREEMENT.md)).
 
-| Model | chrF ↑ | TTFT-UI p50 | Tokens/s | Verdict |
-| --- | --- | --- | --- | --- |
-| **qwen3** (default) | **46.3** | **451 ms** | 48 | best quality/latency balance |
-| qwen3.5 | 43.4 | 730 ms | 42 | no chrF edge, 1.6× the wait |
-| llama3.1 | 31.6 | 532 ms | 49 | fast, but ~13 chrF behind |
-| deepseek-r1:8b | 36.6 | 6,353 ms | — | 6-second "thinking tax" — wrong workload |
+| Model               | chrF ↑   | TTFT-UI p50 | Tokens/s | Verdict                                  |
+| ------------------- | -------- | ----------- | -------- | ---------------------------------------- |
+| **qwen3** (default) | **46.3** | **451 ms**  | 48       | best quality/latency balance             |
+| qwen3.5             | 43.4     | 730 ms      | 42       | no chrF edge, 1.6× the wait              |
+| llama3.1            | 31.6     | 532 ms      | 49       | fast, but ~13 chrF behind                |
+| deepseek-r1:8b      | 36.6     | 6,353 ms    | —        | 6-second "thinking tax" — wrong workload |
 
 _Engineered-prompt condition, seed 42; full tables in
 [`eval/BENCHMARK-RESULTS.md`](eval/BENCHMARK-RESULTS.md), methodology and
@@ -99,7 +99,7 @@ limitations in [`docs/BENCHMARK.md`](docs/BENCHMARK.md)._
 Two findings worth calling out:
 
 - **The benchmark caught a product-breaking bug.** Through Ollama's
-  OpenAI-compat endpoint, reasoning models can spend the *entire* generation
+  OpenAI-compat endpoint, reasoning models can spend the _entire_ generation
   on hidden chain-of-thought — one fixture: 99 s, 4,055 tokens, zero visible
   characters. The client now uses the native `/api/chat` with `think: false`
   (same fixture: 1.6 s).
@@ -117,11 +117,18 @@ Two findings worth calling out:
   translation still paints fast, then streams the rest straight through.
 - **Taiwan localization** ([`src/core/zh-convert.ts`](src/core/zh-convert.ts)) —
   OpenCC `s2twp` phrase-level Simplified→Traditional conversion, replacing v1's
-  hand-rolled character map that corrupted `界面→界麵` and `公里→公裡`.
+  hand-rolled character map that corrupted `界面→界麵` and `公里→公裡`. Because
+  it maps _phrases_, converting each stream chunk on its own mistranslates any
+  phrase a chunk boundary splits (`数据` + `库` → `數據庫`, not `資料庫`), so the
+  transform holds the ambiguous tail back until enough context arrives — the
+  streamed result is byte-identical to converting the finished text in one call.
 - **Same-language short-circuit**
   ([`src/core/language.ts`](src/core/language.ts)) — script detection skips the
   API entirely when a selection is already in the target language (zero latency,
-  zero cost).
+  zero cost). The Simplified/Traditional marker sets are _derived from the
+  OpenCC dictionaries_ (`pnpm gen:markers`), not hand-written: the hand-written
+  lists both flagged shared characters like 系 and 游 as Simplified and missed
+  common ones like 发 and 时.
 - **Cancellation-safe streaming**
   ([`src/api/ollama.ts`](src/api/ollama.ts) +
   [`src/entrypoints/background.ts`](src/entrypoints/background.ts)) — each
@@ -149,8 +156,8 @@ translation, and a machine-readable YAML header — straight into your vault via
 an `obsidian://new` URI. No extra permissions, no server; notes too large for a
 protocol-handler URL fall back to the clipboard.
 
-| Translate + one-tap capture on any page | …lands as a note in your Obsidian vault |
-| :---: | :---: |
+|                                         Translate + one-tap capture on any page                                          |                                     …lands as a note in your Obsidian vault                                     |
+| :----------------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------------: |
 | ![Inline translation, the save-to-Obsidian button, and the saved toast on Wikipedia](docs/screenshots/capture-saved.png) | ![The captured note in Obsidian, its frontmatter rendered as Properties](docs/screenshots/capture-obsidian.png) |
 
 <sub>And the exact Markdown OpenRead writes — the frontmatter is the `status: raw` handoff contract:</sub>
@@ -166,11 +173,11 @@ re-implementing a knowledge base it has no business owning.
 Optionally, a small local model can pre-label a capture with a title, summary,
 and tags. That pipeline is defense-in-depth, and every layer is _measured_:
 
-| Layer | Evidence |
-| --- | --- |
-| Schema-constrained decoding (Ollama `format`) | took the one imperfect model (deepseek-r1) from 93.3% → **100%** usable metadata at zero latency cost — live study over 4 models × 16 excerpts ([`eval/STRUCTURED-RESULTS.md`](eval/STRUCTURED-RESULTS.md)) |
-| Tolerant `parseEnrichResponse` | salvages 71.4% vs naive parsing's 42.9% on an archive of 14 hostile reply shapes from older/thinking models ([`eval/CAPTURE-RESULTS.md`](eval/CAPTURE-RESULTS.md)); today it mostly does content hygiene — length caps, tag normalisation |
-| `status: raw` handoff | even a perfect-looking label is garnish; the raw capture stays the source of truth |
+| Layer                                         | Evidence                                                                                                                                                                                                                                  |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema-constrained decoding (Ollama `format`) | took the one imperfect model (deepseek-r1) from 93.3% → **100%** usable metadata at zero latency cost — live study over 4 models × 16 excerpts ([`eval/STRUCTURED-RESULTS.md`](eval/STRUCTURED-RESULTS.md))                               |
+| Tolerant `parseEnrichResponse`                | salvages 71.4% vs naive parsing's 42.9% on an archive of 14 hostile reply shapes from older/thinking models ([`eval/CAPTURE-RESULTS.md`](eval/CAPTURE-RESULTS.md)); today it mostly does content hygiene — length caps, tag normalisation |
+| `status: raw` handoff                         | even a perfect-looking label is garnish; the raw capture stays the source of truth                                                                                                                                                        |
 
 The live study also produced an honest negative result: with the shipped
 prompt, temperature 0, and thinking disabled, **modern small models emit
