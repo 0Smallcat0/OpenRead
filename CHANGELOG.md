@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.6] - 2026-07-25
+
+### Changed
+
+- **A capture now reports "Sent to Obsidian ↗" rather than "Saved ✓".** Handing
+  a URL to the OS protocol handler returns no completion signal, so if Obsidian
+  is not installed — or declines the URL — nothing happens and the page is
+  never told. The old wording claimed a save that the extension cannot observe.
+
+### Removed
+
+- **`translateText`, dead since the UI never used it.** It was exported and
+  documented as "the sequential retry fallback", but nothing in `src/` called
+  it; the retry added in 2.2.4 re-streams instead. Removing it also revealed
+  that `cleanTranslationOutput` — which the offline eval calls "the exact
+  transform the production pipeline applies" — is not reachable from any
+  shipped path either. That is tracked as the next fix; the eval's numbers are
+  not restated here until the code they describe actually runs.
+
 ## [2.2.5] - 2026-07-25
 
 ### Fixed
