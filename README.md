@@ -108,10 +108,13 @@ Two findings worth calling out:
   on hidden chain-of-thought — one fixture: 99 s, 4,055 tokens, zero visible
   characters. The client now uses the native `/api/chat` with `think: false`
   (same fixture: 1.6 s).
-- **The reliability layer is a measured tradeoff, not free.** It zeroes
-  preamble on dirty outputs and halves deepseek-r1's Simplified leakage, but
-  costs ~200 ms of first paint and a fraction of a chrF point on clean
-  outputs — numbers, not vibes, either way.
+- **The reliability layer stopped being a tradeoff once it was fixed.** It
+  zeroes preamble on dirty outputs and deepseek-r1's Simplified leakage
+  (14.8% → 0%), and now _adds_ chrF on six of eight model × prompt cells —
+  llama3.1's naive prompt went from −0.3 to **+1.0** after the streaming
+  assembler stopped flushing mid-artifact. Its remaining price is ~200 ms of
+  first paint. Same recorded generations, re-scored through the current
+  pipeline (`pnpm bench -- --repipe`), so the change is the code, not sampling.
 
 ## How it works
 

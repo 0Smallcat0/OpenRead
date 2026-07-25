@@ -20,6 +20,8 @@
  *   pnpm bench                       # full matrix + judge + report
  *   pnpm bench -- --models qwen3:latest --fixtures news-01 --skip-judge
  *   pnpm bench -- --report-only      # regenerate the report from checkpoints
+ *   pnpm bench -- --repipe           # re-score recorded generations through
+ *                                    # the current pipeline, no model calls
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -145,6 +147,16 @@ const onlyModels = argList('--models');
 const onlyFixtures = argList('--fixtures');
 const skipJudge = process.argv.includes('--skip-judge');
 const reportOnly = process.argv.includes('--report-only');
+/**
+ * Re-run the *pipeline* over the recorded generations without asking the models
+ * for new ones. The checkpoint stores `raw` (what the model emitted) separately
+ * from `piped` (what the shipped pipeline made of it), so a change to the
+ * assembler can be re-scored against the identical model output — which
+ * isolates the pipeline's effect instead of confounding it with sampling noise.
+ * Without this, the committed report keeps describing whatever pipeline
+ * happened to be checked out on the day the models were run.
+ */
+const repipe = process.argv.includes('--repipe');
 
 const fixtures = (
   JSON.parse(
@@ -511,7 +523,13 @@ function writeReport(checkpoint: Checkpoint): void {
       '`extractChunk` → `StreamAssembler` + OpenCC). Decoding: temperature ' +
       `${checkpoint.meta.temperature}, seed ${checkpoint.meta.seed}. ` +
       `Judge: \`${checkpoint.meta.judgeModel}\` (native \`/api/chat\`, JSON-schema ` +
-      'constrained, temperature 0). Regenerate with `pnpm bench`.',
+      'constrained, temperature 0). Regenerate with `pnpm bench`.\n\n' +
+      '_Generations are checkpointed, so the model output behind these numbers ' +
+      'is fixed while the pipeline columns are produced by whatever the ' +
+      'assembler does today. After a pipeline change, `pnpm bench -- --repipe` ' +
+      're-scores the recorded generations through the new code and drops the ' +
+      "judge scores it invalidated — the same model output, so the pipeline's " +
+      'effect is isolated from sampling noise._',
   );
   lines.push('');
 
@@ -619,10 +637,52 @@ async function warmup(model: string): Promise<void> {
   }
 }
 
+/** Replay every recorded `raw` through the current pipeline, in place. */
+function repipeCheckpoint(checkpoint: Checkpoint): number {
+  let changed = 0;
+  for (const record of Object.values(checkpoint.generations)) {
+    if (!record.raw) continue;
+    const fixture = fixtures.find((f) => f.id === record.fixtureId);
+    if (!fixture) continue;
+    const assembler = new StreamAssembler({
+      source: fixture.source,
+      transform: new TraditionalTWTransform(),
+    });
+    let piped = '';
+    // The recorded raw is the concatenation of the deltas, so replay it in
+    // small slices: chunk boundaries have to land mid-artifact, as they did.
+    for (let i = 0; i < record.raw.length; i += 3) {
+      piped += assembler.push(record.raw.slice(i, i + 3));
+    }
+    piped += assembler.end();
+    if (piped !== record.piped) {
+      changed++;
+      // The judge grades `engineered` cells on the piped text, so a cached
+      // score for text that no longer exists would put two different pipelines
+      // in one report. Drop it and let the run re-judge.
+      if (record.condition === 'engineered') {
+        delete checkpoint.judgements[
+          cellKey(record.model, record.condition, record.fixtureId)
+        ];
+      }
+    }
+    record.piped = piped;
+  }
+  return changed;
+}
+
 async function main(): Promise<void> {
   const checkpoint = loadCheckpoint();
 
-  if (!reportOnly) {
+  if (repipe) {
+    const changed = repipeCheckpoint(checkpoint);
+    saveCheckpoint(checkpoint);
+    console.log(
+      `re-piped ${Object.keys(checkpoint.generations).length} recorded generations; ${changed} changed`,
+    );
+  }
+
+  if (!reportOnly && !repipe) {
     const totalCells = models.length * CONDITIONS.length * fixtures.length;
     let done = 0;
     for (const model of models) {
