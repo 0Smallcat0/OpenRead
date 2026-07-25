@@ -130,6 +130,13 @@ Two findings worth calling out:
   phrase a chunk boundary splits (`数据` + `库` → `數據庫`, not `資料庫`), so the
   transform holds the ambiguous tail back until enough context arrives — the
   streamed result is byte-identical to converting the finished text in one call.
+- **Keyboard-first, not keyboard-afterthought** — text selected with
+  Shift+Arrow or Ctrl+A offers the 文 button just as a mouse selection does, the
+  button takes Enter/Space, Escape dismisses the panel, and
+  **`Ctrl+Shift+Y`** (remappable at `chrome://extensions/shortcuts`) translates
+  the selection without touching the icon at all. The panel is a named
+  `role="dialog"` whose content is an `aria-live` region, so a streamed
+  translation is actually announced.
 - **Same-language short-circuit**
   ([`src/core/language.ts`](src/core/language.ts)) — script detection skips the
   API entirely when a selection is already in the target language (zero latency,
