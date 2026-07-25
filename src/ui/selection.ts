@@ -23,6 +23,23 @@ const ICON_ID = 'oit-translate-icon';
 const PANEL_ID = 'oit-translate-panel';
 const CONTENT_CLASS = 'content-div';
 const Z = '2147483647';
+/** Single source for the panel's narrowest width — the right-edge test used to
+ *  hardcode 320 against a 400px panel, so a selection near the right margin was
+ *  judged to fit and then overflowed. */
+const PANEL_MIN_WIDTH = 400;
+
+/**
+ * The panel is injected into arbitrary pages, so it cannot assume a white host:
+ * a hardcoded light sheet is blinding on a dark site or dark PDF viewer.
+ * Contrast-checked both ways (dim text >= 4.5:1 on its own background).
+ */
+function palette(): { bg: string; fg: string; dim: string; rule: string } {
+  const dark =
+    window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+  return dark
+    ? { bg: '#1f1f1f', fg: '#e8e8e8', dim: '#9aa0aa', rule: '#3a3a3a' }
+    : { bg: '#fff', fg: '#111', dim: '#6b7280', rule: '#e5e7eb' };
+}
 
 export interface SelectionSettings {
   modelId: string;
@@ -38,8 +55,6 @@ export interface SelectionSettings {
 export interface SelectionUIOptions {
   /** Read the current model + target language at translate time. */
   getSettings: () => Promise<SelectionSettings>;
-  /** PDF viewer tags its close button so its overlay CSS can target it. */
-  closeButtonClass?: string;
 }
 
 /**
@@ -49,7 +64,7 @@ export interface SelectionUIOptions {
 export function mountSelectionTranslator(
   options: SelectionUIOptions,
 ): () => void {
-  let icon: HTMLDivElement | null = null;
+  let icon: HTMLButtonElement | null = null;
   let panel: HTMLDivElement | null = null;
   let activePort: chrome.runtime.Port | null = null;
   let lastRect: DOMRect | null = null;
@@ -68,9 +83,13 @@ export function mountSelectionTranslator(
 
   function showIcon(rect: DOMRect, text: string): void {
     removeIcon();
-    const el = document.createElement('div');
+    // A button, not a div: keyboard users select with the keyboard too, and a
+    // div with a mousedown handler is unreachable for them.
+    const el = document.createElement('button');
     el.id = ICON_ID;
+    el.type = 'button';
     el.textContent = '文';
+    el.setAttribute('aria-label', 'Translate selection');
     el.style.cssText = [
       'position:fixed',
       `top:${rect.bottom + 6}px`,
@@ -88,6 +107,9 @@ export function mountSelectionTranslator(
       'cursor:pointer',
       'box-shadow:0 2px 8px rgba(0,0,0,0.2)',
       'user-select:none',
+      'border:0',
+      'padding:0',
+      'font-family:inherit',
     ].join(';');
     // mousedown (not click) so we act before the selection is cleared.
     el.addEventListener('mousedown', (e) => {
@@ -96,14 +118,31 @@ export function mountSelectionTranslator(
       lastRect = rect;
       void translate(text, rect);
     });
+    // ...but a keyboard press never clears the selection, so Enter/Space works
+    // through the normal keydown path.
+    el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      e.stopPropagation();
+      lastRect = rect;
+      void translate(text, rect, true);
+    });
     document.body.appendChild(el);
     icon = el;
   }
 
-  function showPanel(rect: DOMRect): HTMLDivElement {
+  /** `focusOnOpen` is set only for keyboard activation: translate() removes the
+   *  icon first, so the element the user was focused on disappears and focus
+   *  falls back to <body> unless the panel takes it. Doing this on a mouse
+   *  click would steal focus from the page for no reason. */
+  function showPanel(rect: DOMRect, focusOnOpen = false): HTMLDivElement {
     removePanel();
     const el = document.createElement('div');
     el.id = PANEL_ID;
+    // -1: focusable by script (see focusOnOpen) but never a Tab stop of its own.
+    el.tabIndex = -1;
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', 'Translation');
 
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
@@ -114,19 +153,24 @@ export function mountSelectionTranslator(
       ? `bottom:${viewportHeight - rect.top + 6}px`
       : `top:${rect.bottom + 6}px`;
     const horizontal =
-      rect.left + 320 > viewportWidth ? 'right:20px' : `left:${rect.left}px`;
+      rect.left + PANEL_MIN_WIDTH > viewportWidth
+        ? 'right:20px'
+        : `left:${rect.left}px`;
 
+    const skin = palette();
     el.style.cssText = [
       'position:fixed',
       vertical,
       horizontal,
       `z-index:${Z}`,
-      'min-width:400px',
+      // min-width used to win over max-width below ~400px of viewport and push
+      // the panel off-screen; clamp it to the same 90vw ceiling.
+      `min-width:min(${PANEL_MIN_WIDTH}px,90vw)`,
       'max-width:min(600px,90vw)',
       'max-height:80vh',
       'overflow:auto',
-      'background:#fff',
-      'color:#111',
+      `background:${skin.bg}`,
+      `color:${skin.fg}`,
       'padding:14px 16px',
       'border-radius:10px',
       'box-shadow:0 6px 24px rgba(0,0,0,0.18)',
@@ -135,12 +179,21 @@ export function mountSelectionTranslator(
       'font-family:system-ui,-apple-system,sans-serif',
     ].join(';');
 
-    const close = document.createElement('div');
-    if (options.closeButtonClass) close.className = options.closeButtonClass;
+    const close = document.createElement('button');
+    close.type = 'button';
     close.textContent = '×';
+    close.setAttribute('aria-label', 'Close');
     close.style.cssText =
-      'position:absolute;top:6px;right:10px;cursor:pointer;font-size:18px;color:#888;user-select:none';
+      'position:absolute;top:6px;right:10px;cursor:pointer;font-size:18px;' +
+      // #888 was 3.54:1; the dim tone is contrast-checked for both schemes
+      `color:${skin.dim};user-select:none;background:none;border:0;` +
+      'padding:0;line-height:1;font-family:inherit';
     close.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      removePanel();
+    });
+    close.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       removePanel();
@@ -148,11 +201,15 @@ export function mountSelectionTranslator(
 
     const content = document.createElement('div');
     content.className = CONTENT_CLASS;
+    // The translation streams in chunk by chunk; without a live region a screen
+    // reader never hears any of it.
+    content.setAttribute('aria-live', 'polite');
     content.style.cssText = 'white-space:pre-wrap;word-break:break-word';
 
     el.append(close, content);
     document.body.appendChild(el);
     panel = el;
+    if (focusOnOpen) el.focus();
     return content;
   }
 
@@ -165,10 +222,14 @@ export function mountSelectionTranslator(
     if (panel) panel.scrollTop = panel.scrollHeight;
   }
 
-  async function translate(text: string, rect: DOMRect): Promise<void> {
+  async function translate(
+    text: string,
+    rect: DOMRect,
+    viaKeyboard = false,
+  ): Promise<void> {
     removeIcon();
     const settings = await options.getSettings();
-    const content = showPanel(rect);
+    const content = showPanel(rect, viaKeyboard);
 
     // Same-language selection: show it verbatim, no API round-trip.
     if (shouldBypassAI(text, settings.targetLang)) {
@@ -222,14 +283,18 @@ export function mountSelectionTranslator(
       if (!panel || panel.querySelector('.oit-capture-bar')) return;
       const host = panel;
 
+      const skin = palette();
       const bar = document.createElement('div');
       bar.className = 'oit-capture-bar';
       bar.style.cssText =
-        'margin-top:12px;padding-top:10px;border-top:1px solid #eee;' +
+        `margin-top:12px;padding-top:10px;border-top:1px solid ${skin.rule};` +
         'display:flex;align-items:center;gap:8px';
 
       const btn = document.createElement('button');
-      btn.textContent = '＋ 儲存到 Obsidian';
+      btn.type = 'button';
+      // The rest of this UI (popup, "Translating…") is English; the capture
+      // strings were the only Chinese left in the chrome.
+      btn.textContent = '＋ Save to Obsidian';
       btn.style.cssText = [
         'appearance:none',
         'border:0',
@@ -237,13 +302,14 @@ export function mountSelectionTranslator(
         'font-size:13px',
         'padding:6px 10px',
         'border-radius:6px',
-        'background:#3b82f6',
+        // #3b82f6 put white text at 3.68:1
+        'background:#2563eb',
         'color:#fff',
         'font-family:inherit',
       ].join(';');
 
       const hint = document.createElement('span');
-      hint.style.cssText = 'font-size:12px;color:#888';
+      hint.style.cssText = `font-size:12px;color:${skin.dim}`;
 
       bar.append(btn, hint);
       host.appendChild(bar);
@@ -257,7 +323,7 @@ export function mountSelectionTranslator(
         e.preventDefault();
         e.stopPropagation();
         btn.disabled = true;
-        hint.textContent = config.enrichOnCapture ? '整理中…' : '儲存中…';
+        hint.textContent = config.enrichOnCapture ? 'Enriching…' : 'Saving…';
 
         const note: CaptureNote = {
           title: document.title,
@@ -283,10 +349,10 @@ export function mountSelectionTranslator(
           if (outcome.ok) {
             hint.textContent =
               outcome.method === 'clipboard'
-                ? '已複製，貼到 Obsidian'
-                : '已儲存 ✓';
+                ? 'Copied — paste into Obsidian'
+                : 'Saved ✓';
           } else {
-            hint.textContent = '儲存失敗';
+            hint.textContent = 'Save failed';
             btn.disabled = false;
           }
         });
@@ -325,12 +391,23 @@ export function mountSelectionTranslator(
     removePanel();
   }
 
+  // Clicking outside was the only way to dismiss the panel, which leaves a
+  // keyboard user stuck with it open.
+  function onKeyDown(event: KeyboardEvent): void {
+    if (event.key !== 'Escape') return;
+    if (!panel && !icon) return;
+    removeIcon();
+    removePanel();
+  }
+
   document.addEventListener('mouseup', onMouseUp, true);
   document.addEventListener('mousedown', onMouseDown, true);
+  document.addEventListener('keydown', onKeyDown, true);
 
   return () => {
     document.removeEventListener('mouseup', onMouseUp, true);
     document.removeEventListener('mousedown', onMouseDown, true);
+    document.removeEventListener('keydown', onKeyDown, true);
     removeIcon();
     removePanel();
     void lastRect;

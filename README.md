@@ -151,7 +151,7 @@ streaming sequence diagram.
 
 Reading is only half the loop — OpenRead also turns any translated selection
 into a note in your [Obsidian](https://obsidian.md) vault. Once a translation
-streams in, a **＋ 儲存到 Obsidian** button drops a Markdown note — original,
+streams in, a **＋ Save to Obsidian** button drops a Markdown note — original,
 translation, and a machine-readable YAML header — straight into your vault via
 an `obsidian://new` URI. No extra permissions, no server; notes too large for a
 protocol-handler URL fall back to the clipboard.

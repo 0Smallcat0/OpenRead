@@ -5,6 +5,46 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2] - 2026-07-25
+
+### Fixed
+
+- **The selection UI is reachable without a mouse.** The floating 文 trigger was
+  a `<div>` with a `mousedown` handler — invisible to keyboard and assistive
+  tech. It is now a `<button>` with an accessible name, activated by Enter or
+  Space, and the panel can be dismissed with Escape (previously only a click
+  outside would close it). Keyboard activation moves focus into the panel,
+  because removing the trigger would otherwise drop focus to `<body>`; mouse
+  activation deliberately does not steal focus from the page.
+- **Streaming translations are announced to screen readers.** The panel is a
+  `role="dialog"` with an accessible name, its content is an `aria-live` region
+  so text arriving chunk by chunk is actually read out, and the popup's status
+  line is a live region too.
+- **Contrast failures across the UI.** The panel close button (3.54:1), the
+  popup's primary button label (3.68:1), the capture button, and the popup's
+  input borders (1.61:1) all sat below their WCAG minimums; each is corrected,
+  with the measured ratio recorded next to the value.
+- **The injected panel follows the page's colour scheme.** It hardcoded a white
+  sheet with near-black text, which is blinding on a dark site or dark PDF
+  viewer. It now picks a contrast-checked light or dark palette, as does the
+  popup's status line.
+- **Panel placement near the right edge and on narrow viewports.** The
+  right-edge fit test compared against 320px while the panel was 400px wide, so
+  a selection near the margin was judged to fit and then overflowed; both now
+  read one `PANEL_MIN_WIDTH` constant. `min-width:400px` also beat
+  `max-width:min(600px,90vw)` below ~440px of viewport and pushed the panel
+  off-screen; it is clamped to the same 90vw ceiling.
+- **Saving settings can no longer fail silently.** A rejected `saveSettings`
+  left the popup's status line blank, which reads exactly like "nothing
+  happened yet"; failures now show `Save failed`.
+
+### Changed
+
+- Capture button and status strings are English (`＋ Save to Obsidian`,
+  `Saving…`, `Saved ✓`), matching the rest of the extension chrome.
+- Dropped the unused `closeButtonClass` option from `mountSelectionTranslator`;
+  nothing referenced the class it applied.
+
 ## [2.2.1] - 2026-07-25
 
 Two correctness fixes in the Chinese-conversion path, both found by replaying
