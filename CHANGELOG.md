@@ -5,6 +5,31 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.10] - 2026-07-25
+
+### Added
+
+- **`pnpm bench -- --repipe`** re-scores the recorded benchmark generations
+  through the current pipeline without asking the models for new ones. The
+  checkpoint already stored what the model emitted separately from what the
+  pipeline made of it, so a change to the assembler can be measured against
+  identical model output — the pipeline's effect isolated from sampling noise.
+  It also drops the judge scores it invalidated, so a report can never mix
+  scores from two different pipelines.
+
+### Changed
+
+- **The benchmark now describes the shipped pipeline.** Its numbers were
+  produced by whatever was checked out on 2026-07-10 — before phrase-safe
+  conversion, the corrected script markers, the adaptive buffer and echo
+  removal. Re-piped: 17 of 216 generations changed. Preamble, echo and
+  Simplified leakage are now **0% across every model × prompt cell** after the
+  pipeline (deepseek-r1's naive-prompt Simplified leakage: 14.8% → 0%), and the
+  pipeline **adds** chrF on six of eight cells rather than costing it —
+  llama3.1's naive prompt moved from −0.3 to +1.0, with −0.1 the worst cell.
+  The "reliability costs 0.3–0.5 chrF" claim in the README and
+  `docs/BENCHMARK.md` was true of the old assembler and is now retired.
+
 ## [2.2.9] - 2026-07-25
 
 ### Added

@@ -2,42 +2,37 @@
 
 Live model × prompt matrix over **27** curated EN→zh-TW fixtures (216 generations recorded). Generations run through the exact shipped pipeline (`buildMessages` → native `/api/chat` NDJSON, `think: false` → `extractChunk` → `StreamAssembler` + OpenCC). Decoding: temperature 0.3, seed 42. Judge: `qwen3.5:latest` (native `/api/chat`, JSON-schema constrained, temperature 0). Regenerate with `pnpm bench`.
 
+_Generations are checkpointed, so the model output behind these numbers is fixed while the pipeline columns are produced by whatever the assembler does today. After a pipeline change, `pnpm bench -- --repipe` re-scores the recorded generations through the new code and drops the judge scores it invalidated — the same model output, so the pipeline's effect is isolated from sampling noise._
+
 ## Quality — corpus chrF against references
 
 | Model           | Prompt     | chrF raw | chrF shipped pipeline | Δ pipeline |
 | --------------- | ---------- | -------- | --------------------- | ---------- |
 | qwen3.5:latest  | naive      | 44.1     | 44.7                  | 0.6        |
 | qwen3.5:latest  | engineered | 42.9     | 43.4                  | 0.4        |
-| qwen3:latest    | naive      | 44.2     | 44.4                  | 0.1        |
-| qwen3:latest    | engineered | 45.9     | 46.3                  | 0.5        |
-| llama3.1:latest | naive      | 32.5     | 32.1                  | -0.3       |
-| llama3.1:latest | engineered | 32.1     | 31.6                  | -0.5       |
-| deepseek-r1:8b  | naive      | 32.8     | 35.2                  | 2.4        |
-| deepseek-r1:8b  | engineered | 36.4     | 36.6                  | 0.1        |
+| qwen3:latest    | naive      | 44.2     | 44.8                  | 0.6        |
+| qwen3:latest    | engineered | 45.9     | 46.4                  | 0.5        |
+| llama3.1:latest | naive      | 32.5     | 33.4                  | 1.0        |
+| llama3.1:latest | engineered | 32.1     | 31.9                  | -0.1       |
+| deepseek-r1:8b  | naive      | 32.8     | 36.0                  | 3.3        |
+| deepseek-r1:8b  | engineered | 36.4     | 36.4                  | -0.0       |
 
 ## Streaming artifacts — raw vs shipped pipeline
 
-> **Note (recorded 2026-07-10, annotated 2026-07-25):** the Simplified column
-> below is an artifact of the detector this run used. `SC_MARKERS` listed 系 and
-> 游 as Simplified-only, so correct Traditional output (`系統`, `下游`) scored as
-> leakage. With the corrected detector every one of these figures is 0.0%. The
-> numbers are left as recorded; see [`docs/BENCHMARK.md`](../docs/BENCHMARK.md)
-> §6 for what the investigation did turn up.
-
 | Model           | Prompt     | Preamble raw→piped | Echo raw→piped | Simplified raw→piped |
 | --------------- | ---------- | ------------------ | -------------- | -------------------- |
-| qwen3.5:latest  | naive      | 0.0% → 0.0%        | 0.0% → 0.0%    | 7.4% → 7.4%          |
-| qwen3.5:latest  | engineered | 0.0% → 0.0%        | 0.0% → 0.0%    | 7.4% → 7.4%          |
-| qwen3:latest    | naive      | 0.0% → 0.0%        | 0.0% → 0.0%    | 7.4% → 7.4%          |
-| qwen3:latest    | engineered | 0.0% → 0.0%        | 0.0% → 0.0%    | 11.1% → 7.4%         |
-| llama3.1:latest | naive      | 7.4% → 0.0%        | 0.0% → 0.0%    | 7.4% → 3.7%          |
-| llama3.1:latest | engineered | 0.0% → 0.0%        | 0.0% → 0.0%    | 7.4% → 3.7%          |
-| deepseek-r1:8b  | naive      | 0.0% → 0.0%        | 0.0% → 0.0%    | 18.5% → 7.4%         |
-| deepseek-r1:8b  | engineered | 0.0% → 0.0%        | 0.0% → 0.0%    | 11.1% → 11.1%        |
+| qwen3.5:latest  | naive      | 0.0% → 0.0%        | 0.0% → 0.0%    | 0.0% → 0.0%          |
+| qwen3.5:latest  | engineered | 0.0% → 0.0%        | 0.0% → 0.0%    | 0.0% → 0.0%          |
+| qwen3:latest    | naive      | 0.0% → 0.0%        | 0.0% → 0.0%    | 0.0% → 0.0%          |
+| qwen3:latest    | engineered | 0.0% → 0.0%        | 0.0% → 0.0%    | 3.7% → 0.0%          |
+| llama3.1:latest | naive      | 7.4% → 0.0%        | 0.0% → 0.0%    | 0.0% → 0.0%          |
+| llama3.1:latest | engineered | 0.0% → 0.0%        | 0.0% → 0.0%    | 0.0% → 0.0%          |
+| deepseek-r1:8b  | naive      | 0.0% → 0.0%        | 0.0% → 0.0%    | 14.8% → 0.0%         |
+| deepseek-r1:8b  | engineered | 0.0% → 0.0%        | 0.0% → 0.0%    | 3.7% → 0.0%          |
 
 ## Latency
 
-_TTFT-net = first SSE content token; TTFT-UI = first text the panel paints (after the reluctant buffer). The gap is the price of preamble filtering; for reasoning models the wait is dominated by hidden thinking._
+_TTFT-net = first content token off the wire; TTFT-UI = first text the panel paints (after the reluctant buffer). The gap is the price of preamble filtering; for reasoning models the wait is dominated by hidden thinking._
 
 | Model           | Prompt     | TTFT-net p50 (ms) | TTFT-UI p50 (ms) | Tokens/s | Errors |
 | --------------- | ---------- | ----------------- | ---------------- | -------- | ------ |
