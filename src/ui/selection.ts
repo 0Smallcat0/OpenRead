@@ -179,6 +179,12 @@ export function mountSelectionTranslator(
       vertical,
       horizontal,
       `z-index:${Z}`,
+      // Without this the widths below are content-box, so the 30px of
+      // horizontal padding is added on top of them: a 90vw panel measured
+      // 370px in a 375px viewport and hung 14px off the left edge once the
+      // right-edge branch pushed it back. Caught in a real layout engine —
+      // jsdom computes no geometry, so no unit test could have seen it.
+      'box-sizing:border-box',
       // min-width used to win over max-width below ~400px of viewport and push
       // the panel off-screen; clamp it to the same 90vw ceiling.
       `min-width:min(${PANEL_MIN_WIDTH}px,90vw)`,
