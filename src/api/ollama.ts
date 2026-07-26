@@ -118,6 +118,17 @@ function withTimeout<T>(
 
 async function assertOk(response: Response): Promise<void> {
   if (response.ok) return;
+  // The first thing a new user hits: Ollama refuses requests from origins it
+  // was not told about, and a browser extension is always such an origin. It
+  // answers 403 with an empty body, so the generic branch below produced
+  // "Ollama 403: {}" — true, useless, and one setting away from working.
+  if (response.status === 403) {
+    throw new Error(
+      'Ollama refused this extension (403). It only accepts requests from ' +
+        'origins on its allowlist, so start the server with ' +
+        'OLLAMA_ORIGINS="chrome-extension://*" (see the README) and try again.',
+    );
+  }
   const data: unknown = await response.json().catch(() => ({}));
   const error = (data as { error?: string | { message?: string } })?.error;
   const message =

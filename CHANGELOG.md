@@ -5,6 +5,35 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.12] - 2026-07-26
+
+Found by running the **real extension** in a real browser — loaded from the
+command line into a throwaway profile, driven over CDP with real mouse input,
+against a real page and a real Ollama. The unit tests were green throughout;
+none of these three is reachable from jsdom.
+
+### Fixed
+
+- **The panel picked its colours from the operating system, not the page.**
+  `palette()` asked `prefers-color-scheme`, which answers a different question
+  than the one its own comment posed. Most sites are light-only whatever the OS
+  preference says, so a dark system theme put a dark panel on a light page —
+  precisely the mismatch the palette exists to prevent. It now samples the
+  background actually painted behind the selection and falls back to the media
+  query only when the whole chain is transparent.
+- **Clicking the 文 button made it come back on top of the panel it opened.**
+  The button acts on `mousedown`; the `mouseup` that follows still reaches the
+  document, where it read as "the user finished selecting" — and the selection
+  is of course still there, so the icon was redrawn over the panel. A
+  synthesised `mousedown` never produces the matching `mouseup`, which is why
+  the suite never saw it.
+- **The likeliest first-run failure said nothing useful.** Ollama refuses
+  requests from origins it was not told about, and a browser extension is
+  always such an origin; it answers **403 with an empty body**, which surfaced
+  as `⚠️ Ollama 403: {}`. The client now names the cause and the setting
+  (`OLLAMA_ORIGINS="chrome-extension://*"`). The actionable wording already
+  existed for the network-failure case and simply never covered this one.
+
 ## [2.2.11] - 2026-07-26
 
 Everything below was found by running the UI in a real browser. The unit tests

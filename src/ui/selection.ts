@@ -42,15 +42,63 @@ const MAX_TRANSLATE_CHARS = 5000;
 /** Beyond this a "selection" is a stray Ctrl-A, not something to read. */
 const MAX_SELECTION_CHARS = 50000;
 
+/** Relative luminance of a CSS colour, or null if it is transparent. */
+function luminanceOf(color: string): number | null {
+  const parts = color.match(/[\d.]+/g);
+  if (!parts || parts.length < 3) return null;
+  if (parts.length > 3 && Number(parts[3]) === 0) return null; // fully transparent
+  const [r, g, b] = parts.slice(0, 3).map((value) => {
+    const channel = Number(value) / 255;
+    return channel <= 0.03928
+      ? channel / 12.92
+      : Math.pow((channel + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * (r ?? 0) + 0.7152 * (g ?? 0) + 0.0722 * (b ?? 0);
+}
+
+/**
+ * Is the page the panel is about to sit on a dark one?
+ *
+ * Asking `prefers-color-scheme` — which is what this used to do — answers a
+ * different question: the user's *system* preference. Most sites are light-only
+ * whatever that preference says, so a dark OS setting put a dark panel on a
+ * light page, which is exactly the mismatch the palette exists to avoid. Read
+ * the background actually painted behind the selection instead, and fall back
+ * to the media query only when everything in the chain is transparent.
+ */
+function pageIsDark(at: DOMRect | null): boolean {
+  let hit: Element | null = null;
+  try {
+    // Not universally available (jsdom has no layout, so it throws), and a
+    // panel that fails to open is a far worse outcome than a mistuned palette.
+    if (at) hit = document.elementFromPoint(at.left + 1, at.top + 1);
+  } catch {
+    hit = null;
+  }
+  const seed = hit ?? document.body;
+  for (let el: Element | null = seed; el; el = el.parentElement) {
+    const lum = luminanceOf(getComputedStyle(el).backgroundColor);
+    if (lum !== null) return lum < 0.4;
+  }
+  const root = luminanceOf(
+    getComputedStyle(document.documentElement).backgroundColor,
+  );
+  if (root !== null) return root < 0.4;
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+}
+
 /**
  * The panel is injected into arbitrary pages, so it cannot assume a white host:
  * a hardcoded light sheet is blinding on a dark site or dark PDF viewer.
  * Contrast-checked both ways (dim text >= 4.5:1 on its own background).
  */
-function palette(): { bg: string; fg: string; dim: string; rule: string } {
-  const dark =
-    window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
-  return dark
+function palette(at: DOMRect | null = null): {
+  bg: string;
+  fg: string;
+  dim: string;
+  rule: string;
+} {
+  return pageIsDark(at)
     ? { bg: '#1f1f1f', fg: '#e8e8e8', dim: '#9aa0aa', rule: '#3a3a3a' }
     : { bg: '#fff', fg: '#111', dim: '#6b7280', rule: '#e5e7eb' };
 }
@@ -83,6 +131,14 @@ export function mountSelectionTranslator(
   let activePort: chrome.runtime.Port | null = null;
   let lastRect: DOMRect | null = null;
   let slowHintTimer: number | undefined;
+  /**
+   * Set when the 文 button starts a translation on mousedown. The matching
+   * mouseup still reaches the document, where it used to be read as "the user
+   * finished selecting" — the selection is of course still there, so the icon
+   * reappeared on top of the panel it had just opened. Only visible with a real
+   * press/release pair; a synthesised mousedown never produced one.
+   */
+  let ignoreNextMouseUp = false;
 
   function removeIcon(): void {
     icon?.remove();
@@ -131,6 +187,7 @@ export function mountSelectionTranslator(
     el.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      ignoreNextMouseUp = true;
       lastRect = rect;
       void translate(text, rect);
     });
@@ -173,7 +230,8 @@ export function mountSelectionTranslator(
         ? 'right:20px'
         : `left:${rect.left}px`;
 
-    const skin = palette();
+    // Sampled at the selection, so the panel matches the page it lands on.
+    const skin = palette(rect);
     el.style.cssText = [
       'position:fixed',
       vertical,
@@ -246,7 +304,7 @@ export function mountSelectionTranslator(
 
   /** A line above the translation explaining something about the request. */
   function mountNotice(host: HTMLDivElement, message: string): void {
-    const skin = palette();
+    const skin = palette(lastRect);
     const notice = document.createElement('div');
     notice.className = 'oit-notice';
     notice.textContent = message;
@@ -374,7 +432,7 @@ export function mountSelectionTranslator(
       if (!panel || panel.querySelector('.oit-capture-bar')) return;
       const host = panel;
 
-      const skin = palette();
+      const skin = palette(lastRect);
       const bar = document.createElement('div');
       bar.className = 'oit-capture-bar';
       bar.style.cssText =
@@ -486,6 +544,10 @@ export function mountSelectionTranslator(
   }
 
   function onMouseUp(event: MouseEvent): void {
+    if (ignoreNextMouseUp) {
+      ignoreNextMouseUp = false;
+      return;
+    }
     // Ignore clicks originating inside our own UI.
     const target = event.target as Node | null;
     if (target && (icon?.contains(target) || panel?.contains(target))) return;
