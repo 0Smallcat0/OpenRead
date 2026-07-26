@@ -139,6 +139,20 @@ describe('streaming a translation', () => {
     expect(ports).toHaveLength(1);
   });
 
+  it('does not bring the icon back on the mouseup that follows the click', async () => {
+    // A real press/release pair: the mousedown opens the panel, and the mouseup
+    // that follows still reaches the document. It used to be read as a fresh
+    // selection, so the icon reappeared on top of the panel it had just opened.
+    const icon = await select('Hello, world!');
+    icon.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    await settle();
+    await new Promise((r) => setTimeout(r, 90));
+
+    expect(document.getElementById('oit-translate-panel')).not.toBeNull();
+    expect(document.getElementById('oit-translate-icon')).toBeNull();
+  });
+
   it('shows a transport error and does not retry it', async () => {
     // Retrying "model not found" or a timeout only doubles the wait — the
     // message is already actionable.
