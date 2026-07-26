@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.14] - 2026-07-26
+
+### Removed
+
+- **The manual UI harness added in 2.2.11.** It existed to work around a
+  limitation that no longer applies: at the time the built extension could not
+  be loaded into a browser, so the only way to see the selection UI render was
+  to mount the module on a plain page. Loading the extension into Chrome for
+  Testing removed that constraint, and every finding since — the page-aware
+  palette, the icon reappearing over the panel, the 403 message, the PDF
+  startup sweep — came from the real extension rather than the harness, which
+  has not been used since the day it was written. Keeping an unused second way
+  to exercise the same module is maintenance surface with no reader. Goes with
+  it: the `harness` script, the direct `vite` dependency it needed, and the
+  launch configuration that only pointed at it.
+
 ## [2.2.13] - 2026-07-26
 
 ### Fixed
