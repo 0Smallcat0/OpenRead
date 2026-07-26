@@ -219,6 +219,25 @@ describe('translateStream', () => {
     ).rejects.toThrow('Ollama 404: model not found');
   });
 
+  it('explains a 403 instead of reporting an empty body', async () => {
+    // Measured against the real extension: Ollama refuses a chrome-extension://
+    // origin with 403 and no body, which used to surface as "Ollama 403: {}".
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('', { status: 403 })),
+    );
+
+    await expect(
+      translateStream({
+        text: 'Hello',
+        baseUrl: BASE_URL,
+        model: 'qwen3',
+        targetLang: 'Traditional Chinese',
+        onChunk: () => {},
+      }),
+    ).rejects.toThrow(/OLLAMA_ORIGINS/);
+  });
+
   it('gives up when the server accepts the request and then goes silent', async () => {
     // A wedged model load looks exactly like this from the client: headers
     // arrive, then nothing. Without a bound the panel sits on "Translating…"
