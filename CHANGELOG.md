@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.13] - 2026-07-26
+
+### Fixed
+
+- **A PDF opened as the browser's startup page stayed in Chrome's own viewer.**
+  `chrome.tabs.onUpdated` only sees navigations that happen while the MV3 worker
+  is alive; launch the browser straight onto a PDF — a restored session, or a
+  `.pdf` link clicked from outside Chrome — and the navigation is already past
+  `loading` before the worker starts. Measured in a real browser: launching with
+  a PDF as the startup page landed in the built-in viewer every time, while
+  browsing first and then opening the same PDF worked. The worker now sweeps the
+  open tabs on `onStartup` and `onInstalled`, honouring the same file-scheme
+  permission check and the same don't-redirect-the-viewer guard.
+
 ## [2.2.12] - 2026-07-26
 
 Found by running the **real extension** in a real browser — loaded from the
