@@ -31,18 +31,44 @@ export default defineBackground(() => {
     }
   }
 
-  // Auto-redirect PDF navigations into the vendored PDF.js viewer.
-  chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-    if (changeInfo.status !== 'loading' || !tab.url) return;
-    if (!isPdfUrl(tab.url) || tab.url.startsWith(viewerUrl)) return;
-    if (tab.url.startsWith('file://')) {
+  /** Send one tab into the bundled viewer, if it is a PDF we may open. */
+  async function routeToViewer(tabId: number, url: string): Promise<void> {
+    if (!isPdfUrl(url) || url.startsWith(viewerUrl)) return;
+    if (url.startsWith('file://')) {
       const allowed = await chrome.extension.isAllowedFileSchemeAccess();
       if (!allowed) return;
     }
-    void chrome.tabs.update(tabId, {
-      url: `${viewerUrl}?file=${encodeURIComponent(tab.url)}`,
+    await chrome.tabs.update(tabId, {
+      url: `${viewerUrl}?file=${encodeURIComponent(url)}`,
     });
+  }
+
+  // Auto-redirect PDF navigations into the vendored PDF.js viewer.
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status !== 'loading' || !tab.url) return;
+    void routeToViewer(tabId, tab.url);
   });
+
+  /**
+   * The listener above only sees navigations that happen while this worker is
+   * alive. Open the browser straight onto a PDF — a restored session, or a .pdf
+   * link clicked from outside Chrome — and the navigation is already past
+   * `loading` by the time MV3 gets around to starting the worker, so the tab
+   * stays in Chrome's own viewer. Measured: launching with a PDF as the startup
+   * page landed in the built-in viewer every time, while browsing first and then
+   * opening the same PDF worked. Sweeping the open tabs on wake covers the gap.
+   */
+  function routeExistingPdfTabs(): void {
+    void (async () => {
+      const tabs = await chrome.tabs.query({});
+      for (const tab of tabs) {
+        if (tab.id === undefined || !tab.url) continue;
+        await routeToViewer(tab.id, tab.url).catch(() => undefined);
+      }
+    })();
+  }
+  chrome.runtime.onStartup.addListener(routeExistingPdfTabs);
+  chrome.runtime.onInstalled.addListener(routeExistingPdfTabs);
 
   // Keyboard shortcut: a selection made with the keyboard produces no mouseup,
   // so the floating 文 icon is not a route a keyboard user can take. Broadcast

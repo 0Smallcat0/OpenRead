@@ -35,6 +35,8 @@ interface Registered {
     tab: { url?: string },
   ) => void;
   onCommand: (command: string) => void;
+  onStartup: () => void;
+  onInstalled: () => void;
   onConnect: (port: FakePort) => void;
   onMessage: (
     request: unknown,
@@ -77,6 +79,7 @@ class FakePort {
 
 let registered: Registered;
 let tabsUpdate: ReturnType<typeof vi.fn>;
+let tabsQuery: ReturnType<typeof vi.fn>;
 let tabsSendMessage: ReturnType<typeof vi.fn>;
 let fileSchemeAllowed: boolean;
 
@@ -92,6 +95,7 @@ beforeEach(async () => {
   mocks.loadSettings.mockReset().mockResolvedValue({ baseUrl: BASE_URL });
   fileSchemeAllowed = true;
   tabsUpdate = vi.fn().mockResolvedValue(undefined);
+  tabsQuery = vi.fn().mockResolvedValue([{ id: 7 }]);
   tabsSendMessage = vi.fn().mockResolvedValue(undefined);
 
   const partial: Partial<Registered> = {};
@@ -108,6 +112,16 @@ beforeEach(async () => {
           partial.onMessage = fn;
         },
       },
+      onStartup: {
+        addListener: (fn: Registered['onStartup']) => {
+          partial.onStartup = fn;
+        },
+      },
+      onInstalled: {
+        addListener: (fn: Registered['onInstalled']) => {
+          partial.onInstalled = fn;
+        },
+      },
     },
     tabs: {
       onUpdated: {
@@ -116,7 +130,7 @@ beforeEach(async () => {
         },
       },
       update: tabsUpdate,
-      query: vi.fn().mockResolvedValue([{ id: 7 }]),
+      query: tabsQuery,
       sendMessage: tabsSendMessage,
     },
     commands: {
@@ -189,6 +203,49 @@ describe('PDF routing', () => {
       { status: 'loading' },
       { url: 'file:///C:/papers/attention.pdf' },
     );
+    await settle();
+
+    expect(tabsUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('PDF tabs that were already open when the worker woke', () => {
+  it('sweeps them into the viewer on startup', async () => {
+    // Launching the browser straight onto a PDF puts the navigation past
+    // `loading` before MV3 starts the worker, so onUpdated never sees it.
+    tabsQuery.mockResolvedValue([
+      { id: 1, url: 'https://example.com/paper.pdf' },
+      { id: 2, url: 'https://example.com/article' },
+    ]);
+    registered.onStartup();
+    await settle();
+
+    expect(tabsUpdate).toHaveBeenCalledTimes(1);
+    expect(tabsUpdate).toHaveBeenCalledWith(1, {
+      url: `${VIEWER}?file=${encodeURIComponent('https://example.com/paper.pdf')}`,
+    });
+  });
+
+  it('sweeps them on install too, not only on browser startup', async () => {
+    tabsQuery.mockResolvedValue([{ id: 3, url: 'https://example.com/a.pdf' }]);
+    registered.onInstalled();
+    await settle();
+
+    expect(tabsUpdate).toHaveBeenCalledWith(3, expect.anything());
+  });
+
+  it('does not send the viewer into itself', async () => {
+    tabsQuery.mockResolvedValue([{ id: 4, url: `${VIEWER}?file=x.pdf` }]);
+    registered.onStartup();
+    await settle();
+
+    expect(tabsUpdate).not.toHaveBeenCalled();
+  });
+
+  it('still honours the file-scheme permission during the sweep', async () => {
+    fileSchemeAllowed = false;
+    tabsQuery.mockResolvedValue([{ id: 5, url: 'file:///C:/a.pdf' }]);
+    registered.onStartup();
     await settle();
 
     expect(tabsUpdate).not.toHaveBeenCalled();
