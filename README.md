@@ -71,11 +71,11 @@ mid-artifact exactly as they do in a live stream.
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](eval/RESULTS.md)._
 
-**211 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
+**218 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
 pure core at **100% function / 97% line** coverage, the selection and capture UI
 driven through jsdom with a stubbed extension port, and the background worker —
-which owns cancellation, error translation and PDF routing — at **100% function
-/ 98% line**. Overall: 95% function, 94% line.
+which owns cancellation, error translation and PDF routing. Overall: 93%
+function, 94% line.
 
 ## Which local model? — live benchmark
 

@@ -109,10 +109,10 @@ eval/
 4. Manifest declared unused `scripting` + `declarativeNetRequest` permissions (store-review risk). Dropped.
 5. `content.js` <-> `pdf-integration.js` ~90% copy-paste duplication.
 
-## Resume bullets (v2.2.10 — real numbers, EN)
+## Resume bullets (v2.2.14 — real numbers, EN)
 
 - Rebuilt a browser LLM-translation extension around a **pure, 100%-function-covered
-  reliability core** (TypeScript strict, 211 Vitest tests, 100% function / 97% line coverage on the core),
+  reliability core** (TypeScript strict, 218 Vitest tests, 100% function / 97% line coverage on the core),
   separating all output-cleanup logic from Chrome/DOM so it is unit-testable and
   eval-measurable; shipped with CI, an offline eval harness, and a live benchmark.
 - Built an **offline, deterministic eval harness** that cut, on a curated fixture set,
@@ -159,17 +159,17 @@ eval/
   one cause (a 12-character buffer flushing mid-artifact), fixed with an
   adaptive hold that costs **zero extra characters on clean output**, and all
   three harnesses now replay the shipped assembler.
-- Grew coverage from 120 to **211 tests** by testing what users actually touch:
+- Grew coverage from 120 to **218 tests** by testing what users actually touch:
   the selection UI and capture path in jsdom with a stubbed extension port, and
   the MV3 service worker — whose suite I validated by **mutation** (removing
   the abort-on-new-request, reporting aborts as errors, and dropping the
   channel-keepalive each failed exactly the case covering it) rather than
   trusting that twenty green tests meant twenty real ones.
 
-## Resume bullets (v2.2.10 — zh-TW)
+## Resume bullets (v2.2.14 — zh-TW)
 
 - 以**純函式、100% 函式覆蓋的可靠性核心**重建瀏覽器 LLM 翻譯擴充功能
-  （TypeScript strict、211 個 Vitest 測試、核心 100% 函式／97% 行覆蓋），將輸出清理邏輯與
+  （TypeScript strict、218 個 Vitest 測試、核心 100% 函式／97% 行覆蓋），將輸出清理邏輯與
   Chrome/DOM 完全解耦，使其可單元測試、可評測；附 CI、離線評測與實機基準。
 - 建立**離線、確定性的評測框架**：模型前言洩漏 34.8%→0%、原文回聲 17.4%→0%、
   簡體字洩漏 42.9%→0%，前後對照數據可在 CI 重現。
@@ -200,7 +200,7 @@ eval/
   8.7%** —— 回聲移除在產品中一次都沒執行過。兩個漏洞同一根因（12 字元緩衝
   在偽影中間沖出），以自適應扣留修正，且**乾淨輸出零額外成本**；三個 harness
   現在都重放出貨版 assembler。
-- 測試從 120 成長到 **211**，補的是使用者真正碰得到的部分：selection UI 與
+- 測試從 120 成長到 **218**，補的是使用者真正碰得到的部分：selection UI 與
   擷取路徑（jsdom＋stub 擴充功能 port）、以及 MV3 service worker —— 後者的
   測試我用**突變測試**驗證（拿掉新請求時的 abort、把 abort 當錯誤回報、拿掉
   維持通道開啟的回傳值，各自只打中對應那一個測試），而不是相信「20 個綠燈
