@@ -188,7 +188,7 @@ protocol-handler URL fall back to the clipboard.
 
 |                                         Translate + one-tap capture on any page                                          |                                     …lands as a note in your Obsidian vault                                     |
 | :----------------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------------: |
-| ![Inline translation, the save-to-Obsidian button, and the saved toast on Wikipedia](docs/screenshots/capture-saved.png) | ![The captured note in Obsidian, its frontmatter rendered as Properties](docs/screenshots/capture-obsidian.png) |
+| ![Inline translation and the save-to-Obsidian button on Wikipedia](docs/screenshots/capture-saved.png) | ![The captured note in Obsidian, its frontmatter rendered as Properties](docs/screenshots/capture-obsidian.png) |
 
 <sub>And the exact Markdown OpenRead writes — the frontmatter is the `status: raw` handoff contract:</sub>
 
