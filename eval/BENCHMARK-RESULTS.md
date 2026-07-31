@@ -6,58 +6,61 @@ _Generations are checkpointed, so the model output behind these numbers is fixed
 
 ## Quality — corpus chrF against references
 
-| Model           | Prompt     | chrF raw | chrF shipped pipeline | Δ pipeline |
-| --------------- | ---------- | -------- | --------------------- | ---------- |
-| qwen3.5:latest  | naive      | 44.1     | 44.7                  | 0.6        |
-| qwen3.5:latest  | engineered | 42.9     | 43.4                  | 0.4        |
-| qwen3:latest    | naive      | 44.2     | 44.8                  | 0.6        |
-| qwen3:latest    | engineered | 45.9     | 46.4                  | 0.5        |
-| llama3.1:latest | naive      | 32.5     | 33.4                  | 1.0        |
-| llama3.1:latest | engineered | 32.1     | 31.9                  | -0.1       |
-| deepseek-r1:8b  | naive      | 32.8     | 36.0                  | 3.3        |
-| deepseek-r1:8b  | engineered | 36.4     | 36.4                  | -0.0       |
+| Model | Prompt | chrF raw | chrF shipped pipeline | Δ pipeline |
+| --- | --- | --- | --- | --- |
+| qwen3.5:latest | naive | 44.1 | 44.7 | 0.6 |
+| qwen3.5:latest | engineered | 42.9 | 43.4 | 0.4 |
+| qwen3:latest | naive | 44.2 | 44.8 | 0.6 |
+| qwen3:latest | engineered | 45.9 | 46.4 | 0.5 |
+| llama3.1:latest | naive | 32.5 | 33.4 | 1.0 |
+| llama3.1:latest | engineered | 32.1 | 31.9 | -0.1 |
+| deepseek-r1:8b | naive | 32.8 | 36.0 | 3.3 |
+| deepseek-r1:8b | engineered | 36.4 | 36.4 | -0.0 |
 
 ## Streaming artifacts — raw vs shipped pipeline
 
-| Model           | Prompt     | Preamble raw→piped | Echo raw→piped | Simplified raw→piped |
-| --------------- | ---------- | ------------------ | -------------- | -------------------- |
-| qwen3.5:latest  | naive      | 0.0% → 0.0%        | 0.0% → 0.0%    | 0.0% → 0.0%          |
-| qwen3.5:latest  | engineered | 0.0% → 0.0%        | 0.0% → 0.0%    | 0.0% → 0.0%          |
-| qwen3:latest    | naive      | 0.0% → 0.0%        | 0.0% → 0.0%    | 0.0% → 0.0%          |
-| qwen3:latest    | engineered | 0.0% → 0.0%        | 0.0% → 0.0%    | 3.7% → 0.0%          |
-| llama3.1:latest | naive      | 7.4% → 0.0%        | 0.0% → 0.0%    | 0.0% → 0.0%          |
-| llama3.1:latest | engineered | 0.0% → 0.0%        | 0.0% → 0.0%    | 0.0% → 0.0%          |
-| deepseek-r1:8b  | naive      | 0.0% → 0.0%        | 0.0% → 0.0%    | 14.8% → 0.0%         |
-| deepseek-r1:8b  | engineered | 0.0% → 0.0%        | 0.0% → 0.0%    | 3.7% → 0.0%          |
+_Control tokens are measured but never filtered, so that column reads the same on both sides by design. Ollama's qwen3 template appends ` /no_think` to the last user message whenever a request sets `think: false`, which every translation does; with no context supplied that message is the bare source text, so the token lands inside what the model is asked to translate. It has never been observed leaking in this benchmark — the column exists to catch it if that changes._
+
+| Model | Prompt | Preamble raw→piped | Echo raw→piped | Simplified raw→piped | Control token raw→piped |
+| --- | --- | --- | --- | --- | --- |
+| qwen3.5:latest | naive | 0.0% → 0.0% | 0.0% → 0.0% | 0.0% → 0.0% | 0.0% → 0.0% |
+| qwen3.5:latest | engineered | 0.0% → 0.0% | 0.0% → 0.0% | 0.0% → 0.0% | 0.0% → 0.0% |
+| qwen3:latest | naive | 0.0% → 0.0% | 0.0% → 0.0% | 0.0% → 0.0% | 0.0% → 0.0% |
+| qwen3:latest | engineered | 0.0% → 0.0% | 0.0% → 0.0% | 3.7% → 0.0% | 0.0% → 0.0% |
+| llama3.1:latest | naive | 7.4% → 0.0% | 0.0% → 0.0% | 0.0% → 0.0% | 0.0% → 0.0% |
+| llama3.1:latest | engineered | 0.0% → 0.0% | 0.0% → 0.0% | 0.0% → 0.0% | 0.0% → 0.0% |
+| deepseek-r1:8b | naive | 0.0% → 0.0% | 0.0% → 0.0% | 14.8% → 0.0% | 0.0% → 0.0% |
+| deepseek-r1:8b | engineered | 0.0% → 0.0% | 0.0% → 0.0% | 3.7% → 0.0% | 0.0% → 0.0% |
 
 ## Latency
 
 _TTFT-net = first content token off the wire; TTFT-UI = first text the panel paints (after the reluctant buffer). The gap is the price of preamble filtering; for reasoning models the wait is dominated by hidden thinking._
 
-| Model           | Prompt     | TTFT-net p50 (ms) | TTFT-UI p50 (ms) | Tokens/s | Errors |
-| --------------- | ---------- | ----------------- | ---------------- | -------- | ------ |
-| qwen3.5:latest  | naive      | 554               | 766              | 13.7     | 0/27   |
-| qwen3.5:latest  | engineered | 545               | 730              | 42.4     | 0/27   |
-| qwen3:latest    | naive      | 258               | 453              | 47.8     | 0/27   |
-| qwen3:latest    | engineered | 255               | 451              | 48.0     | 0/27   |
-| llama3.1:latest | naive      | 301               | 534              | 48.6     | 0/27   |
-| llama3.1:latest | engineered | 299               | 532              | 49.1     | 0/27   |
-| deepseek-r1:8b  | naive      | 6568              | 6568             | 457.0    | 0/27   |
-| deepseek-r1:8b  | engineered | 6353              | 6353             | 477.0    | 0/27   |
+| Model | Prompt | TTFT-net p50 (ms) | TTFT-UI p50 (ms) | Tokens/s | Errors |
+| --- | --- | --- | --- | --- | --- |
+| qwen3.5:latest | naive | 554 | 766 | 13.7 | 0/27 |
+| qwen3.5:latest | engineered | 545 | 730 | 42.4 | 0/27 |
+| qwen3:latest | naive | 258 | 453 | 47.8 | 0/27 |
+| qwen3:latest | engineered | 255 | 451 | 48.0 | 0/27 |
+| llama3.1:latest | naive | 301 | 534 | 48.6 | 0/27 |
+| llama3.1:latest | engineered | 299 | 532 | 49.1 | 0/27 |
+| deepseek-r1:8b | naive | 6568 | 6568 | 457.0 | 0/27 |
+| deepseek-r1:8b | engineered | 6353 | 6353 | 477.0 | 0/27 |
 
 ## LLM-judge quality (1–5)
 
 _Judged end-to-end experiences: `naive` = raw baseline output, `engineered` = shipped pipeline output. Reference-based grading; see `docs/BENCHMARK.md` for judge calibration against human labels._
 
-| Model           | Prompt     | Adequacy | Fluency | TW localization | Judged |
-| --------------- | ---------- | -------- | ------- | --------------- | ------ |
-| qwen3.5:latest  | naive      | 4.74     | 4.89    | 4.78            | 27/27  |
-| qwen3.5:latest  | engineered | 4.67     | 4.93    | 4.78            | 27/27  |
-| qwen3:latest    | naive      | 4.70     | 4.78    | 4.33            | 27/27  |
-| qwen3:latest    | engineered | 4.48     | 4.70    | 4.37            | 27/27  |
-| llama3.1:latest | naive      | 4.44     | 4.70    | 4.37            | 27/27  |
-| llama3.1:latest | engineered | 4.30     | 4.63    | 4.41            | 27/27  |
-| deepseek-r1:8b  | naive      | 4.41     | 4.81    | 4.22            | 27/27  |
-| deepseek-r1:8b  | engineered | 4.19     | 4.85    | 4.41            | 27/27  |
+| Model | Prompt | Adequacy | Fluency | TW localization | Judged |
+| --- | --- | --- | --- | --- | --- |
+| qwen3.5:latest | naive | 4.74 | 4.89 | 4.78 | 27/27 |
+| qwen3.5:latest | engineered | 4.67 | 4.93 | 4.78 | 27/27 |
+| qwen3:latest | naive | 4.70 | 4.78 | 4.33 | 27/27 |
+| qwen3:latest | engineered | 4.48 | 4.70 | 4.37 | 27/27 |
+| llama3.1:latest | naive | 4.44 | 4.70 | 4.37 | 27/27 |
+| llama3.1:latest | engineered | 4.30 | 4.63 | 4.41 | 27/27 |
+| deepseek-r1:8b | naive | 4.41 | 4.81 | 4.22 | 27/27 |
+| deepseek-r1:8b | engineered | 4.19 | 4.85 | 4.41 | 27/27 |
 
 _Hardware: local Ollama (http://localhost:11434). Latency numbers are machine-specific; relative comparisons are the point._
+
