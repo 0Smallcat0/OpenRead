@@ -30,7 +30,12 @@ import { performance } from 'node:perf_hooks';
 import { buildMessages, extractChunk } from '../../src/api/ollama';
 import { StreamAssembler } from '../../src/core/stream';
 import { TraditionalTWTransform } from '../../src/core/zh-convert';
-import { hasEcho, hasPreamble, hasSimplifiedLeak } from '../detectors';
+import {
+  hasControlTokenLeak,
+  hasEcho,
+  hasPreamble,
+  hasSimplifiedLeak,
+} from '../detectors';
 import { chrfStats, addStats, chrfFromStats, CHAR_ORDER } from './chrf';
 import type { ChatMessage } from '../../src/core/types';
 
@@ -378,6 +383,8 @@ interface CellAggregate {
   echoPiped: number;
   simplifiedRaw: number;
   simplifiedPiped: number;
+  controlRaw: number;
+  controlPiped: number;
   ttftNetP50: number | null;
   ttftUiP50: number | null;
   tokensPerSec: number | null;
@@ -430,6 +437,8 @@ function aggregate(checkpoint: Checkpoint): CellAggregate[] {
       let echoPiped = 0;
       let simplifiedRaw = 0;
       let simplifiedPiped = 0;
+      let controlRaw = 0;
+      let controlPiped = 0;
 
       for (const r of ok) {
         const fixture = byFixture.get(r.fixtureId);
@@ -445,6 +454,8 @@ function aggregate(checkpoint: Checkpoint): CellAggregate[] {
         if (hasEcho(fixture.source, r.piped)) echoPiped++;
         if (hasSimplifiedLeak(r.raw)) simplifiedRaw++;
         if (hasSimplifiedLeak(r.piped)) simplifiedPiped++;
+        if (hasControlTokenLeak(r.raw)) controlRaw++;
+        if (hasControlTokenLeak(r.piped)) controlPiped++;
         if (r.ttftNetMs !== null) ttftNet.push(r.ttftNetMs);
         if (r.ttftUiMs !== null) ttftUi.push(r.ttftUiMs);
         if (r.completionTokens !== null && r.ttftNetMs !== null) {
@@ -474,6 +485,8 @@ function aggregate(checkpoint: Checkpoint): CellAggregate[] {
         echoPiped,
         simplifiedRaw,
         simplifiedPiped,
+        controlRaw,
+        controlPiped,
         ttftNetP50: percentile(ttftNet, 0.5),
         ttftUiP50: percentile(ttftUi, 0.5),
         tokensPerSec: tokenTimeMs > 0 ? (tokenSum / tokenTimeMs) * 1000 : null,
@@ -550,16 +563,27 @@ function writeReport(checkpoint: Checkpoint): void {
   lines.push('## Streaming artifacts — raw vs shipped pipeline');
   lines.push('');
   lines.push(
-    '| Model | Prompt | Preamble raw→piped | Echo raw→piped | Simplified raw→piped |',
+    '_Control tokens are measured but never filtered, so that column reads the ' +
+      "same on both sides by design. Ollama's qwen3 template appends ` /no_think` " +
+      'to the last user message whenever a request sets `think: false`, which every ' +
+      'translation does; with no context supplied that message is the bare source ' +
+      'text, so the token lands inside what the model is asked to translate. It has ' +
+      'never been observed leaking in this benchmark — the column exists to catch it ' +
+      'if that changes._',
   );
-  lines.push('| --- | --- | --- | --- | --- |');
+  lines.push('');
+  lines.push(
+    '| Model | Prompt | Preamble raw→piped | Echo raw→piped | Simplified raw→piped | Control token raw→piped |',
+  );
+  lines.push('| --- | --- | --- | --- | --- | --- |');
   for (const c of cells) {
     const okCount = c.count - c.errors;
     lines.push(
       `| ${c.model} | ${c.condition} ` +
         `| ${fmtRate(c.preambleRaw, okCount)} → ${fmtRate(c.preamblePiped, okCount)} ` +
         `| ${fmtRate(c.echoRaw, okCount)} → ${fmtRate(c.echoPiped, okCount)} ` +
-        `| ${fmtRate(c.simplifiedRaw, okCount)} → ${fmtRate(c.simplifiedPiped, okCount)} |`,
+        `| ${fmtRate(c.simplifiedRaw, okCount)} → ${fmtRate(c.simplifiedPiped, okCount)} ` +
+        `| ${fmtRate(c.controlRaw, okCount)} → ${fmtRate(c.controlPiped, okCount)} |`,
     );
   }
   lines.push('');

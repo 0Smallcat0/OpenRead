@@ -5,6 +5,37 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.15] - 2026-07-31
+
+### Added
+
+- **A control-token detector in the benchmark, and the measurement behind
+  leaving the pipeline alone.** Dogfooding turned up a translation reading
+  `Fetch 是基於 Promise 的，且位於 /no_think 路徑下。` — the model had translated
+  a chat-template control token as if it were part of the sentence. The cause is
+  not model noise: Ollama's qwen3 template appends ` /no_think` to the **last
+  user message** whenever a request sets `think: false`, which every OpenRead
+  translation does. The extension supplies no translation context, so that last
+  message is the bare source text and the token is glued directly onto the text
+  the model is asked to translate.
+
+  Nothing was filtered, because the measurements did not support it. The token
+  leaked 0 times in 216 recorded generations and 0 times in 278 fresh ones swept
+  over temperature (0.3 and the retry path's 0.7) and selection length. Fencing
+  the source in `<target>` tags — which moves the appended token outside the
+  region the model is told to translate, and reuses a shape the codebase already
+  has — was implemented and scored against the shipped prompt over the 27 bench
+  fixtures: chrF 46.39 versus 46.76. No gain, a slightly negative point estimate,
+  and no reproducible leak to fix, so it was not shipped. A runtime filter would
+  additionally need to hold an ambiguous tail across chunk boundaries
+  (`/no_` + `think`), which is real machinery to add at this rate.
+
+  What did ship is the ability to know: `hasControlTokenLeak` joins the existing
+  preamble/echo/Simplified detectors and `pnpm bench` now reports a `Control
+token raw→piped` column. It reads the same on both sides by design — nothing
+  filters it — so the number is the incidence rate, and the decision above can be
+  revisited on data rather than on memory of a single sighting.
+
 ## [2.2.14] - 2026-07-26
 
 ### Removed
