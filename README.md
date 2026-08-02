@@ -1,48 +1,140 @@
 # OpenRead
 
-> **Engineering reliable, _measurable_ streaming-LLM output — with translation as the vehicle.**
+> **Translate the web and your PDFs with a language model running on your own
+> machine.** No cloud, no API key, no telemetry.
 
-OpenRead is a Manifest V3 Chrome extension that translates any web page or local
-PDF with a local LLM via Ollama — no key, no cloud — streaming the result in
-place. The interesting part isn't calling the API — it's taming the
-non-deterministic text a model emits in a latency-sensitive streaming UI, and
-_proving_ the taming works.
+Select text on any page — or in a PDF — and the translation streams in place.
+Inference happens on a local [Ollama](https://ollama.com) server, so nothing you
+read ever leaves your computer.
 
 ![CI](https://github.com/0Smallcat0/OpenRead/actions/workflows/ci.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)
-
----
-
-## Demo
-
-Select a sentence on any page, click the floating **文**, and the
-Traditional-Chinese translation streams in. Recorded live on the
-[Wikipedia article for LLMs](https://en.wikipedia.org/wiki/Large_language_model)
-against a local `qwen3` via Ollama — end-to-end, unedited, real time:
+[![Download](https://img.shields.io/github/v/release/0Smallcat0/OpenRead?label=download)](https://github.com/0Smallcat0/OpenRead/releases/latest)
 
 ![OpenRead selecting text on Wikipedia and streaming a Traditional-Chinese translation from a local model](docs/screenshots/demo.gif)
 
-The same selection UI works on developer docs (dark pages included) and on
-PDFs — local or remote — through a bundled PDF.js viewer (below: MDN, and the
-Bitcoin whitepaper as a real-world PDF):
+<sub>Real time, unedited, against a local `qwen3`.</sub>
 
-| Developer docs (MDN)                                   | Research PDF (PDF.js viewer)                                             |
-| ------------------------------------------------------ | ------------------------------------------------------------------------ |
-| ![Translating MDN docs](docs/screenshots/demo-mdn.png) | ![Translating the Bitcoin whitepaper PDF](docs/screenshots/demo-pdf.png) |
+## Who this is for
 
-Everything is configured in a small popup — a local Ollama server URL, a model,
-and a target language. No account, no API key:
+- **You read things you cannot paste into a cloud translator** — unpublished
+  drafts, contracts, medical records, internal documents, anything under NDA.
+  Cloud translators are excellent and completely unusable for this.
+- **You read PDFs, not just web pages.** Papers, specs, whitepapers. OpenRead
+  opens them in a bundled PDF.js viewer where the same selection translator
+  works on the rendered text — including `file://` PDFs already on your disk.
+- **You want Traditional Chinese that reads like Taiwan.** Most tools translate
+  into Simplified and convert character-by-character, which produces
+  `界面`, `公裡`, and `數據庫` where a Taiwanese reader expects `介面`, `公里`,
+  and `資料庫`. OpenRead converts at the phrase level with OpenCC `s2twp`, and
+  the conversion is [tested against chunk-boundary corruption](#how-it-works).
+- **You want to keep what you read.** One tap saves any translated selection
+  into your [Obsidian](https://obsidian.md) vault as Markdown.
+
+## Install
+
+**Download the latest release**, unzip it, then open `chrome://extensions`,
+enable **Developer mode**, click **Load unpacked**, and select the unzipped
+folder.
+
+[**⬇ Download the latest release**](https://github.com/0Smallcat0/OpenRead/releases/latest)
+
+<details>
+<summary>Or build from source</summary>
+
+```bash
+pnpm install
+pnpm build
+```
+
+Then load `.output/chrome-mv3` as an unpacked extension.
+
+</details>
+
+### Then set up Ollama
+
+OpenRead needs a local model server. This is the only setup step, and it is a
+one-time cost:
+
+1. [Install Ollama](https://ollama.com/).
+2. Pull the default model: `ollama pull qwen3`
+   (chosen by [benchmark](#which-local-model), not by taste).
+3. **Let the extension talk to it.** Ollama only answers requests from origins
+   it knows, and a browser extension is not one of them by default. Set
+   `OLLAMA_ORIGINS=chrome-extension://*` and restart Ollama:
+
+   | OS          | Command                                                                        |
+   | ----------- | ------------------------------------------------------------------------------ |
+   | **macOS**   | `launchctl setenv OLLAMA_ORIGINS "chrome-extension://*"`, then restart Ollama  |
+   | **Linux**   | add it to the systemd unit or your shell env, then restart Ollama              |
+   | **Windows** | set a user environment variable `OLLAMA_ORIGINS=chrome-extension://*`, restart |
+
+   Skip this and every translation fails with a `403`. The extension says so in
+   as many words, and links back here.
+
+Open the toolbar popup to confirm the connection, pick a model, and choose a
+target language.
 
 <p align="center">
   <img src="docs/screenshots/popup.png" alt="Popup settings" width="300" />
 </p>
 
-> All demos are real end-to-end runs against a local `qwen3` via Ollama —
-> captured by the browser E2E harness, not mock-ups. A ready-to-submit Chrome
-> Web Store kit lives in [`docs/store/`](docs/store/SUBMISSION.md).
+## Usage
 
-## Why this exists
+- **Web pages** — select text, click the floating **文**, and the translation
+  streams into a panel.
+- **PDFs** — open any `.pdf`; OpenRead redirects it into the bundled PDF.js
+  viewer, where selection works exactly the same.
+- **Keyboard** — select with Shift+Arrow or Ctrl+A and press **`Ctrl+Shift+Y`**
+  (remappable at `chrome://extensions/shortcuts`). Escape closes the panel.
+
+| Developer docs (MDN)                                   | Research PDF (PDF.js viewer)                                             |
+| ------------------------------------------------------ | ------------------------------------------------------------------------ |
+| ![Translating MDN docs](docs/screenshots/demo-mdn.png) | ![Translating the Bitcoin whitepaper PDF](docs/screenshots/demo-pdf.png) |
+
+<sub>Every screenshot on this page is a real end-to-end run against a local
+`qwen3` — the built extension loaded into Chrome, not a mock-up.</sub>
+
+## Save to Obsidian
+
+Reading is half the loop. Once a translation streams in, a **＋ Save to
+Obsidian** button drops a Markdown note — original, translation, and a
+machine-readable YAML header — into your vault through an `obsidian://new` URI.
+No extra permissions, no server; notes too large for a protocol-handler URL fall
+back to the clipboard.
+
+|                                Translate + one-tap capture on any page                                 |                                     …lands as a note in your Obsidian vault                                     |
+| :----------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------------: |
+| ![Inline translation and the save-to-Obsidian button on Wikipedia](docs/screenshots/capture-saved.png) | ![The captured note in Obsidian, its frontmatter rendered as Properties](docs/screenshots/capture-obsidian.png) |
+
+Every note is written `status: raw`. That header is a deliberate **handoff
+contract**: a stronger downstream model can query the unprocessed captures,
+synthesize them, and flip the flag. OpenRead does the cheap, reliable part
+on-device and defers the expensive part, rather than re-implementing a knowledge
+base it has no business owning.
+
+Set your vault, capture folder, and the optional enrichment toggle in the popup;
+leave the vault blank to use whichever vault is currently open.
+
+## Privacy
+
+The selected text is sent to one place: the Ollama server at the URL you
+configured, on your own machine. There is no account, no API key, no analytics,
+and no remote endpoint anywhere in the code. The server URL lives in
+`chrome.storage`, is read only by the background worker, and never travels over
+the extension's message bus. Permissions are `storage` and `activeTab` —
+[v1 declared two more it never used](#bugs-this-rebuild-fixed).
+
+---
+
+# How it is built
+
+Everything above is the product. The rest of this file is the engineering, which
+is the part this repository actually exists to show: **making streaming LLM
+output reliable, and _proving_ it** — with translation as the vehicle.
+
+## Why this is hard
 
 An LLM told to "translate this" will happily also emit a preamble
 (`Sure, here is the translation:`), think out loud (`The user wants…`), echo the
@@ -71,13 +163,13 @@ mid-artifact exactly as they do in a live stream.
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](eval/RESULTS.md)._
 
-**224 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
+**232 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
 pure core at **100% function / 97% line** coverage, the selection and capture UI
 driven through jsdom with a stubbed extension port, and the background worker —
 which owns cancellation, error translation and PDF routing. Overall: 93%
 function, 94% line.
 
-## Which local model? — live benchmark
+## Which local model?
 
 The offline eval freezes model output to score the pipeline; `pnpm bench`
 asks the opposite question against live models: **which model should you run,
@@ -148,10 +240,9 @@ Three findings worth calling out:
 - **Keyboard-first, not keyboard-afterthought** — text selected with
   Shift+Arrow or Ctrl+A offers the 文 button just as a mouse selection does, the
   button takes Enter/Space, Escape dismisses the panel, and
-  **`Ctrl+Shift+Y`** (remappable at `chrome://extensions/shortcuts`) translates
-  the selection without touching the icon at all. The panel is a named
-  `role="dialog"` whose content is an `aria-live` region, so a streamed
-  translation is actually announced.
+  **`Ctrl+Shift+Y`** translates the selection without touching the icon at all.
+  The panel is a named `role="dialog"` whose content is an `aria-live` region,
+  so a streamed translation is actually announced.
 - **Same-language short-circuit**
   ([`src/core/language.ts`](src/core/language.ts)) — script detection skips the
   API entirely when a selection is already in the target language (zero latency,
@@ -169,36 +260,11 @@ Three findings worth calling out:
   burning entire generations as hidden reasoning with zero visible output on
   qwen3-family and deepseek-r1 models
   ([`docs/BENCHMARK.md`](docs/BENCHMARK.md) §6). Requires Ollama ≥ 0.9.
-- **Fully local** — no cloud, no key, no telemetry. The selected text is sent
-  only to a local Ollama server on your machine; nothing leaves your device.
-  The server URL lives in `chrome.storage` and is read only by the background
-  worker; it never travels over the message bus.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the module map and the
 streaming sequence diagram.
 
-## Capture to Obsidian
-
-Reading is only half the loop — OpenRead also turns any translated selection
-into a note in your [Obsidian](https://obsidian.md) vault. Once a translation
-streams in, a **＋ Save to Obsidian** button drops a Markdown note — original,
-translation, and a machine-readable YAML header — straight into your vault via
-an `obsidian://new` URI. No extra permissions, no server; notes too large for a
-protocol-handler URL fall back to the clipboard.
-
-|                                         Translate + one-tap capture on any page                                          |                                     …lands as a note in your Obsidian vault                                     |
-| :----------------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------------: |
-| ![Inline translation and the save-to-Obsidian button on Wikipedia](docs/screenshots/capture-saved.png) | ![The captured note in Obsidian, its frontmatter rendered as Properties](docs/screenshots/capture-obsidian.png) |
-
-<sub>And the exact Markdown OpenRead writes — the frontmatter is the `status: raw` handoff contract:</sub>
-
-![Generated capture note](docs/screenshots/capture-note.png)
-
-That header is a deliberate **handoff contract**. Every note is written
-`status: raw`, so a stronger downstream model (a "second brain") can query the
-unprocessed captures, synthesize them, and flip the flag. OpenRead does the
-cheap, reliable part on-device and defers the expensive part — rather than
-re-implementing a knowledge base it has no business owning.
+## The enrichment stage, and its honest negative result
 
 Optionally, a small local model can pre-label a capture with a title, summary,
 and tags. That pipeline is defense-in-depth, and every layer is _measured_:
@@ -216,44 +282,22 @@ model generations. Enrichment stays off by default anyway: it adds a
 model round-trip per capture, and reasoning-class models take ~45 s to label
 a paragraph (measured), which no capture UX survives.
 
-Set your vault, capture folder, and the enrichment toggle in the popup; leave
-the vault blank to use whichever vault is currently open.
+## Bugs this rebuild fixed
 
-## Install (from source)
+v1 was ~1,500 lines of untyped JavaScript. Each of these was found by rebuilding
+it, and each is why a corresponding test exists:
 
-```bash
-pnpm install
-pnpm build
-```
-
-Then in Chrome: open `chrome://extensions`, enable **Developer mode**, click
-**Load unpacked**, and select `.output/chrome-mv3`.
-
-### Ollama setup
-
-OpenRead translates through a local [Ollama](https://ollama.com/) server — no
-API key required.
-
-1. [Install Ollama](https://ollama.com/).
-2. Pull a model: `ollama pull qwen3` (the benchmarked default; see
-   [`docs/BENCHMARK.md`](docs/BENCHMARK.md) for how it was chosen).
-3. Start the server: `ollama serve`.
-4. Allow the extension's origin through Ollama's CORS by setting
-   `OLLAMA_ORIGINS=chrome-extension://*` before starting it:
-   - **macOS**: `launchctl setenv OLLAMA_ORIGINS "chrome-extension://*"`, then restart Ollama
-   - **Linux**: set `OLLAMA_ORIGINS=chrome-extension://*` in the systemd service or shell env, then restart Ollama
-   - **Windows**: set a user environment variable `OLLAMA_ORIGINS=chrome-extension://*`, then restart Ollama
-
-Open the toolbar popup and set the Ollama server URL (default
-`http://localhost:11434`) and model (default `qwen3:latest`), plus a target
-language.
-
-## Usage
-
-- **Web pages** — select text; click the floating **文** icon; the translation
-  streams into a panel.
-- **PDFs** — navigate to any `.pdf`; OpenRead redirects it into a bundled
-  PDF.js viewer where the same selection translator works on the rendered text.
+1. `viewer_init.js` loaded `pdf.worker.js`; the file is `pdf.worker.mjs`. The
+   PDF worker never started.
+2. `utils/zh-map.js` advertised "~2,800 pairs"; the string was ~200 characters
+   repeated four or five times.
+3. Unconditional `面→麵`, `里→裡`, `台→臺` substitution corrupted `界面→界麵`
+   and `公里→公裡`. OpenCC replaced it.
+4. The manifest declared `scripting` and `declarativeNetRequest` and used
+   neither — a store-review red flag, and permissions a privacy-first extension
+   has no business asking for.
+5. `content.js` and `pdf-integration.js` were ~90% copy-paste of each other.
+   They are now one module.
 
 ## Development
 
@@ -263,10 +307,14 @@ pnpm test         # Vitest unit suite
 pnpm test:cov     # …with coverage
 pnpm eval         # reliability eval -> eval/RESULTS.md
 pnpm eval:capture # capture-enrichment eval -> eval/CAPTURE-RESULTS.md
+pnpm bench        # live model benchmark (needs Ollama) -> eval/BENCHMARK-RESULTS.md
 pnpm compile      # tsc --noEmit (strict)
 pnpm lint         # ESLint
 pnpm build        # production build -> .output/chrome-mv3
 ```
+
+Releases are cut by pushing a tag: CI re-runs every gate, extracts the notes
+from `CHANGELOG.md`, and attaches the built zip.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full workflow.
 
