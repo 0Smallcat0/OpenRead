@@ -108,6 +108,71 @@
       label.checkbox input {
         width: auto;
       }
+      /* The connection line sits under the URL field it reports on, so it reads
+         as that field's state rather than as a second status area. */
+      #connection {
+        margin-top: 6px;
+        font-size: 12px;
+        line-height: 1.4;
+        color: #4b5563;
+      }
+      #connection.ok {
+        color: #15803d;
+      }
+      #connection.warn {
+        color: #b45309;
+      }
+      #connection.error {
+        color: #b91c1c;
+      }
+      @media (prefers-color-scheme: dark) {
+        #connection {
+          color: #9ca3af;
+        }
+        #connection.ok {
+          color: #16a34a;
+        }
+        #connection.warn {
+          color: #fbbf24;
+        }
+        #connection.error {
+          color: #f87171;
+        }
+      }
+      #fix {
+        display: flex;
+        gap: 6px;
+        align-items: stretch;
+        margin-top: 6px;
+      }
+      #fix[hidden] {
+        display: none;
+      }
+      #fixCommand {
+        flex: 1;
+        min-width: 0;
+        overflow-x: auto;
+        padding: 6px 8px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        white-space: pre;
+        background: #f3f4f6;
+        border: 1px solid #8b93a1;
+        border-radius: 6px;
+      }
+      @media (prefers-color-scheme: dark) {
+        #fixCommand {
+          background: #2a2a2a;
+          border-color: #444;
+        }
+      }
+      #copyFix {
+        flex: 0 0 auto;
+        width: auto;
+        margin-top: 0;
+        padding: 6px 10px;
+        font-size: 12px;
+      }
     </style>
   </head>
   <body>
@@ -115,9 +180,28 @@
     <form id="settingsForm">
       <label for="baseUrl">Ollama Server URL</label>
       <input id="baseUrl" type="text" placeholder="http://localhost:11434" />
+      <!-- Announced, because the whole reason this line exists is to reach a
+           user who would otherwise learn about a 403 from a failed
+           translation. -->
+      <div id="connection" role="status" aria-live="polite">Checking…</div>
+      <div id="fix" hidden>
+        <code id="fixCommand"></code>
+        <!-- type="button": inside a form, the default is submit -->
+        <button id="copyFix" type="button">Copy</button>
+      </div>
 
       <label for="modelId">Model</label>
-      <input id="modelId" type="text" placeholder="qwen3:latest" />
+      <!-- A list, not a select: the options come from a server that may be
+           unreachable, and a user must still be able to save a model name when
+           it is. The list offers what is installed; the field accepts anything
+           and warns when it is not there. -->
+      <input
+        id="modelId"
+        type="text"
+        list="modelOptions"
+        placeholder="qwen3:latest"
+      />
+      <datalist id="modelOptions"></datalist>
 
       <label for="targetLang">Target Language</label>
       <select id="targetLang"></select>
