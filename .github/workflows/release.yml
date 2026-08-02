@@ -1,0 +1,62 @@
+name: Release
+
+# Cutting a release is `git tag v2.3.0 && git push --tags`. Everything below —
+# gates, build, notes, upload — happens here so a release can never be a
+# hand-built zip from someone's laptop.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      # A tag that disagrees with package.json publishes a zip whose manifest
+      # version contradicts the release page it hangs on. Catch it before the
+      # build rather than after the upload.
+      - name: Check the tag matches package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${pkg}" >&2
+            exit 1
+          fi
+
+      # Same gates as CI. A tagged build is the one that most needs them.
+      - run: pnpm compile
+      - run: pnpm test
+      - run: pnpm lint
+
+      - run: pnpm zip
+
+      # Fails when CHANGELOG.md has no section for this tag, which is the right
+      # outcome: a release page is the first thing a stranger reads.
+      - name: Extract the changelog section for this tag
+        run: pnpm release:notes "${GITHUB_REF_NAME}" > release-notes.md
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "OpenRead ${GITHUB_REF_NAME}" \
+            --notes-file release-notes.md \
+            ".output/openread-${GITHUB_REF_NAME#v}-chrome.zip"
