@@ -209,11 +209,22 @@ eval/
   chrF），在 assembler 不再於偽影中間沖出後，用同一批錄製輸出重新量測，變成
   **8 個 model × prompt cell 中有 6 個淨增益**（llama3.1 naive −0.3 → +1.0）。
 
-## Chrome Web Store — intentionally not published
+## Chrome Web Store — decision reversed (2026-08-03)
 
-Decision (2026-07-10): skip the Web Store submission — the $5 developer fee
-buys nothing for a portfolio (the repo, demo GIF, and install-from-source
-instructions carry the story). The complete submission kit is archived in
-[`docs/store/`](store/SUBMISSION.md) (listing copy, screenshots, privacy
-answers, step-by-step guide); if publishing ever becomes worthwhile, it is a
-20-minute task.
+**Original decision (2026-07-10):** skip the submission. The $5 developer fee
+bought nothing for a portfolio — the repo, demo GIF, and install-from-source
+instructions carried the story on their own.
+
+**Reversed (2026-08-03)** because the goal changed. A portfolio artifact is
+read; a tool is _used_, and the project now aims at users rather than only at
+reviewers. That flips the arithmetic entirely: the Web Store is where people
+search for extensions, and `pnpm install && pnpm build` is not an install path
+for anyone who has not already decided to trust the project. A GitHub release
+with a prebuilt zip (shipped in 2.2.15) closes part of that gap; the store
+closes the rest.
+
+The kit in [`docs/store/`](store/SUBMISSION.md) is current as of 2.4.0. What
+remains is the $5 registration and the upload, both of which need the
+maintainer's own account and card, plus a re-shoot of the four listing
+screenshots — they predate whole-page translation, and the first one is what a
+browser shows in search results.
