@@ -12,7 +12,9 @@ import { loadSettings } from '../settings';
 import {
   STREAM_PORT_NAME,
   TRANSLATE_SELECTION_COMMAND,
+  TRANSLATE_PAGE_COMMAND,
   type TranslateSelectionMessage,
+  type TranslatePageMessage,
   type PortRequest,
   type RuntimeRequest,
   type OpenPdfViewerResponse,
@@ -74,16 +76,19 @@ export default defineBackground(() => {
   // so the floating 文 icon is not a route a keyboard user can take. Broadcast
   // to every frame in the active tab; only the one holding a selection acts.
   chrome.commands?.onCommand.addListener((command) => {
-    if (command !== TRANSLATE_SELECTION_COMMAND) return;
+    const message: TranslateSelectionMessage | TranslatePageMessage | null =
+      command === TRANSLATE_SELECTION_COMMAND
+        ? { type: 'TRANSLATE_SELECTION' }
+        : command === TRANSLATE_PAGE_COMMAND
+          ? { type: 'TRANSLATE_PAGE' }
+          : null;
+    if (!message) return;
     void (async () => {
       const [tab] = await chrome.tabs.query({
         active: true,
         currentWindow: true,
       });
       if (tab?.id === undefined) return;
-      const message: TranslateSelectionMessage = {
-        type: 'TRANSLATE_SELECTION',
-      };
       // No receiver in a frame without our content script; that is expected.
       await chrome.tabs.sendMessage(tab.id, message).catch(() => undefined);
     })();

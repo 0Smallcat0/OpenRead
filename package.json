@@ -1,6 +1,6 @@
 {
   "name": "openread",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Local-first, evaluation-driven LLM translation for web & PDF via Ollama — a case study in making streaming LLM output reliable.",
   "type": "module",
   "license": "MIT",
@@ -26,6 +26,7 @@
     "eval:structured": "tsx eval/structured/run.ts",
     "bench": "tsx eval/bench/run.ts",
     "bench:agreement": "tsx eval/bench/agreement.ts",
+    "e2e:page": "node e2e/fullpage.mjs",
     "postinstall": "wxt prepare"
   },
   "devDependencies": {
@@ -35,6 +36,7 @@
     "eslint-config-prettier": "^10.1.8",
     "jsdom": "^29.1.1",
     "prettier": "^3.9.4",
+    "puppeteer-core": "^24.30.0",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.63.0",

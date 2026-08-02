@@ -58,11 +58,24 @@ export interface TranslateSelectionMessage {
   type: 'TRANSLATE_SELECTION';
 }
 
-/** The command id declared in the manifest, and the message it produces. */
+/**
+ * popup or background -> content one-shot: translate the whole page, or undo
+ * a translation already on it. One message for both because the control is one
+ * button whose meaning follows the page's state.
+ */
+export interface TranslatePageMessage {
+  type: 'TRANSLATE_PAGE';
+}
+
+/** The command ids declared in the manifest, and the messages they produce. */
 export const TRANSLATE_SELECTION_COMMAND = 'translate-selection';
+export const TRANSLATE_PAGE_COMMAND = 'translate-page';
 
 export type RuntimeRequest =
-  OpenPdfViewerMessage | EnrichCaptureMessage | TranslateSelectionMessage;
+  | OpenPdfViewerMessage
+  | EnrichCaptureMessage
+  | TranslateSelectionMessage
+  | TranslatePageMessage;
 
 export type OpenPdfViewerResponse =
   { success: true } | { error: 'PERMISSION_DENIED' };

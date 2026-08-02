@@ -21,6 +21,10 @@ read ever leaves your computer.
 - **You read things you cannot paste into a cloud translator** — unpublished
   drafts, contracts, medical records, internal documents, anything under NDA.
   Cloud translators are excellent and completely unusable for this.
+- **You want the whole page, not one sentence at a time.** Bilingual
+  translation puts each paragraph's translation directly under the original,
+  so a sentence that looks wrong can be checked against the source instead of
+  taken on faith.
 - **You read PDFs, not just web pages.** Papers, specs, whitepapers. OpenRead
   opens them in a bundled PDF.js viewer where the same selection translator
   works on the rendered text — including `file://` PDFs already on your disk.
@@ -82,8 +86,13 @@ target language.
 
 ## Usage
 
-- **Web pages** — select text, click the floating **文**, and the translation
-  streams into a panel.
+- **Whole page** — click **Translate this page** in the popup, or press
+  **`Ctrl+Shift+G`**. Each paragraph gets its translation underneath it, the
+  page fills from the top, and a badge in the corner counts progress and offers
+  a Stop. Press the shortcut again to remove every translation and get the
+  original page back.
+- **One selection** — select text, click the floating **文**, and the
+  translation streams into a panel.
 - **PDFs** — open any `.pdf`; OpenRead redirects it into the bundled PDF.js
   viewer, where selection works exactly the same.
 - **Keyboard** — select with Shift+Arrow or Ctrl+A and press **`Ctrl+Shift+Y`**
@@ -163,11 +172,11 @@ mid-artifact exactly as they do in a live stream.
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](eval/RESULTS.md)._
 
-**232 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
+**302 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
 pure core at **100% function / 97% line** coverage, the selection and capture UI
 driven through jsdom with a stubbed extension port, and the background worker —
-which owns cancellation, error translation and PDF routing. Overall: 93%
-function, 94% line.
+which owns cancellation, error translation and PDF routing. Overall: 92%
+function, 95% line.
 
 ## Which local model?
 
@@ -237,6 +246,30 @@ Three findings worth calling out:
   phrase a chunk boundary splits (`数据` + `库` → `數據庫`, not `資料庫`), so the
   transform holds the ambiguous tail back until enough context arrives — the
   streamed result is byte-identical to converting the finished text in one call.
+- **Verified in a browser, not only in jsdom**
+  ([`e2e/fullpage.mjs`](e2e/fullpage.mjs)) — every unit test here runs in
+  jsdom, which cannot tell you whether an extension loads, whether a content
+  script is injected, or whether the service worker is awake when a message
+  arrives. Three shipped defects (2.2.11–2.2.13) were invisible until the built
+  extension was loaded into Chrome. `pnpm e2e:page` does that loading over CDP,
+  drives the real popup message against a live page and a real local model, and
+  asserts the properties that matter: translations land, the original survives,
+  chrome under the length floor is skipped, and toggling again restores the
+  page byte for byte. It is deliberately not in CI — GitHub's runners have no
+  GPU and no model, and a translation harness that stubs the model is measuring
+  the stub.
+- **Whole-page translation as a queue, not a flood**
+  ([`src/ui/fullpage.ts`](src/ui/fullpage.ts) +
+  [`src/ui/blocks.ts`](src/ui/blocks.ts)) — Ollama serves one generation per
+  model, so firing fifty parallel requests only builds a queue in arrival
+  order, which is not the order anyone reads in. Two requests stay in flight
+  and the page fills top-down. Block selection takes the leaf-most prose
+  element (a `li` wrapping a `p` is translated once, not twice), refuses to
+  descend into `code`/`pre`, honours `translate="no"` and `.notranslate`, and
+  skips anything already in the target language through the same
+  `shouldBypassAI` short-circuit selection uses. Translations are _appended_,
+  never substituted: a local 8B model is good, not perfect, and a reader has
+  to be able to check a sentence that looks wrong.
 - **Keyboard-first, not keyboard-afterthought** — text selected with
   Shift+Arrow or Ctrl+A offers the 文 button just as a mouse selection does, the
   button takes Enter/Space, Escape dismisses the panel, and
@@ -308,6 +341,7 @@ pnpm test:cov     # …with coverage
 pnpm eval         # reliability eval -> eval/RESULTS.md
 pnpm eval:capture # capture-enrichment eval -> eval/CAPTURE-RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama) -> eval/BENCHMARK-RESULTS.md
+pnpm e2e:page     # whole-page translation in a real Chrome (needs Ollama)
 pnpm compile      # tsc --noEmit (strict)
 pnpm lint         # ESLint
 pnpm build        # production build -> .output/chrome-mv3
