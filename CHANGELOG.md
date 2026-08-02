@@ -5,6 +5,56 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-08-03
+
+### Added
+
+- **Whole-page bilingual translation.** Until now OpenRead translated one
+  selection at a time, which answers "what does this sentence say" — not "let
+  me read this page", which is what most people mean when they install a
+  translator. **Translate this page** in the popup, or `Ctrl+Shift+G`, now
+  translates every worthwhile block; the same control stops a run in progress
+  and, on an already-translated page, removes every translation.
+
+  Three decisions are worth recording, because each one is a way the obvious
+  implementation goes wrong:
+
+  _Bilingual, not replacement._ The translation is appended under each block,
+  never over it. A local 8B model is good and not perfect; leaving the original
+  in place means a suspicious sentence can be checked against its source, and a
+  bad translation degrades a page instead of destroying it.
+
+  _A queue, not a flood._ Ollama serves one generation per model by default, so
+  firing fifty parallel requests only builds a queue — in arrival order, which
+  is not the order anyone reads in. Two requests stay in flight, over blocks in
+  document order, so the page fills from the top where the reader is looking.
+
+  _Block selection is the whole problem._ "Every element with text" translates a
+  paragraph once for itself and again for each of its wrappers, spends minutes
+  of a local GPU on navigation labels, and hands a model a code sample to
+  translate the identifiers in. `ui/blocks.ts` takes the leaf-most prose
+  element, refuses to descend into `code`/`pre`/`kbd`/form controls, honours
+  `translate="no"` and `.notranslate` because a page asking not to be
+  translated is the difference between a tool and a nuisance, drops blocks
+  under 12 characters or with no letters in any script, and runs the same
+  `shouldBypassAI` short-circuit selection uses so a block already in the
+  target language costs nothing.
+
+  Every block is independent: one failure marks one paragraph and the run
+  continues, because a page is not all-or-nothing. An empty generation is
+  reported as a failure rather than skipped — a silent gap reads as "already in
+  my language", which is worse than an error. Running again is a no-op on
+  blocks that already carry a translation, which makes the same action the
+  right way to pick up content that loaded after the first pass.
+
+  Only the top frame runs. An ad iframe doing its own pass would spend the
+  user's GPU on someone else's banner and stack a second progress badge in the
+  same corner.
+
+  70 new tests, including the concurrency ceiling, the stop-mid-run path, and
+  the case that would otherwise stall the whole queue forever: an MV3 worker
+  killed mid-generation disconnects without ever sending `done`.
+
 ## [2.3.0] - 2026-08-03
 
 ### Added

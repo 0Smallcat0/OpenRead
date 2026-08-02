@@ -11,6 +11,7 @@ import { mountPopup, type PopupDeps } from './popup';
 import type { ConnectionProbe } from '../core/diagnostics';
 
 const MARKUP = `
+  <button id="translatePage" type="button">Translate this page</button>
   <form id="settingsForm">
     <input id="baseUrl" type="text" />
     <div id="connection"></div>
@@ -29,6 +30,7 @@ const MARKUP = `
 let stored: Record<string, unknown>;
 let probe: ReturnType<typeof vi.fn>;
 let written: string[];
+let pageTranslations: number;
 
 function stubChrome(): void {
   (globalThis as unknown as { chrome: unknown }).chrome = {
@@ -52,6 +54,10 @@ function deps(overrides: Partial<PopupDeps> = {}): PopupDeps {
       written.push(text);
       return Promise.resolve();
     },
+    translateActivePage: () => {
+      pageTranslations++;
+      return Promise.resolve();
+    },
     ...overrides,
   };
 }
@@ -68,6 +74,10 @@ function $(id: string): HTMLElement {
 }
 
 beforeEach(() => {
+  // The popup closes itself after handing a page translation off. jsdom takes
+  // that literally and tears the window down, which would strand every test
+  // after this one; the close itself is asserted below.
+  vi.spyOn(window, 'close').mockImplementation(() => undefined);
   document.body.innerHTML = MARKUP;
   stored = {
     baseUrl: 'http://localhost:11434',
@@ -75,6 +85,7 @@ beforeEach(() => {
     targetLang: 'Traditional Chinese',
   };
   written = [];
+  pageTranslations = 0;
   probe = vi.fn((): Promise<ConnectionProbe> =>
     Promise.resolve({ kind: 'ok', models: ['qwen3:latest'] }),
   );
@@ -126,6 +137,17 @@ describe('mountPopup', () => {
       'launchctl setenv OLLAMA_ORIGINS "chrome-extension://*"',
     ]);
     expect($('copyFix').textContent).toBe('Copied');
+  });
+
+  it('hands a page translation to the active tab', async () => {
+    mountPopup(document, deps());
+    await settle();
+    $('translatePage').dispatchEvent(new Event('click'));
+    await settle();
+    expect(pageTranslations).toBe(1);
+    // Closing is the honest signal that the work moved to the page, where the
+    // progress badge lives — in the corner an open popup would cover.
+    expect(window.close).toHaveBeenCalled();
   });
 
   it('hides the fix row when there is nothing to fix', async () => {
