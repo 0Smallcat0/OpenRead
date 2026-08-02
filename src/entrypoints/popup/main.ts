@@ -1,71 +1,18 @@
-import {
-  loadSettings,
-  saveSettings,
-  TARGET_LANGUAGES,
-  DEFAULT_SETTINGS,
-  type Settings,
-} from '../../settings';
+import { mountPopup } from '../../ui/popup';
+import { probeOllama } from '../../api/probe';
+import type { PlatformOs } from '../../core/diagnostics';
 
-const form = document.querySelector<HTMLFormElement>('#settingsForm');
-const baseUrlInput = document.querySelector<HTMLInputElement>('#baseUrl');
-const modelInput = document.querySelector<HTMLInputElement>('#modelId');
-const langSelect = document.querySelector<HTMLSelectElement>('#targetLang');
-const vaultInput = document.querySelector<HTMLInputElement>('#obsidianVault');
-const folderInput = document.querySelector<HTMLInputElement>('#obsidianFolder');
-const enrichInput =
-  document.querySelector<HTMLInputElement>('#enrichOnCapture');
-const status = document.querySelector<HTMLDivElement>('#status');
-
-if (
-  form &&
-  baseUrlInput &&
-  modelInput &&
-  langSelect &&
-  vaultInput &&
-  folderInput &&
-  enrichInput &&
-  status
-) {
-  for (const lang of TARGET_LANGUAGES) {
-    const option = document.createElement('option');
-    option.value = lang;
-    option.textContent = lang;
-    langSelect.appendChild(option);
-  }
-
-  void loadSettings().then((settings) => {
-    baseUrlInput.value = settings.baseUrl;
-    modelInput.value = settings.modelId;
-    langSelect.value = settings.targetLang;
-    vaultInput.value = settings.obsidianVault;
-    folderInput.value = settings.obsidianFolder;
-    enrichInput.checked = settings.enrichOnCapture;
-  });
-
-  form.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const settings: Settings = {
-      baseUrl: baseUrlInput.value.trim() || DEFAULT_SETTINGS.baseUrl,
-      modelId: modelInput.value.trim() || DEFAULT_SETTINGS.modelId,
-      targetLang: langSelect.value,
-      obsidianVault: vaultInput.value.trim(),
-      obsidianFolder:
-        folderInput.value.trim() || DEFAULT_SETTINGS.obsidianFolder,
-      enrichOnCapture: enrichInput.checked,
-    };
-    void saveSettings(settings)
-      .then(() => {
-        status.classList.remove('error');
-        status.textContent = 'Saved ✓';
-        window.setTimeout(() => {
-          status.textContent = '';
-        }, 1500);
-      })
-      .catch(() => {
-        // Without this the failure is silent: the status line simply stays
-        // blank, which reads exactly like "nothing happened yet".
-        status.classList.add('error');
-        status.textContent = 'Save failed';
-      });
-  });
+/** Map Chrome's platform list onto the three shells that need different fixes. */
+async function platformOs(): Promise<PlatformOs> {
+  const { os } = await chrome.runtime.getPlatformInfo();
+  if (os === 'mac') return 'mac';
+  if (os === 'win') return 'win';
+  if (os === 'linux' || os === 'openbsd') return 'linux';
+  return 'other';
 }
+
+mountPopup(document, {
+  probe: probeOllama,
+  platformOs,
+  writeClipboard: (text) => navigator.clipboard.writeText(text),
+});
