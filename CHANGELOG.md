@@ -5,6 +5,43 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-08-03
+
+### Added
+
+- **The popup now checks whether Ollama will actually answer, and says what to
+  do when it will not.** Every new install has to clear the same two hurdles —
+  the server running, and the server willing to answer a browser extension's
+  origin — and a third that only bites later, a model name that is not
+  installed. All three used to surface the same way: select text on a page,
+  wait, read an error in a translation panel. The popup is where the user is
+  already configuring things, so it is where the answer belongs.
+
+  Opening it probes `/api/tags` and reports one of five states. A 403 — by far
+  the most common, because Ollama refuses unknown origins and an extension is
+  always an unknown origin — now comes with the exact `OLLAMA_ORIGINS` command
+  for the user's platform, next to a Copy button, rather than a paragraph
+  pointing at the README.
+
+  The model field gained the list of models the server actually has. It stayed
+  a text input rather than becoming a `<select>`, because the options come from
+  a server that may be unreachable and a user must still be able to configure
+  one before starting it; the field accepts anything and warns when what it
+  holds is not installed. That warning compares `qwen3` against `qwen3:latest`
+  the way Ollama resolves them, so a correctly configured server is never
+  reported as broken.
+
+  The probe is called straight from the popup instead of through the background
+  worker. Translate and enrich are brokered because they originate in a content
+  script, which runs in the page's origin and cannot reach localhost; the popup
+  is an extension page with the same origin the worker has, so it reaches
+  Ollama on exactly the terms a translation will — which is the point of a
+  check — and the URL being tested never has to ride the message bus. It lives
+  in its own `api/probe.ts` for a second reason: importing it from `ollama.ts`
+  would have pulled that file's import graph into the popup bundle, and that
+  graph reaches the OpenCC phrase tables. A megabyte of dictionaries, loaded so
+  a settings panel could ask for a list of names. The popup chunk is 5.5 kB.
+
 ## [2.2.15] - 2026-07-31
 
 ### Added
