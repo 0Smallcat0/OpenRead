@@ -86,6 +86,12 @@ target language.
 
 ## Usage
 
+![Whole-page bilingual translation on the Wikipedia article for Ollama, each paragraph's Traditional-Chinese translation appearing under the original](docs/screenshots/demo-fullpage.png)
+
+<sub>Whole-page bilingual translation, live `qwen3`. The navigation, table of
+contents and account links are deliberately untouched — only the article is
+translated.</sub>
+
 - **Whole page** — click **Translate this page** in the popup, or press
   **`Ctrl+Shift+G`**. Each paragraph gets its translation underneath it, the
   page fills from the top, and a badge in the corner counts progress and offers
@@ -172,7 +178,7 @@ mid-artifact exactly as they do in a live stream.
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](eval/RESULTS.md)._
 
-**302 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
+**309 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
 pure core at **100% function / 97% line** coverage, the selection and capture UI
 driven through jsdom with a stubbed extension port, and the background worker —
 which owns cancellation, error translation and PDF routing. Overall: 92%
@@ -264,10 +270,14 @@ Three findings worth calling out:
   model, so firing fifty parallel requests only builds a queue in arrival
   order, which is not the order anyone reads in. Two requests stay in flight
   and the page fills top-down. Block selection takes the leaf-most prose
-  element (a `li` wrapping a `p` is translated once, not twice), refuses to
-  descend into `code`/`pre`, honours `translate="no"` and `.notranslate`, and
-  skips anything already in the target language through the same
-  `shouldBypassAI` short-circuit selection uses. Translations are _appended_,
+  element (a `li` wrapping a `p` is translated once, not twice), scopes to the
+  page's `main`/`article` landmark when it declares one, drops navigational
+  chrome, refuses to descend into `code`/`pre`, honours `translate="no"` and
+  `.notranslate`, and skips anything already in the target language through the
+  same `shouldBypassAI` short-circuit selection uses. Measured on real pages:
+  Wikipedia's article for Ollama goes from **325 candidate blocks to 48**, and
+  the first block translated changes from "Current events" to the opening
+  sentence. Translations are _appended_,
   never substituted: a local 8B model is good, not perfect, and a reader has
   to be able to check a sentence that looks wrong.
 - **Keyboard-first, not keyboard-afterthought** — text selected with

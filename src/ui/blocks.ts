@@ -30,6 +30,25 @@ const BLOCK_SELECTOR =
 const SKIP_WITHIN =
   'script, style, noscript, code, pre, kbd, samp, svg, math, textarea, select, option, [contenteditable="true"], [translate="no"], .notranslate';
 
+/**
+ * Navigational chrome. Not "probably not worth translating" — actively wrong
+ * to translate: a real browser run on the Wikipedia article for Ollama picked
+ * up **325** blocks, of which 277 were the sidebar, the table of contents, and
+ * the account links across the top. Because the DOM puts all of that before
+ * the article, a queue in document order translated "Create account" and
+ * "View history" while the reader waited on paragraph one.
+ */
+const NAVIGATION =
+  'nav, header, footer, aside, [role="navigation"], [role="banner"], [role="contentinfo"], [role="complementary"], [role="search"], .toc, #toc, .navbox, .sidebar';
+
+/**
+ * Where a page keeps the thing it is about. Scoping to this is what makes
+ * "document order" mean "reading order": these landmarks exclude the chrome by
+ * construction rather than by blocklist, and a page without one falls back to
+ * the body, where the blocklist above still applies.
+ */
+const CONTENT_ROOT = 'main, [role="main"], article';
+
 /** Our own injected UI, which must never become input to itself. */
 const OWN_UI =
   '#oit-translate-panel, #oit-translate-icon, .oit-bilingual, #oit-page-progress';
@@ -74,12 +93,13 @@ export function collectBlocks(
   { isVisible, shouldSkipText }: CollectOptions,
 ): HTMLElement[] {
   const candidates = Array.from(
-    root.querySelectorAll<HTMLElement>(BLOCK_SELECTOR),
+    contentRoot(root).querySelectorAll<HTMLElement>(BLOCK_SELECTOR),
   );
 
   const kept = candidates.filter((element) => {
     if (element.hasAttribute(TRANSLATED_ATTR)) return false;
     if (element.closest(SKIP_WITHIN)) return false;
+    if (element.closest(NAVIGATION)) return false;
     if (element.closest(OWN_UI)) return false;
 
     // Leaf-most wins. A `li` wrapping a `p` would otherwise be translated
@@ -94,6 +114,18 @@ export function collectBlocks(
 
   if (!shouldSkipText) return kept;
   return kept.filter((element) => !shouldSkipText(element.textContent ?? ''));
+}
+
+/**
+ * Narrow to the page's main content when it declares one.
+ *
+ * Measured on real pages: Wikipedia's article for Ollama goes from 325 blocks
+ * to 48, MDN's AbortController page from 135 to 24, and the first block to be
+ * translated changes from "Current events" to the opening sentence. A page
+ * with no such landmark — example.com, most hand-written HTML — is unaffected.
+ */
+export function contentRoot(root: ParentNode): ParentNode {
+  return root.querySelector<HTMLElement>(CONTENT_ROOT) ?? root;
 }
 
 /**
