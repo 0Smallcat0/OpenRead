@@ -55,6 +55,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the case that would otherwise stall the whole queue forever: an MV3 worker
   killed mid-generation disconnects without ever sending `done`.
 
+- **A browser harness, kept this time.** `pnpm e2e:page` loads the built
+  extension into Chrome over CDP, drives the real popup message against a live
+  page and a real local model, and asserts that translations land, the original
+  survives, chrome under the length floor is skipped, and toggling again
+  restores the page byte for byte.
+
+  This closes a gap the 2.3.0 README rewrite had to admit: screenshots were
+  described as "captured by the browser E2E harness" when no such harness was
+  in the repository — the scripts that took them lived in a scratch directory
+  and were thrown away. jsdom cannot tell you whether an extension loads,
+  whether a content script is injected, or whether the service worker is awake
+  when a message arrives, and all three shipped defects of the 2.2.11–2.2.13
+  run were invisible without a real browser.
+
+  Not in CI, on purpose: GitHub's runners have no GPU and no model, and a
+  translation harness that stubs the model is measuring the stub.
+
 ## [2.3.0] - 2026-08-03
 
 ### Added

@@ -246,6 +246,18 @@ Three findings worth calling out:
   phrase a chunk boundary splits (`数据` + `库` → `數據庫`, not `資料庫`), so the
   transform holds the ambiguous tail back until enough context arrives — the
   streamed result is byte-identical to converting the finished text in one call.
+- **Verified in a browser, not only in jsdom**
+  ([`e2e/fullpage.mjs`](e2e/fullpage.mjs)) — every unit test here runs in
+  jsdom, which cannot tell you whether an extension loads, whether a content
+  script is injected, or whether the service worker is awake when a message
+  arrives. Three shipped defects (2.2.11–2.2.13) were invisible until the built
+  extension was loaded into Chrome. `pnpm e2e:page` does that loading over CDP,
+  drives the real popup message against a live page and a real local model, and
+  asserts the properties that matter: translations land, the original survives,
+  chrome under the length floor is skipped, and toggling again restores the
+  page byte for byte. It is deliberately not in CI — GitHub's runners have no
+  GPU and no model, and a translation harness that stubs the model is measuring
+  the stub.
 - **Whole-page translation as a queue, not a flood**
   ([`src/ui/fullpage.ts`](src/ui/fullpage.ts) +
   [`src/ui/blocks.ts`](src/ui/blocks.ts)) — Ollama serves one generation per
@@ -329,6 +341,7 @@ pnpm test:cov     # …with coverage
 pnpm eval         # reliability eval -> eval/RESULTS.md
 pnpm eval:capture # capture-enrichment eval -> eval/CAPTURE-RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama) -> eval/BENCHMARK-RESULTS.md
+pnpm e2e:page     # whole-page translation in a real Chrome (needs Ollama)
 pnpm compile      # tsc --noEmit (strict)
 pnpm lint         # ESLint
 pnpm build        # production build -> .output/chrome-mv3
