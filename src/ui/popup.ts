@@ -32,6 +32,8 @@ export interface PopupDeps {
   /** Which OS to tailor the OLLAMA_ORIGINS fix command for. */
   platformOs: () => Promise<PlatformOs>;
   writeClipboard: (text: string) => Promise<void>;
+  /** Ask the active tab to translate (or untranslate) itself. */
+  translateActivePage: () => Promise<void>;
 }
 
 interface Elements {
@@ -48,6 +50,7 @@ interface Elements {
   fix: HTMLElement;
   fixCommand: HTMLElement;
   copyFix: HTMLButtonElement;
+  translatePage: HTMLButtonElement;
 }
 
 function collect(root: ParentNode): Elements | null {
@@ -64,6 +67,7 @@ function collect(root: ParentNode): Elements | null {
   const fix = root.querySelector<HTMLElement>('#fix');
   const fixCommand = root.querySelector<HTMLElement>('#fixCommand');
   const copyFix = root.querySelector<HTMLButtonElement>('#copyFix');
+  const translatePage = root.querySelector<HTMLButtonElement>('#translatePage');
 
   if (
     !form ||
@@ -78,7 +82,8 @@ function collect(root: ParentNode): Elements | null {
     !connection ||
     !fix ||
     !fixCommand ||
-    !copyFix
+    !copyFix ||
+    !translatePage
   ) {
     return null;
   }
@@ -96,6 +101,7 @@ function collect(root: ParentNode): Elements | null {
     fix,
     fixCommand,
     copyFix,
+    translatePage,
   };
 }
 
@@ -189,6 +195,15 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
   // Re-judged locally: whether a model is installed is answered by the probe
   // already in hand, so retyping the field costs nothing.
   el.model.addEventListener('input', render);
+
+  el.translatePage.addEventListener('click', () => {
+    // Closing immediately is the honest signal that the work moved to the
+    // page: the progress badge lives there, and a popup left open would
+    // cover the corner it appears in.
+    void deps.translateActivePage().finally(() => {
+      window.close();
+    });
+  });
 
   el.copyFix.addEventListener('click', () => {
     const command = el.fixCommand.textContent ?? '';

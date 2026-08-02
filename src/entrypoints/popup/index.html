@@ -166,6 +166,10 @@
           border-color: #444;
         }
       }
+      .primary-action {
+        margin-top: 0;
+        margin-bottom: 4px;
+      }
       #copyFix {
         flex: 0 0 auto;
         width: auto;
@@ -177,6 +181,11 @@
   </head>
   <body>
     <h1>OpenRead</h1>
+    <!-- The primary action, above the settings it depends on: the popup is
+         opened far more often to translate a page than to change a model. -->
+    <button id="translatePage" type="button" class="primary-action">
+      Translate this page
+    </button>
     <form id="settingsForm">
       <label for="baseUrl">Ollama Server URL</label>
       <input id="baseUrl" type="text" placeholder="http://localhost:11434" />

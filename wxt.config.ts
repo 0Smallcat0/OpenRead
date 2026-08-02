@@ -21,6 +21,15 @@ export default defineConfig({
         },
         description: 'Translate the current selection',
       },
+      // Whole-page translation is a toggle, so one binding covers translating
+      // and undoing it. Ctrl+Shift+G is unbound in a default Chrome.
+      'translate-page': {
+        suggested_key: {
+          default: 'Ctrl+Shift+G',
+          mac: 'Command+Shift+G',
+        },
+        description: 'Translate the whole page (again to undo)',
+      },
     },
     host_permissions: ['<all_urls>'],
     web_accessible_resources: [
