@@ -5,6 +5,37 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - 2026-08-03
+
+### Fixed
+
+- **Whole-page translation spent most of its effort on navigation.** The first
+  real-browser run of the 2.4.0 feature, on Wikipedia's article for Ollama,
+  collected **325 blocks — 277 of them chrome**: the sidebar, the account
+  links, and the table of contents. Because the DOM puts all of that ahead of
+  the article, a queue in document order translated "Create account" and
+  "View history" while the reader waited on paragraph one, and a table of
+  contents entry reading `4` came back as `四`.
+
+  Two changes, both measured on live pages. Collection now scopes to the page's
+  `main` / `[role="main"]` / `article` landmark when it declares one, which
+  excludes chrome by construction rather than by blocklist and makes "document
+  order" finally mean "reading order"; a page with no such landmark falls back
+  to the whole body, unaffected. On top of that, navigational landmarks are
+  skipped wherever they appear — `nav`, `header`, `footer`, `aside`, their
+  ARIA equivalents, and the table-of-contents and sidebar classes that predate
+  them.
+
+  Wikipedia's Ollama article: **325 blocks → 48**. MDN's `AbortController`
+  page: **135 → 24**. example.com, which declares no landmark: unchanged at 2. The first block translated goes from "Current events" to the article's
+  opening sentence.
+
+  Worth recording how this was found: 2.4.0 shipped with 70 unit tests that all
+  passed, and comments explaining that block selection must not waste a local
+  GPU on navigation chrome. It did anyway. jsdom has no real page to be wrong
+  about — the defect was visible in the first screenshot taken through
+  `pnpm e2e:page` and in no test written before it.
+
 ## [2.4.0] - 2026-08-03
 
 ### Added

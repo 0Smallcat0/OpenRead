@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   collectBlocks,
+  contentRoot,
   hasTranslatableText,
   isElementVisible,
   MIN_BLOCK_CHARS,
@@ -174,6 +175,80 @@ describe('collectBlocks', () => {
   it('returns nothing for a page with no prose', () => {
     render(`<nav><li>Home</li></nav><script>const x = 1;</script>`);
     expect(collectBlocks(document.body, visible)).toEqual([]);
+  });
+});
+
+describe('navigation chrome', () => {
+  it('skips the landmarks a page keeps its chrome in', () => {
+    render(`
+      <header><p>Create account or log in here</p></header>
+      <nav><li>About Wikipedia, and other links</li></nav>
+      <aside><p>A sidebar of related reading material.</p></aside>
+      <footer><p>Copyright and licensing information here.</p></footer>
+      <p>The opening sentence of the actual article.</p>
+    `);
+    expect(textsOf(collectBlocks(document.body, visible))).toEqual([
+      'The opening sentence of the actual article.',
+    ]);
+  });
+
+  it('skips chrome marked only by ARIA role', () => {
+    render(`
+      <div role="navigation"><li>Random article link here</li></div>
+      <div role="complementary"><p>A tangential box of links.</p></div>
+      <p>The opening sentence of the actual article.</p>
+    `);
+    expect(collectBlocks(document.body, visible)).toHaveLength(1);
+  });
+
+  it('skips a table of contents, which is numbers and section names', () => {
+    // Left in, this produced the absurd output that exposed the bug: a table
+    // of contents entry reading "4" came back translated as "四".
+    render(`
+      <div class="toc"><li>4 See also and references</li></div>
+      <p>The opening sentence of the actual article.</p>
+    `);
+    expect(collectBlocks(document.body, visible)).toHaveLength(1);
+  });
+});
+
+describe('contentRoot', () => {
+  it('narrows to the landmark a page declares', () => {
+    render(`
+      <div><p>Chrome that lives outside the main region.</p></div>
+      <main><p>The opening sentence of the actual article.</p></main>
+    `);
+    expect(contentRoot(document.body)).toBe(document.querySelector('main'));
+    expect(textsOf(collectBlocks(document.body, visible))).toEqual([
+      'The opening sentence of the actual article.',
+    ]);
+  });
+
+  it('accepts role="main" and article as the same signal', () => {
+    render(`<div role="main"><p>The article body lives here.</p></div>`);
+    expect(contentRoot(document.body)).toBe(
+      document.querySelector('[role="main"]'),
+    );
+    render(`<article><p>The article body lives here.</p></article>`);
+    expect(contentRoot(document.body)).toBe(document.querySelector('article'));
+  });
+
+  it('falls back to the whole page when none is declared', () => {
+    // example.com and most hand-written HTML. Narrowing to nothing would
+    // translate nothing.
+    render(`<p>A page with no landmark at all, just text.</p>`);
+    expect(contentRoot(document.body)).toBe(document.body);
+    expect(collectBlocks(document.body, visible)).toHaveLength(1);
+  });
+
+  it('still filters chrome that a page nests inside its main region', () => {
+    render(`
+      <main>
+        <nav><li>An in-content navigation strip here</li></nav>
+        <p>The opening sentence of the actual article.</p>
+      </main>
+    `);
+    expect(collectBlocks(document.body, visible)).toHaveLength(1);
   });
 });
 
