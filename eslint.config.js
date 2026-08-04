@@ -9,6 +9,8 @@ export default tseslint.config(
     ignores: [
       '.output/**',
       '.wxt/**',
+      // Build output of `pnpm build:cli`; linting a bundle lints its deps.
+      'dist/**',
       'node_modules/**',
       'public/**',
       'coverage/**',

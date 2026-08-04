@@ -5,6 +5,9 @@ node_modules/
 # WXT build output
 .wxt/
 .output/
+
+# CLI / MCP bundle (built by `pnpm build:cli`, published from the tarball)
+dist/
 web-ext.config.ts
 
 # Env / secrets (BYOK — never commit keys)

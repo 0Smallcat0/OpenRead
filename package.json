@@ -1,7 +1,7 @@
 {
   "name": "openread",
-  "version": "2.5.0",
-  "description": "Local-first, evaluation-driven LLM translation for web & PDF via Ollama — a case study in making streaming LLM output reliable.",
+  "version": "2.6.0",
+  "description": "Translate web pages, PDFs and text with a local LLM through Ollama - browser extension, CLI, and MCP server. No cloud, no API key.",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -11,6 +11,7 @@
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
     "build": "wxt build",
+    "build:cli": "node scripts/build-cli.mjs",
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "compile": "tsc --noEmit",
@@ -27,11 +28,15 @@
     "bench": "tsx eval/bench/run.ts",
     "bench:agreement": "tsx eval/bench/agreement.ts",
     "e2e:page": "node e2e/fullpage.mjs",
-    "postinstall": "wxt prepare"
+    "cli": "pnpm build:cli && node bin/openread.mjs",
+    "prepare": "wxt prepare && node scripts/build-cli.mjs",
+    "prepack": "node scripts/build-cli.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.2.2",
+    "@types/node": "^24.10.1",
     "@vitest/coverage-v8": "^4.1.10",
+    "esbuild": "^0.28.1",
     "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
     "jsdom": "^29.1.1",
@@ -46,5 +51,45 @@
   "dependencies": {
     "@types/opencc-js": "^1.0.3",
     "opencc-js": "^1.4.0"
+  },
+  "bin": {
+    "openread": "bin/openread.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": "./dist/node/cli.js",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "ollama",
+    "translation",
+    "local-llm",
+    "mcp",
+    "mcp-server",
+    "cli",
+    "chrome-extension",
+    "traditional-chinese",
+    "privacy",
+    "offline"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0Smallcat0/OpenRead.git"
+  },
+  "homepage": "https://github.com/0Smallcat0/OpenRead#readme",
+  "main": "eslint.config.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "author": "",
+  "bugs": {
+    "url": "https://github.com/0Smallcat0/OpenRead/issues"
   }
 }

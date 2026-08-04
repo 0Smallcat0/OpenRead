@@ -23,8 +23,16 @@ jobs:
 
       - run: pnpm compile
 
+      # Before the tests: the MCP suite drives the published entry point, so
+      # it needs the bundle that entry point loads.
+      - run: pnpm build:cli
+
       - run: pnpm test
 
       - run: pnpm lint
 
       - run: pnpm build
+
+      # The package a user installs has to be installable. `npm pack` runs
+      # prepack, so this also proves the bundle is in the tarball.
+      - run: npm pack --dry-run

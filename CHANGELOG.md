@@ -5,6 +5,58 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-08-03
+
+### Added
+
+- **A CLI and an MCP server.** `npx openread "…"` translates from a shell;
+  `openread mcp` exposes the pipeline to any MCP client.
+
+  Everything valuable this project has built — the artifact filters, the
+  streaming assembler, the Taiwan-convention conversion, the prompt chosen by
+  benchmark — was reachable only by a person clicking inside Chrome. A
+  script could not use it. Neither could an agent. That is a strange place to
+  keep a text-in / text-out function.
+
+  It is the same pipeline, not a reimplementation: `src/node/translate.ts`
+  calls the identical `translateStream` the extension calls, with the same
+  request, the same `think: false`, the same `StreamAssembler` and the same
+  OpenCC transform. The core was written framework-free so this file could be
+  twenty lines, and it is. A test pins the CLI's defaults against
+  `DEFAULT_SETTINGS`, because the same text coming back differently depending
+  on how you asked is a bug nothing else in the project would notice.
+
+  The MCP server is hand-rolled rather than built on the official SDK. A stdio
+  tool server needs five methods, and a project whose argument is that its
+  claims are checkable is better served by a handshake it tests than by a
+  dependency it trusts — so the suite spawns the published entry point and
+  performs a real initialize / tools/list / tools/call exchange, including the
+  cases that wedge clients: never answering a notification, and returning tool
+  failures as results with `isError` rather than as JSON-RPC errors, since a
+  model can read the former and act on it.
+
+  Bundled with esbuild rather than emitted by `tsc`, because NodeNext demands
+  explicit `.js` extensions the extension source does not use, and rewriting
+  every import in `src/core` so one entry point could be published is the wrong
+  trade. Bundling also brings the OpenCC dictionaries along, so `npx openread`
+  works on a machine with nothing installed.
+
+### Fixed
+
+- **`npm install openread` failed outright, for everyone.** `postinstall` ran
+  `wxt prepare`, and npm runs `postinstall` on the _consumer's_ machine, where
+  `wxt` is a devDependency that is not there. Every install — and every
+  `npx` — would have died at that line. It is now `prepare`, which npm runs
+  for local development and for git installs and never for a dependency.
+
+  Caught by installing the packed tarball into an empty directory and running
+  the binary, which is now part of CI as `npm pack --dry-run`. Nothing in a
+  test suite that runs inside the repository could have found it.
+
+- **The MCP server exited while still generating.** Closing stdin ended the
+  process immediately, so a piped batch of requests silently lost its last
+  answer. In-flight work is now drained first.
+
 ## [2.5.0] - 2026-08-03
 
 ### Changed
