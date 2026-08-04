@@ -136,11 +136,18 @@ strange place to keep a text-in / text-out function, so it is now also a
 command and an MCP server.
 
 ```bash
-npx openread "The quick brown fox jumps over the lazy dog."
-cat paper.txt | npx openread --to Japanese
-npx openread -f notes.md -m llama3.1
-npx openread models
+npm install -g github:0Smallcat0/OpenRead
+
+openread "The quick brown fox jumps over the lazy dog."
+cat paper.txt | openread --to Japanese
+openread -f notes.md -m llama3.1
+openread models
 ```
+
+<sub>Installing from GitHub builds from source, so it takes a minute or two.
+The package is not on npm yet — when it is, this becomes
+<code>npx openread</code> with no install at all, and the release workflow
+already publishes on tag once an <code>NPM_TOKEN</code> secret exists.</sub>
 
 ### As an MCP server
 
@@ -149,7 +156,7 @@ locally — nothing leaves the machine, which is the same property that makes
 the extension worth having, applied to agents.
 
 ```bash
-claude mcp add openread -- npx -y openread mcp
+claude mcp add openread -- openread mcp
 ```
 
 <details>
@@ -159,8 +166,8 @@ claude mcp add openread -- npx -y openread mcp
 {
   "mcpServers": {
     "openread": {
-      "command": "npx",
-      "args": ["-y", "openread", "mcp"]
+      "command": "openread",
+      "args": ["mcp"]
     }
   }
 }
