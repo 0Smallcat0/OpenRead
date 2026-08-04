@@ -9,6 +9,7 @@
  */
 import { translateStream, enrichText } from '../api/ollama';
 import { loadSettings } from '../settings';
+import { buildOriginStripRule, ORIGIN_STRIP_RULE_ID } from '../core/dnr-rule';
 import {
   STREAM_PORT_NAME,
   TRANSLATE_SELECTION_COMMAND,
@@ -69,6 +70,55 @@ export default defineBackground(() => {
       }
     })();
   }
+  /**
+   * Let this extension reach Ollama without the user configuring anything.
+   *
+   * Ollama 403s any request whose Origin it does not know, and an extension's
+   * origin is never on its list, so every install used to begin with an
+   * OLLAMA_ORIGINS environment variable and a server restart. The rule strips
+   * the header from this extension's own requests to the configured server
+   * only; see `core/dnr-rule.ts` for why that does not also hand every web
+   * page an unauthenticated local model.
+   *
+   * Session-scoped rather than dynamic: it is cheap to rebuild, and a rule
+   * that outlives the browser would keep pointing at a server the user may
+   * have since changed.
+   */
+  async function applyOriginStripRule(): Promise<void> {
+    const { baseUrl } = await loadSettings();
+    const rule = buildOriginStripRule(baseUrl);
+    await chrome.declarativeNetRequest.updateSessionRules({
+      removeRuleIds: [ORIGIN_STRIP_RULE_ID],
+      addRules: rule ? [rule] : [],
+    });
+  }
+
+  /**
+   * Resolves once the rule is in force. Every outbound request waits on it.
+   *
+   * Installing the rule is asynchronous, and an MV3 worker starts cold — it is
+   * woken *by* the first request, so without this the request that woke it can
+   * reach the network first and take a 403 the user did nothing to deserve.
+   * Caught by the browser harness against a stock server: with two blocks in
+   * flight, exactly the first one failed. Awaiting a settled promise costs
+   * nothing on every request after the first.
+   */
+  let originRuleReady = applyOriginStripRule();
+
+  chrome.runtime.onStartup.addListener(() => {
+    originRuleReady = applyOriginStripRule();
+  });
+  chrome.runtime.onInstalled.addListener(() => {
+    originRuleReady = applyOriginStripRule();
+  });
+  // Pointing the extension at a different server has to move the rule with it,
+  // or the new server answers 403 and the old one stays reachable.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'sync' && 'baseUrl' in changes) {
+      originRuleReady = applyOriginStripRule();
+    }
+  });
+
   chrome.runtime.onStartup.addListener(routeExistingPdfTabs);
   chrome.runtime.onInstalled.addListener(routeExistingPdfTabs);
 
@@ -114,6 +164,7 @@ export default defineBackground(() => {
       const { signal } = controller;
 
       void (async () => {
+        await originRuleReady;
         const { baseUrl } = await loadSettings();
         try {
           await translateStream({
@@ -133,7 +184,7 @@ export default defineBackground(() => {
           // isn't running or hasn't allowed this extension's origin.
           const message_ =
             error instanceof TypeError
-              ? `Can't reach Ollama at ${baseUrl}. Is it running, and is OLLAMA_ORIGINS set to allow this extension?`
+              ? `Can't reach Ollama at ${baseUrl}. Is the server running?`
               : (error as Error).message;
           post({ status: 'error', message: message_ });
         }
@@ -166,6 +217,7 @@ export default defineBackground(() => {
 
       if (request.type === 'ENRICH_CAPTURE') {
         void (async () => {
+          await originRuleReady;
           const { baseUrl } = await loadSettings();
           let result = null;
           try {

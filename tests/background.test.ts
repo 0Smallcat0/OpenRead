@@ -37,6 +37,7 @@ interface Registered {
   onCommand: (command: string) => void;
   onStartup: () => void;
   onInstalled: () => void;
+  onStorageChanged: (changes: Record<string, unknown>, area: string) => void;
   onConnect: (port: FakePort) => void;
   onMessage: (
     request: unknown,
@@ -82,6 +83,9 @@ let tabsUpdate: ReturnType<typeof vi.fn>;
 let tabsQuery: ReturnType<typeof vi.fn>;
 let tabsSendMessage: ReturnType<typeof vi.fn>;
 let fileSchemeAllowed: boolean;
+let sessionRules: ReturnType<typeof vi.fn>;
+let startupListeners: (() => void)[];
+let installedListeners: (() => void)[];
 
 /** Let the worker's awaited `loadSettings()` and stream call resolve. */
 async function settle(): Promise<void> {
@@ -97,6 +101,9 @@ beforeEach(async () => {
   tabsUpdate = vi.fn().mockResolvedValue(undefined);
   tabsQuery = vi.fn().mockResolvedValue([{ id: 7 }]);
   tabsSendMessage = vi.fn().mockResolvedValue(undefined);
+  sessionRules = vi.fn().mockResolvedValue(undefined);
+  startupListeners = [];
+  installedListeners = [];
 
   const partial: Partial<Registered> = {};
   vi.stubGlobal('chrome', {
@@ -112,14 +119,16 @@ beforeEach(async () => {
           partial.onMessage = fn;
         },
       },
+      // Collected, not overwritten: PDF routing and the Origin-strip rule
+      // both register here, and keeping only the last would silently drop one.
       onStartup: {
-        addListener: (fn: Registered['onStartup']) => {
-          partial.onStartup = fn;
+        addListener: (fn: () => void) => {
+          startupListeners.push(fn);
         },
       },
       onInstalled: {
-        addListener: (fn: Registered['onInstalled']) => {
-          partial.onInstalled = fn;
+        addListener: (fn: () => void) => {
+          installedListeners.push(fn);
         },
       },
     },
@@ -143,7 +152,23 @@ beforeEach(async () => {
     extension: {
       isAllowedFileSchemeAccess: () => Promise.resolve(fileSchemeAllowed),
     },
+    storage: {
+      onChanged: {
+        addListener: (fn: Registered['onStorageChanged']) => {
+          partial.onStorageChanged = fn;
+        },
+      },
+    },
+    declarativeNetRequest: {
+      updateSessionRules: sessionRules,
+    },
   });
+  partial.onStartup = () => {
+    for (const fn of startupListeners) fn();
+  };
+  partial.onInstalled = () => {
+    for (const fn of installedListeners) fn();
+  };
   // WXT auto-imports this; here it just hands back the registration callback.
   vi.stubGlobal('defineBackground', (fn: () => void) => fn);
 
@@ -353,7 +378,11 @@ describe('the streaming broker', () => {
     const error = port.posted.at(-1) as { status: string; message: string };
     expect(error.status).toBe('error');
     expect(error.message).toContain(BASE_URL);
-    expect(error.message).toContain('OLLAMA_ORIGINS');
+    // No longer mentions OLLAMA_ORIGINS. The Origin-strip rule removed that
+    // as a thing a user has to know about, so naming it here would send
+    // someone to configure a server that is already configured correctly.
+    expect(error.message).not.toContain('OLLAMA_ORIGINS');
+    expect(error.message).toContain('running');
   });
 
   it('passes any other failure through verbatim', async () => {
@@ -518,5 +547,72 @@ describe('one-shot handlers', () => {
     expect(
       registered.onMessage({ type: 'SOMETHING_ELSE' }, {}, vi.fn()),
     ).toBeUndefined();
+  });
+});
+
+describe('the Origin-strip rule', () => {
+  /** The rule the worker last handed to declarativeNetRequest. */
+  function lastRule(): {
+    condition: { urlFilter?: string; tabIds?: number[] };
+    action: { requestHeaders?: { header: string; operation: string }[] };
+  } | null {
+    const call = sessionRules.mock.calls.at(-1)?.[0] as
+      { addRules?: unknown[] } | undefined;
+    return (call?.addRules?.[0] ?? null) as ReturnType<typeof lastRule>;
+  }
+
+  it('installs on load, so a fresh install needs no OLLAMA_ORIGINS', async () => {
+    await settle();
+    expect(sessionRules).toHaveBeenCalled();
+    expect(lastRule()?.action.requestHeaders).toEqual([
+      { header: 'origin', operation: 'remove' },
+    ]);
+    expect(lastRule()?.condition.urlFilter).toBe('|http://localhost:11434/');
+  });
+
+  it('never applies to a request that belongs to a tab', async () => {
+    // Origin is what stops a web page from driving a local model. Only
+    // tab-less requests — this extension's own — may have it stripped.
+    await settle();
+    expect(lastRule()?.condition.tabIds).toEqual([-1]);
+  });
+
+  it('follows the server when the user points somewhere else', async () => {
+    mocks.loadSettings.mockResolvedValue({ baseUrl: 'http://nas.local:11434' });
+    registered.onStorageChanged({ baseUrl: { newValue: 'x' } }, 'sync');
+    await settle();
+    expect(lastRule()?.condition.urlFilter).toBe('|http://nas.local:11434/');
+  });
+
+  it('ignores changes to settings that are not the server URL', async () => {
+    await settle();
+    const before = sessionRules.mock.calls.length;
+    registered.onStorageChanged({ targetLang: { newValue: 'x' } }, 'sync');
+    await settle();
+    expect(sessionRules.mock.calls.length).toBe(before);
+  });
+
+  it('ignores writes to a storage area this extension does not use', async () => {
+    await settle();
+    const before = sessionRules.mock.calls.length;
+    registered.onStorageChanged({ baseUrl: { newValue: 'x' } }, 'local');
+    await settle();
+    expect(sessionRules.mock.calls.length).toBe(before);
+  });
+
+  it('installs nothing rather than something malformed', async () => {
+    mocks.loadSettings.mockResolvedValue({ baseUrl: 'not a url' });
+    registered.onStorageChanged({ baseUrl: { newValue: 'x' } }, 'sync');
+    await settle();
+    const call = sessionRules.mock.calls.at(-1)?.[0] as { addRules: unknown[] };
+    expect(call.addRules).toEqual([]);
+  });
+
+  it('always clears the previous rule, so rules cannot stack', async () => {
+    await settle();
+    const call = sessionRules.mock.calls.at(-1)?.[0] as {
+      removeRuleIds: number[];
+    };
+    expect(call.removeRuleIds).toEqual([1]);
   });
 });

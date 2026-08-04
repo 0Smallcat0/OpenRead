@@ -6,10 +6,14 @@ export default defineConfig({
   srcDir: 'src',
   manifest: {
     name: 'OpenRead',
-    // Least-privilege: v1 declared `scripting` + `declarativeNetRequest` but never
-    // used them (store-review red flag). Dropped. We only need storage + the
-    // broad host access required to inject the selection UI on any page/PDF.
-    permissions: ['storage', 'activeTab'],
+    // Least-privilege: v1 declared `scripting` + `declarativeNetRequest` but
+    // used neither, which is a store-review red flag. `scripting` stays gone.
+    // `declarativeNetRequest` is back in 2.5.0 with an actual job: one
+    // session rule strips the `Origin` header from this extension's own
+    // requests to the configured Ollama server, which is what removes the
+    // OLLAMA_ORIGINS setup step entirely. Scoped in `core/dnr-rule.ts` so it
+    // cannot apply to a web page's requests.
+    permissions: ['storage', 'activeTab', 'declarativeNetRequest'],
     // A keyboard user can select text but never produces a mouseup, so the
     // floating 文 icon is not a route they can take. This is: remappable at
     // chrome://extensions/shortcuts, and it needs no extra permission.
