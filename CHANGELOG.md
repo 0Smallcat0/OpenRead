@@ -5,6 +5,50 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-08-03
+
+### Changed
+
+- **`OLLAMA_ORIGINS` is no longer a step.** Setup is now `ollama pull qwen3`
+  and `ollama serve`. Nothing else.
+
+  Every install used to begin with an environment variable — set three
+  different ways on three platforms — followed by a server restart, before
+  a single translation could succeed. It was the largest cost in the project
+  and it had nothing to do with translation. Version 2.3.0 responded by
+  detecting the failure and printing a good error message with a copyable fix,
+  which is a better way to describe a wall than to remove one.
+
+  Measured against a stock server: a request with no `Origin` header gets
+  **200**, the same request with `Origin: chrome-extension://…` gets
+  **403**. The header is the entire wall. One `declarativeNetRequest` session
+  rule strips it, and the step stops existing.
+
+  The scoping is the part that mattered to get right, because `Origin` is
+  precisely what stops a web page from driving a local model it has no
+  business touching. The rule matches only `tabIds: [-1]` — requests with
+  no owning tab, meaning this extension's own service worker and pages —
+  and only a `urlFilter` anchored to the configured server's origin. A request
+  from a web page always carries a real tab id, so it can never match, and it
+  keeps facing Ollama's own check exactly as before. Both conditions are
+  pinned by tests rather than checked by eye.
+
+  `declarativeNetRequest` therefore returns to the manifest, four releases
+  after being dropped as a permission v1 declared and never used. It now has
+  one job and one rule. `scripting` stays gone.
+
+### Fixed
+
+- **A cold-start race that would have made the above intermittent.** Installing
+  the rule is asynchronous and an MV3 worker starts cold — it is woken _by_
+  the first request — so that request could reach the network before the
+  rule was in force and take a 403 the user did nothing to deserve. Both
+  outbound paths now await the rule.
+
+  Found by `pnpm e2e:page` against a stock server: with two blocks in flight,
+  exactly one failed, every time. No unit test would have shown this; the
+  suite was green before and after.
+
 ## [2.4.1] - 2026-08-03
 
 ### Fixed

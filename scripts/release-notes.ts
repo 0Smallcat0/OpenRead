@@ -48,7 +48,10 @@ export function extractReleaseNotes(
     }
   }
 
-  return lines.slice(heading + 1, end).join('\n').trim();
+  return lines
+    .slice(heading + 1, end)
+    .join('\n')
+    .trim();
 }
 
 function escapeRegExp(value: string): string {
