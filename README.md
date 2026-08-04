@@ -58,24 +58,17 @@ Then load `.output/chrome-mv3` as an unpacked extension.
 
 ### Then set up Ollama
 
-OpenRead needs a local model server. This is the only setup step, and it is a
-one-time cost:
+OpenRead needs a local model server. Two commands, and nothing to configure:
 
-1. [Install Ollama](https://ollama.com/).
-2. Pull the default model: `ollama pull qwen3`
-   (chosen by [benchmark](#which-local-model), not by taste).
-3. **Let the extension talk to it.** Ollama only answers requests from origins
-   it knows, and a browser extension is not one of them by default. Set
-   `OLLAMA_ORIGINS=chrome-extension://*` and restart Ollama:
+```bash
+ollama pull qwen3
+ollama serve
+```
 
-   | OS          | Command                                                                        |
-   | ----------- | ------------------------------------------------------------------------------ |
-   | **macOS**   | `launchctl setenv OLLAMA_ORIGINS "chrome-extension://*"`, then restart Ollama  |
-   | **Linux**   | add it to the systemd unit or your shell env, then restart Ollama              |
-   | **Windows** | set a user environment variable `OLLAMA_ORIGINS=chrome-extension://*`, restart |
-
-   Skip this and every translation fails with a `403`. The extension says so in
-   as many words, and links back here.
+That is the whole setup. There is no environment variable to set and no
+allowlist to edit — see
+[the note on `OLLAMA_ORIGINS`](#why-there-is-no-ollama_origins-step) for how
+that step was removed rather than documented.
 
 Open the toolbar popup to confirm the connection, pick a model, and choose a
 target language.
@@ -178,7 +171,7 @@ mid-artifact exactly as they do in a live stream.
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](eval/RESULTS.md)._
 
-**309 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
+**326 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
 pure core at **100% function / 97% line** coverage, the selection and capture UI
 driven through jsdom with a stubbed extension port, and the background worker —
 which owns cancellation, error translation and PDF routing. Overall: 92%
@@ -252,6 +245,22 @@ Three findings worth calling out:
   phrase a chunk boundary splits (`数据` + `库` → `數據庫`, not `資料庫`), so the
   transform holds the ambiguous tail back until enough context arrives — the
   streamed result is byte-identical to converting the finished text in one call.
+- **Why there is no `OLLAMA_ORIGINS` step**
+  ([`src/core/dnr-rule.ts`](src/core/dnr-rule.ts)) — Ollama answers a request
+  whose `Origin` it does not recognise with a 403, and a browser extension's
+  origin is never on its default list. Measured against a stock server: no
+  `Origin` header → 200, `Origin: chrome-extension://…` → 403. The header _is_
+  the wall, so OpenRead strips it with one `declarativeNetRequest` session
+  rule and the setup step stops existing. Until 2.5.0 the answer to this was a
+  well-written error message, which is not the same as a fix.
+
+  The scoping is the interesting part, because `Origin` is exactly what stops
+  a web page from driving a local model it has no business touching. The rule
+  matches only `tabIds: [-1]` — requests with no owning tab, which means this
+  extension's own — and only a URL anchored to the configured server. A
+  request from a page always carries a real tab id, never matches, and keeps
+  facing Ollama's check unchanged.
+
 - **Verified in a browser, not only in jsdom**
   ([`e2e/fullpage.mjs`](e2e/fullpage.mjs)) — every unit test here runs in
   jsdom, which cannot tell you whether an extension loads, whether a content
