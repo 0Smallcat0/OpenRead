@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.6.0] - 2026-08-03
+## [2.6.1] - 2026-08-03
 
 ### Added
 
@@ -42,6 +42,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   works on a machine with nothing installed.
 
 ### Fixed
+
+- **The README promised `npx openread`, which does not work.** The name is
+  unclaimed on npm, so that line described a package that does not exist —
+  the same class of unverifiable claim this project removed from the README in
+  2.3.0. The documented commands are now the ones that work today
+  (`npm install -g github:0Smallcat0/OpenRead`, verified by installing into an
+  empty directory and translating with it), and the release workflow publishes
+  to npm on tag as soon as an `NPM_TOKEN` secret exists, with provenance.
 
 - **`npm install openread` failed outright, for everyone.** `postinstall` ran
   `wxt prepare`, and npm runs `postinstall` on the _consumer's_ machine, where

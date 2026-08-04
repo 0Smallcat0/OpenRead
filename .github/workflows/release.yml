@@ -10,10 +10,18 @@ on:
 
 permissions:
   contents: write
+  # Lets npm attach a provenance attestation, so anyone can verify the
+  # published tarball was built from this tag in this repository.
+  id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Job-level, so the publish step's `if` can see it. A step's own `env:`
+    # block is not in scope for its own condition, which would make the guard
+    # silently always-false and skip publishing forever.
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -61,3 +69,13 @@ jobs:
             --title "OpenRead ${GITHUB_REF_NAME}" \
             --notes-file release-notes.md \
             ".output/openread-${GITHUB_REF_NAME#v}-chrome.zip"
+
+      # Publishing needs an NPM_TOKEN repository secret. Without one this is a
+      # no-op and the GitHub release above still stands: the extension zip does
+      # not depend on npm. With one, `npx openread` starts working within a
+      # minute of the tag, instead of cloning and building for two.
+      - name: Publish to npm
+        if: ${{ env.NPM_TOKEN != '' }}
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          npm publish --provenance --access public
