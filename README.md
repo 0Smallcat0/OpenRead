@@ -1,7 +1,9 @@
 # OpenRead
 
-> **Translate the web and your PDFs with a language model running on your own
-> machine.** No cloud, no API key, no telemetry.
+> **Translate the web, your PDFs, and your text with a language model running
+> on your own machine.** No cloud, no API key, no telemetry.
+
+A browser extension, a command-line tool, and an MCP server over one pipeline.
 
 Select text on any page — or in a PDF — and the translation streams in place.
 Inference happens on a local [Ollama](https://ollama.com) server, so nothing you
@@ -125,6 +127,61 @@ base it has no business owning.
 Set your vault, capture folder, and the optional enrichment toggle in the popup;
 leave the vault blank to use whichever vault is currently open.
 
+## Without a browser: CLI and MCP
+
+The reliability layer, the Taiwan-convention conversion, and the prompt that
+was picked by benchmark all used to be reachable only by a person clicking
+inside Chrome. A script could not use them. Neither could an agent. That is a
+strange place to keep a text-in / text-out function, so it is now also a
+command and an MCP server.
+
+```bash
+npx openread "The quick brown fox jumps over the lazy dog."
+cat paper.txt | npx openread --to Japanese
+npx openread -f notes.md -m llama3.1
+npx openread models
+```
+
+### As an MCP server
+
+`openread mcp` speaks JSON-RPC over stdio, so any MCP client can translate
+locally — nothing leaves the machine, which is the same property that makes
+the extension worth having, applied to agents.
+
+```bash
+claude mcp add openread -- npx -y openread mcp
+```
+
+<details>
+<summary>Or by config file, for clients that use one</summary>
+
+```json
+{
+  "mcpServers": {
+    "openread": {
+      "command": "npx",
+      "args": ["-y", "openread", "mcp"]
+    }
+  }
+}
+```
+
+</details>
+
+Two tools: `translate` (with optional `targetLang` and `model`) and
+`list_models`, so a call can name a model that exists instead of failing
+mid-generation. Settings come from flags, then `OPENREAD_URL` /
+`OPENREAD_MODEL` / `OPENREAD_LANG`, then `OLLAMA_HOST` — which anyone running
+Ollama elsewhere has already set — then the same defaults the extension ships.
+
+**It is the same pipeline, not a reimplementation.** `src/node/translate.ts`
+calls the identical `translateStream` the extension calls: same request, same
+`think: false`, same `StreamAssembler`, same OpenCC transform. The core was
+written framework-free precisely so this file could be twenty lines, and it
+is. A test pins the CLI's defaults against the extension's, because the same
+text coming back differently depending on how you asked would be a bug nothing
+else would catch.
+
 ## Privacy
 
 The selected text is sent to one place: the Ollama server at the URL you
@@ -171,7 +228,7 @@ mid-artifact exactly as they do in a live stream.
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](eval/RESULTS.md)._
 
-**326 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
+**359 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
 pure core at **100% function / 97% line** coverage, the selection and capture UI
 driven through jsdom with a stubbed extension port, and the background worker —
 which owns cancellation, error translation and PDF routing. Overall: 92%
