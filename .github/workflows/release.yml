@@ -42,6 +42,7 @@ jobs:
 
       # Same gates as CI. A tagged build is the one that most needs them.
       - run: pnpm compile
+      - run: pnpm build:cli
       - run: pnpm test
       - run: pnpm lint
 
