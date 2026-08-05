@@ -149,7 +149,8 @@ export default defineBackground(() => {
    * Right-click entry points.
    *
    * The whole-page feature shipped reachable only from the toolbar popup and
-   * `Ctrl+Shift+G`. Both work; neither is where anyone looks. A user with the
+   * a keyboard shortcut — which, it turned out, Chrome had never assigned.
+   * Neither is where anyone looks in any case. A user with the
    * extension installed opened the context menu, found Chrome's own translate
    * item and not this one, and asked where the feature had gone — which is the
    * answer to whether a popup button counts as discoverable.

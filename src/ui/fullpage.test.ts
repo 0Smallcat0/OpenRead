@@ -70,11 +70,23 @@ describe('translatePage', () => {
     );
   });
 
-  it('marks the target language on what it inserts', async () => {
+  it('marks the target language on what it inserts, as BCP-47', async () => {
     await translatePage(document, deps());
     const node = document.querySelector<HTMLElement>(`.${BILINGUAL_CLASS}`);
-    expect(node?.lang).toBe('Traditional Chinese');
+    // Not "Traditional Chinese", which is what this shipped for five releases
+    // and what `Intl.getCanonicalLocales` throws a RangeError on. A screen
+    // reader cannot resolve a display name to a voice.
+    expect(node?.lang).toBe('zh-Hant');
+    expect(() => Intl.getCanonicalLocales(node?.lang ?? '')).not.toThrow();
     expect(node?.getAttribute('dir')).toBe('auto');
+  });
+
+  it('leaves lang off entirely when the target maps to no BCP-47 tag', async () => {
+    // No tag inherits the page's language; a made-up one asserts something
+    // false, which is worse.
+    await translatePage(document, deps({ targetLang: 'Klingon' }));
+    const node = document.querySelector<HTMLElement>(`.${BILINGUAL_CLASS}`);
+    expect(node?.hasAttribute('lang')).toBe(false);
   });
 
   it('keeps going when one block fails, and says how many did', async () => {

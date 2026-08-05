@@ -5,6 +5,61 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.6] - 2026-08-05
+
+### Fixed
+
+- **The whole-page keyboard shortcut was never bound.** `Ctrl+Shift+G` is
+  Chrome's own "find previous". Chrome does not reject a manifest that asks for
+  a key it has already claimed — it installs the extension, registers the
+  command, and leaves the binding empty. So from 2.7.0 to 2.7.5 the README
+  documented a shortcut that did nothing, and nothing in the repository could
+  tell: the manifest said `Ctrl+Shift+G` and the code behind the command was
+  correct.
+
+  Found by asking a real browser instead of the manifest.
+  `chrome.commands.getAll()` returned `shortcut: "Ctrl+Shift+Y"` for
+  `translate-selection` and `shortcut: ""` for `translate-page`. Probed four
+  candidates in a patched copy of the build: `Ctrl+Shift+G` came back empty,
+  `Ctrl+Shift+U`, `Ctrl+Shift+L` and `Ctrl+Shift+K` each came back assigned.
+
+  Now `Ctrl+Shift+L` / `Command+Shift+L`, and `tests/commands.test.ts` fails if
+  a suggested key walks back into a combination already known to be taken.
+
+- **Translations were marked with a language tag that is not a language tag.**
+  Every inserted whole-page translation carried `lang="Traditional Chinese"` —
+  the dropdown's display name, put straight onto the attribute.
+  `Intl.getCanonicalLocales('Traditional Chinese')` throws a RangeError on it.
+
+  This is the attribute that tells a screen reader to switch to a Chinese
+  voice; an unparseable value means it keeps the page's own `lang` and reads
+  Chinese aloud in English. Now mapped through the existing `toBcp47` table
+  (`zh-Hant`), and left off entirely when a target maps to nothing, because no
+  tag inherits while a wrong one asserts.
+
+  The selection panel had the matching hole: it is an `aria-live` region
+  precisely so the translation is announced, and it announced it with no
+  language marked at all. It is now marked while the translated text is on
+  screen and unmarked again for the English status lines, so
+  `Ollama 404: model not found` is not read in a Chinese voice either.
+
+### Notes
+
+Both found in an accessibility pass. Also exercised and found healthy in the
+same pass: the floating icon is a `button` named _Translate selection_ and is
+one Tab stop away; Enter on it translates and moves focus into the panel; the
+panel is a `dialog` named _Translation_ whose Close and Save-to-Obsidian
+controls are both reachable by Tab and both correctly named; the progress badge
+is `role="status"`, `aria-live="polite"`, with a button named _Stop_.
+
+Earlier rounds of the same audit found nothing to fix: three tabs translating
+at once finished 8/8 blocks each with no failures; the service worker was left
+to be reclaimed on its own idle timer and the first request after the cold wake
+came back in 6 s with the `declarativeNetRequest` session rule still installed;
+twenty hostile Ollama URLs — IDN, IPv6, credentials, a 300-character host —
+produced no rejection from `updateSessionRules`, with internationalised hosts
+punycoded and `*` percent-encoded rather than becoming a wildcard.
+
 ## [2.7.5] - 2026-08-05
 
 ### Fixed

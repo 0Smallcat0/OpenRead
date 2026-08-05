@@ -29,6 +29,7 @@ import {
   TRANSLATED_ATTR,
   type CollectOptions,
 } from './blocks';
+import { toBcp47 } from '../core/bcp47';
 
 export const BILINGUAL_CLASS = 'oit-bilingual';
 export const PROGRESS_ID = 'oit-page-progress';
@@ -57,7 +58,11 @@ export interface PageTranslateDeps {
     /** Report a language-pack download, 0-1, so the badge can say so. */
     onDownloadProgress?: (loaded: number) => void,
   ) => Promise<string>;
-  /** Target language, used for the `lang` attribute on inserted nodes. */
+  /**
+   * Target language, as the human-readable name the rest of the project passes
+   * around. Mapped to BCP-47 before it reaches the `lang` attribute — see
+   * `attach`.
+   */
   targetLang: string;
   isVisible?: CollectOptions['isVisible'];
   shouldSkipText?: CollectOptions['shouldSkipText'];
@@ -218,7 +223,17 @@ function attach(
   // A span rather than a div: a div inside a `p` is invalid HTML, and while
   // the DOM API will not reject it, anything that later re-serialises the page
   // will move it out of the paragraph.
-  node.lang = targetLang;
+  //
+  // `lang` has to be BCP-47, and this used to set the dropdown's display name
+  // straight onto the attribute: `lang="Traditional Chinese"`, which
+  // `Intl.getCanonicalLocales` rejects outright. An invalid tag is not a
+  // cosmetic problem — marking the language is what makes a screen reader read
+  // the translation in a Chinese voice instead of spelling it out in an
+  // English one, and an unparseable value means it falls back to the page's
+  // own `lang`. Omitted entirely when the name maps to nothing, because no tag
+  // at least inherits, while a wrong one asserts.
+  const tag = toBcp47(targetLang);
+  if (tag) node.lang = tag;
   node.setAttribute('dir', 'auto');
   if (failed) node.setAttribute('data-oit-failed', '');
   node.textContent = text;

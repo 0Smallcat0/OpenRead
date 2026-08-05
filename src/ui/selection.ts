@@ -10,6 +10,7 @@
  * network calls via the pure `shouldBypassAI` check.
  */
 import { shouldBypassAI } from '../core/language';
+import { toBcp47 } from '../core/bcp47';
 import { resolveSourceUrl } from '../core/capture';
 import { captureNote, type CaptureConfig } from './capture';
 import type { CaptureNote } from '../core/types';
@@ -293,7 +294,15 @@ export function mountSelectionTranslator(
     return content;
   }
 
+  /**
+   * Write a status line: "Translating…", a download percentage, an error.
+   *
+   * All of them are English, so this also drops any `lang` a previous
+   * translation left behind — a screen reader reading "Translating…" in a
+   * Chinese voice is the same defect in the other direction.
+   */
   function setPanelText(content: HTMLDivElement, text: string): void {
+    content.removeAttribute('lang');
     content.textContent = text;
   }
 
@@ -333,9 +342,23 @@ export function mountSelectionTranslator(
       );
     }
 
-    // Same-language selection: show it verbatim, no API round-trip.
+    /**
+     * The panel is a live region, which is the whole reason a screen reader
+     * hears the translation at all — and it was handing it over with no
+     * language marked, so Chinese came out read by an English voice. Marked
+     * only while the translated text is on screen; `setPanelText` clears it
+     * again for the English status lines.
+     */
+    const bcp47 = toBcp47(settings.targetLang);
+    const markLanguage = (): void => {
+      if (bcp47) content.lang = bcp47;
+    };
+
+    // Same-language selection: show it verbatim, no API round-trip. Still the
+    // target language, so it is still marked as such.
     if (shouldBypassAI(text, settings.targetLang)) {
       setPanelText(content, text);
+      markLanguage();
       mountCaptureButton(text, settings);
       return;
     }
@@ -389,6 +412,7 @@ export function mountSelectionTranslator(
         if (res.status === 'streaming') {
           if (firstChunk) {
             setPanelText(content, '');
+            markLanguage();
             firstChunk = false;
           }
           full += res.chunk;
