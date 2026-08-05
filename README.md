@@ -98,12 +98,14 @@ The toolbar popup is where you choose the translator and the target language.
 contents and account links are deliberately untouched — only the article is
 translated.</sub>
 
-- **Whole page** — click **Translate this page** in the popup, or press
+- **Whole page** — right-click anywhere and choose **Translate this page with
+  OpenRead**, click the same thing in the toolbar popup, or press
   **`Ctrl+Shift+G`**. Each paragraph gets its translation underneath it, the
   page fills from the top, and a badge in the corner counts progress and offers
   a Stop. Press the shortcut again to remove every translation and get the
   original page back.
-- **One selection** — select text, click the floating **文**, and the
+- **One selection** — select text, then click the floating **文** or
+  right-click and choose **Translate selection with OpenRead**. The
   translation streams into a panel.
 - **PDFs** — open any `.pdf`; OpenRead redirects it into the bundled PDF.js
   viewer, where selection works exactly the same.
@@ -283,7 +285,7 @@ mid-artifact exactly as they do in a live stream.
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](eval/RESULTS.md)._
 
-**409 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
+**414 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
 pure core at **100% function / 97% line** coverage, the selection and capture UI
 driven through jsdom with a stubbed extension port, and the background worker —
 which owns cancellation, error translation and PDF routing. Overall: 92%
