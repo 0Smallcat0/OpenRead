@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.3] - 2026-08-05
+
+### Changed
+
+- **Published to npm.** `npx openread "…"` now works with no install step
+  at all, and `npx -y openread mcp` is a one-line MCP server entry for any
+  client. Until this release the only route was
+  `npm install -g github:0Smallcat0/OpenRead`, which clones and builds from
+  source and takes a couple of minutes — fine for a contributor, far too
+  much for someone who wants to translate one paragraph without sending it to
+  a cloud.
+
+  The release workflow has published on tag since 2.6.1; what was missing was
+  the `NPM_TOKEN` secret, which only the maintainer can create. Publishing
+  carries `--provenance`, so the tarball on npm can be traced back to the tag
+  and the workflow run that built it.
+
+  The README now documents `npx openread` because it is finally true. It said
+  so once before, in 2.6.0, when the package did not exist — that line was
+  removed in 2.6.1 rather than left to be discovered by whoever tried it.
+
 ## [2.6.2] - 2026-08-04
 
 ### Fixed
