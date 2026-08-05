@@ -395,6 +395,56 @@ describe('togglePageTranslation', () => {
     expect(document.getElementById(PROGRESS_ID)).toBeNull();
   });
 
+  it('retranslates in one press after the target language changes', async () => {
+    // Reported from use: translate a page, switch language in the popup, press
+    // translate — and the page was erased instead. A second press then did the
+    // translation, so switching language cost two presses and the first one
+    // looked like the feature breaking.
+    await togglePageTranslation(document, deps());
+    expect(
+      document.querySelector<HTMLElement>(`.${BILINGUAL_CLASS}`)?.lang,
+    ).toBe('zh-Hant');
+
+    const seen: string[] = [];
+    const result = await togglePageTranslation(
+      document,
+      deps({
+        targetLang: 'Japanese',
+        translate: (text) => {
+          seen.push(text);
+          return Promise.resolve(`[ja] ${text}`);
+        },
+      }),
+    );
+
+    expect(result?.translated).toBe(3);
+    expect(seen).toHaveLength(3);
+    expect(isPageTranslated(document)).toBe(true);
+    const nodes = Array.from(
+      document.querySelectorAll<HTMLElement>(`.${BILINGUAL_CLASS}`),
+    );
+    expect(nodes.every((n) => n.lang === 'ja')).toBe(true);
+    // And nothing from the old language survived alongside it.
+    expect(nodes.every((n) => n.textContent?.startsWith('[ja]'))).toBe(true);
+  });
+
+  it('still undoes when the language has not changed', async () => {
+    await togglePageTranslation(document, deps());
+    expect(await togglePageTranslation(document, deps())).toBeNull();
+    expect(isPageTranslated(document)).toBe(false);
+  });
+
+  it('undoes rather than guessing when the target maps to no tag', async () => {
+    // Nothing on the page says what language it is in, so "unknown" must not
+    // be read as "wrong" and quietly retranslate a page asked to be cleared.
+    const custom = deps({ targetLang: 'Klingon' });
+    await togglePageTranslation(document, custom);
+    expect(isPageTranslated(document)).toBe(true);
+
+    expect(await togglePageTranslation(document, custom)).toBeNull();
+    expect(isPageTranslated(document)).toBe(false);
+  });
+
   it('stops a run in progress rather than starting a second one', async () => {
     let calls = 0;
     const run = translatePage(

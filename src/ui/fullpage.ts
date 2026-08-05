@@ -105,6 +105,32 @@ export function isPageTranslated(root: ParentNode): boolean {
   return root.querySelector(`.${BILINGUAL_CLASS}`) !== null;
 }
 
+/**
+ * Whether what is on the page is a translation into `targetLang`.
+ *
+ * Every inserted node carries the target as a BCP-47 `lang`, so the page keeps
+ * a record of which language it was translated into and the toggle can tell a
+ * stale translation from a current one.
+ *
+ * Returns true when it cannot tell — an unmapped target, or nodes left by a
+ * version that wrote no `lang` — because "unknown" must not be read as "wrong"
+ * and silently retranslate a page the user asked to have cleared.
+ */
+export function isTranslatedInto(
+  root: ParentNode,
+  targetLang: string,
+): boolean {
+  const tag = toBcp47(targetLang);
+  if (!tag) return true;
+  const inserted = Array.from(
+    root.querySelectorAll<HTMLElement>(`.${BILINGUAL_CLASS}`),
+  );
+  return inserted.every((node) => {
+    const lang = node.getAttribute('lang');
+    return !lang || lang === tag;
+  });
+}
+
 function ensureStyle(doc: Document): void {
   if (doc.getElementById(STYLE_ID)) return;
   const style = doc.createElement('style');
@@ -380,9 +406,20 @@ export async function translatePage(
 /**
  * The single entry point behind the toolbar button and the keyboard shortcut.
  *
- * One control, three meanings, in the order a user expects: running → stop,
- * translated → clear, otherwise → translate. A separate "undo" button would
- * spend permanent screen space on a state that is obvious from the page.
+ * One control, four meanings, in the order a user expects: running → stop,
+ * translated into some other language → translate again into this one,
+ * translated into this one → clear, otherwise → translate. A separate "undo"
+ * button would spend permanent screen space on a state that is obvious from
+ * the page.
+ *
+ * The third meaning is the one that took a bug report. Changing the target
+ * language in the popup and pressing translate used to *erase* the page,
+ * because the toggle asked only "is there a translation here" and the answer
+ * was yes. A second press then translated into the new language — so switching
+ * language cost two presses, the first of which looked like the feature
+ * breaking. What the page is translated *into* is recorded on every inserted
+ * node, so the toggle can tell "already done" from "done in the language you
+ * just moved away from".
  */
 export async function togglePageTranslation(
   root: Document,
@@ -393,9 +430,15 @@ export async function togglePageTranslation(
     return null;
   }
   if (isPageTranslated(root)) {
+    if (isTranslatedInto(root, deps.targetLang)) {
+      clearPageTranslation(root);
+      root.getElementById(PROGRESS_ID)?.remove();
+      return null;
+    }
+    // Stale: clear the old language out of the way and run again, so one
+    // press means one thing.
     clearPageTranslation(root);
     root.getElementById(PROGRESS_ID)?.remove();
-    return null;
   }
   return translatePage(root, deps);
 }
