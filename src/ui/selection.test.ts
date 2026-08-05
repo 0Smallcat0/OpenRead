@@ -6,7 +6,7 @@
  * and assert on what the panel would show, not on internals.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mountSelectionTranslator } from './selection';
+import { mountSelectionTranslator, clampPanelTop } from './selection';
 import { STREAM_PORT_NAME, type StreamResponse } from '../messaging';
 
 const SETTINGS = {
@@ -425,5 +425,41 @@ describe('the panel is announced to assistive tech', () => {
     expect(
       panel?.querySelector('.content-div')?.getAttribute('aria-live'),
     ).toBe('polite');
+  });
+});
+
+describe('keeping the panel inside the window', () => {
+  // jsdom computes no geometry, so the placement itself is checked in a real
+  // browser. What is pinned here is the arithmetic that browser run exposed:
+  // a 975-character selection produced a panel occupying 442-1005 of a 703px
+  // viewport, leaving Save to Obsidian 300px below the fold on a position:fixed
+  // box that no scrolling can bring back.
+  const VIEWPORT = 703;
+
+  it('leaves a panel that already fits where it is', () => {
+    expect(clampPanelTop(442, 127, VIEWPORT)).toBe(442);
+  });
+
+  it('lifts a panel whose bottom would fall off the screen', () => {
+    // The measured case: 442 + 563 = 1005, past the 703px fold.
+    expect(clampPanelTop(442, 563, VIEWPORT)).toBe(VIEWPORT - 8 - 563);
+    expect(clampPanelTop(442, 563, VIEWPORT) + 563).toBeLessThanOrEqual(
+      VIEWPORT - 8,
+    );
+  });
+
+  it('pushes down a panel that opened above the top of the screen', () => {
+    // The other direction, also measured: an upward-opening panel reached -189.
+    expect(clampPanelTop(-189, 487, VIEWPORT)).toBe(8);
+  });
+
+  it('shows the top of a panel taller than the window', () => {
+    // Nothing fits, and the top is the half worth showing — it carries the
+    // translation and the close button.
+    expect(clampPanelTop(300, 900, VIEWPORT)).toBe(8);
+  });
+
+  it('respects a caller-supplied margin', () => {
+    expect(clampPanelTop(900, 100, VIEWPORT, 20)).toBe(VIEWPORT - 20 - 100);
   });
 });

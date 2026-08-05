@@ -5,6 +5,57 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.8] - 2026-08-05
+
+### Fixed
+
+- **The translation panel could open off the bottom of the window, taking
+  "Save to Obsidian" with it.** Where the panel goes is decided before it has a
+  height: the up-or-down choice tests a fixed 300 px of space below the
+  selection, which has nothing to do with how tall that particular panel turns
+  out to be. A long selection therefore opened downward into a box that ran
+  past the bottom of the viewport — and the panel is `position: fixed`, so no
+  amount of scrolling brings it back.
+
+  Measured on a 975-character selection in a 703 px viewport:
+
+  ```
+  panel 442..1005 of 703   save 961..990  reachable=false
+  ```
+
+  Three hundred pixels below the fold, and `elementFromPoint` on the button
+  returns nothing. The same arithmetic ran the other way for a selection near
+  the bottom of the screen, putting the panel's top at −189.
+
+  The panel is now re-fitted whenever it grows, which is the part that matters:
+  fitting it once at mount proves nothing, because it is mounted empty and
+  forty pixels tall — the translation arrives afterwards, and so does the
+  capture bar. Same case after the fix: `panel 132..695 of 703`, save button
+  reachable.
+
+- **The clipboard fallback for oversized captures had never actually run.** It
+  is guarded by `URI_LIMIT`, and reaching that limit takes a note of several
+  thousand characters — which is exactly the case where the button to trigger
+  it was off-screen. With the panel fixed, a 1,246-character capture now
+  produces 2,712 characters on the clipboard, frontmatter and all, with both
+  the first and last sentence of the original intact and no oversized
+  `obsidian://` URL handed to the OS to truncate.
+
+### Notes
+
+Found while auditing the capture path. Also exercised and found healthy in the
+same pass: a server that sends its response headers and then nothing at all —
+the panel gives up after 62 s and says _"Ollama sent nothing for 60s while
+streaming the translation. The server may be wedged, or still loading the model
+— try again, or run `ollama ps` to see what it is doing."_ — and a small capture
+still going out through `obsidian://` without touching the clipboard.
+
+One defect is reported rather than fixed: the panel's × scrolls out of view
+with the content once a translation is long enough to make the panel scroll
+(measured at `top: -51` after scrolling to the bottom). Escape and clicking
+outside both still dismiss it, and moving the control out of the scrolling box
+is a layout change rather than a fix.
+
 ## [2.7.7] - 2026-08-05
 
 ### Fixed

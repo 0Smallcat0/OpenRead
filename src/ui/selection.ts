@@ -43,6 +43,48 @@ const MAX_TRANSLATE_CHARS = 5000;
 /** Beyond this a "selection" is a stray Ctrl-A, not something to read. */
 const MAX_SELECTION_CHARS = 50000;
 
+/** Gap kept between the panel and the edge of the window. */
+const PANEL_VIEWPORT_MARGIN = 8;
+
+/**
+ * Where the panel has to sit so all of it is on screen.
+ *
+ * The panel is placed before it has a height — the up-or-down choice tests a
+ * fixed 300px of space below the selection, which is unrelated to how tall this
+ * particular panel turns out to be. A long selection therefore opened downward
+ * into a box that ran off the bottom of the window, and `position: fixed` means
+ * no amount of scrolling brings it back. Measured on a 975-character selection
+ * in a 703px viewport: the panel occupied 442–1005, putting **Save to Obsidian**
+ * at 961–990, three hundred pixels below the fold and not hit-testable.
+ *
+ * So the placement is corrected once the real height is known. Pure, because a
+ * layout bug is exactly the kind jsdom cannot see: the arithmetic is pinned
+ * here and the wiring is checked in a real browser.
+ */
+export function clampPanelTop(
+  top: number,
+  height: number,
+  viewportHeight: number,
+  margin: number = PANEL_VIEWPORT_MARGIN,
+): number {
+  const lowest = viewportHeight - margin - height;
+  // Taller than the window: no position shows all of it, and the top is the
+  // half worth showing — it holds the translation and the close button.
+  if (lowest <= margin) return margin;
+  return Math.min(Math.max(top, margin), lowest);
+}
+
+/** Move `el` so all of it is on screen, if it is not already. */
+function fitPanelToViewport(el: HTMLElement): void {
+  const box = el.getBoundingClientRect();
+  const top = clampPanelTop(box.top, box.height, window.innerHeight);
+  if (Math.abs(top - box.top) <= 0.5) return;
+  // `bottom` has to go: an upward-opened panel is anchored by it, and a fixed
+  // box with both `top` and `bottom` set stretches to span them.
+  el.style.bottom = 'auto';
+  el.style.top = `${String(top)}px`;
+}
+
 /** Relative luminance of a CSS colour, or null if it is transparent. */
 function luminanceOf(color: string): number | null {
   const parts = color.match(/[\d.]+/g);
@@ -132,6 +174,8 @@ export function mountSelectionTranslator(
   let activePort: chrome.runtime.Port | null = null;
   let lastRect: DOMRect | null = null;
   let slowHintTimer: number | undefined;
+  /** Watches the open panel so it can be re-fitted as the translation fills it. */
+  let panelResize: ResizeObserver | null = null;
   /**
    * Set when the 文 button starts a translation on mousedown. The matching
    * mouseup still reaches the document, where it used to be read as "the user
@@ -150,6 +194,8 @@ export function mountSelectionTranslator(
     activePort?.disconnect();
     activePort = null;
     window.clearTimeout(slowHintTimer);
+    panelResize?.disconnect();
+    panelResize = null;
     panel?.remove();
     panel = null;
   }
@@ -289,6 +335,21 @@ export function mountSelectionTranslator(
 
     el.append(close, content);
     document.body.appendChild(el);
+
+    // Fitting it once here would prove nothing: the panel is mounted empty and
+    // is barely forty pixels tall, so of course it fits. The translation lands
+    // afterwards, and a long one is what pushes the bottom of the box off the
+    // screen — measured at 442-1005 in a 703px viewport, with Save to Obsidian
+    // three hundred pixels below the fold. So watch it and re-fit as it grows,
+    // which also covers the capture bar arriving at the end.
+    fitPanelToViewport(el);
+    if (typeof ResizeObserver !== 'undefined') {
+      panelResize = new ResizeObserver(() => {
+        fitPanelToViewport(el);
+      });
+      panelResize.observe(el);
+    }
+
     panel = el;
     if (focusOnOpen) el.focus();
     return content;
