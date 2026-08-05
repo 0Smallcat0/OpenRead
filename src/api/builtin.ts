@@ -22,6 +22,7 @@
  * selection UI nor whole-page translation knows which one answered.
  */
 import { toBcp47 } from '../core/bcp47';
+import { toTaiwanVocabulary, wantsTaiwanVocabulary } from '../core/tw-vocab';
 
 /**
  * Minimal ambient shapes for the Translator and LanguageDetector APIs.
@@ -39,7 +40,6 @@ interface DownloadMonitor {
 
 interface TranslatorInstance {
   translate: (input: string) => Promise<string>;
-  translateStreaming?: (input: string) => ReadableStream<string>;
   destroy?: () => void;
 }
 
@@ -176,10 +176,10 @@ export interface BuiltinStreamParams {
 /**
  * Translate `text`, delivering the result through `onChunk`.
  *
- * Streams when Chrome offers `translateStreaming`, so the panel paints
- * progressively on a long selection exactly as it does for Ollama; falls back
- * to one chunk otherwise. Either way the caller cannot tell which engine ran,
- * which is what keeps the UI free of engine-specific branches.
+ * Arrives in one chunk: the engine is fast enough that there is no first paint
+ * to protect, and buffering is what lets the Taiwan vocabulary pass see whole
+ * words. The caller cannot tell which engine ran, which is what keeps the UI
+ * free of engine-specific branches.
  *
  * Throws `BuiltinUnavailableError` for every "this engine cannot do it" case —
  * unsupported browser, unmapped language, no language pack, undetectable
@@ -222,7 +222,9 @@ export async function translateBuiltin({
   // it. The selection UI already short-circuits the Chinese case; this covers
   // an English page being asked for English.
   if (baseLanguage(sourceLanguage) === baseLanguage(targetLanguage)) {
-    onChunk(text);
+    onChunk(
+      wantsTaiwanVocabulary(targetLang) ? toTaiwanVocabulary(text) : text,
+    );
     return;
   }
 
@@ -250,22 +252,17 @@ export async function translateBuiltin({
   });
 
   try {
-    const stream = translator.translateStreaming?.(text);
-    if (stream) {
-      const reader = stream.getReader();
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (signal?.aborted) {
-          await reader.cancel().catch(() => undefined);
-          return;
-        }
-        if (value) onChunk(value);
-      }
-      return;
-    }
-    const result = await translator.translate(text);
-    if (!signal?.aborted && result) onChunk(result);
+    // Buffered rather than streamed, on purpose.
+    //
+    // Chrome's zh-Hant output is Traditional characters with mainland word
+    // choices, and correcting them is a phrase-level rewrite — 用戶 to
+    // 使用者, 運行 to 執行 — which a chunk boundary can split down the middle.
+    // The same problem OpenCC has on the Ollama path, where it is solved by
+    // holding the ambiguous tail back. Here it is solved by not streaming: a
+    // sentence comes back in 9-20 ms, so there is no first paint to protect.
+    const raw = await translator.translate(text);
+    if (signal?.aborted || !raw) return;
+    onChunk(wantsTaiwanVocabulary(targetLang) ? toTaiwanVocabulary(raw) : raw);
   } finally {
     translator.destroy?.();
   }

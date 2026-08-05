@@ -5,6 +5,50 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.1] - 2026-08-05
+
+### Fixed
+
+- **A claim published in 2.7.0 was wrong, and this retracts it.** That release
+  said Chrome's built-in translator "produced the Taiwan conventions the OpenCC
+  `s2twp` layer exists to produce, arrived at natively". It does not. That
+  conclusion came from three sentences that happened to come out right.
+
+  Watching the extension translate a real page showed it immediately. Counted
+  over that page — 44 blocks, 4,734 characters — Chrome's `zh-Hant` wrote
+  本地 twelve times, 運行 ten, 代碼 four, 用戶 three, 項目 twice and 配置 once:
+  **thirty-two words a Taiwanese reader notices at a glance**. Traditional
+  characters, mainland vocabulary.
+
+  OpenCC cannot correct it. `s2twp` keys its phrase tables on _Simplified_
+  forms, so already-Traditional text never matches, and the
+  Traditional→Simplified→Traditional round trip that would make it match is
+  lossy: 髮 and 發 both collapse to 发 on the way down.
+
+  So the built-in path gets its own pass — `src/core/tw-vocab.ts`, a small
+  explicit table of software terms where the conventions genuinely differ, with
+  the exceptions written down rather than discovered later (`本地化` is correct
+  Taiwan usage; `用戶端` is the ordinary Taiwan word for a client). Same page
+  after it: **32 → 0**, the only remaining match being the `本地` inside
+  `本地化` that the exception exists to protect.
+
+  Re-reading the _corrected_ page then turned up four more: 操作系統, 文檔,
+  穩定釋放, and 本機機器 — a stutter this very table introduced by rewriting
+  本地機器 one word at a time. All four are now covered, and a wider scan of
+  thirty candidate terms over the same page comes back empty.
+
+  The built-in engine also stopped streaming. Correcting vocabulary is a
+  phrase-level rewrite that a chunk boundary can split down the middle — the
+  same hazard OpenCC has on the Ollama path, where it is handled by holding the
+  ambiguous tail back. Here there is no first paint worth protecting: the whole
+  article now finishes in **2 s** once the language pack is resident, so the
+  result is simply buffered.
+
+  Worth stating plainly, because this project keeps catching this exact error
+  in itself and this time made it: a claim drawn from three cherry-picked
+  sentences is not a measurement, and it went into a README, a changelog and a
+  shipped release before a real page contradicted it.
+
 ## [2.7.0] - 2026-08-05
 
 ### Changed

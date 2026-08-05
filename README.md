@@ -212,11 +212,17 @@ Both run entirely on your machine. The default is Chrome's own translation
 model because it is the difference between an extension that works when you
 install it and one that first asks you to install a server.
 
-Measured on the same sentences the Ollama path was benchmarked on, the
-built-in engine produced `使用者介面`, `資料庫連線字串` and
-`本地電腦上運行大型語言模型` — the Taiwan conventions the OpenCC layer below
-exists to produce, arrived at natively because `zh-Hant` is a first-class
-target rather than a post-processing step.
+Chrome's `zh-Hant` is Traditional characters with **mainland word choices**.
+Counted over one translated Wikipedia article — 44 blocks, 4,700 characters —
+it wrote 本地 twelve times, 運行 ten, 代碼 four, 用戶 three: thirty-two words a
+Taiwanese reader notices immediately. OpenCC cannot fix that, because `s2twp`
+keys its tables on Simplified forms and this text is already Traditional.
+
+So the built-in path gets its own pass
+([`src/core/tw-vocab.ts`](src/core/tw-vocab.ts)) — a small, explicit table of
+software terms where the two conventions genuinely differ, with the exceptions
+spelled out (`本地化` is correct Taiwan usage and stays; `用戶端` stays). Same
+article after it: **32 → 0**.
 
 Switch in the popup. A request the built-in engine cannot serve — a language
 Chrome has no pack for, a source it cannot identify, an older browser — falls
@@ -277,7 +283,7 @@ mid-artifact exactly as they do in a live stream.
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](eval/RESULTS.md)._
 
-**391 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
+**402 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
 pure core at **100% function / 97% line** coverage, the selection and capture UI
 driven through jsdom with a stubbed extension port, and the background worker —
 which owns cancellation, error translation and PDF routing. Overall: 92%
