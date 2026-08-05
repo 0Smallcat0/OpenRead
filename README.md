@@ -22,7 +22,9 @@ read ever leaves your computer.
 
 - **You read things you cannot paste into a cloud translator** — unpublished
   drafts, contracts, medical records, internal documents, anything under NDA.
-  Cloud translators are excellent and completely unusable for this.
+  Cloud translators are excellent and completely unusable for this. Every
+  engine here runs on your own machine, and the default one needs nothing
+  installed at all.
 - **You want the whole page, not one sentence at a time.** Bilingual
   translation puts each paragraph's translation directly under the original,
   so a sentence that looks wrong can be checked against the source instead of
@@ -58,22 +60,31 @@ Then load `.output/chrome-mv3` as an unpacked extension.
 
 </details>
 
-### Then set up Ollama
+### That is the whole setup
 
-OpenRead needs a local model server. Two commands, and nothing to configure:
+Nothing else. OpenRead uses Chrome's own on-device translation model, which
+Chrome downloads the first time you translate something — measured at 131
+seconds, once, with a progress indicator. After that a page translates in
+about two seconds and nothing ever leaves your machine.
+
+<details>
+<summary>Optional: a local LLM instead, through Ollama</summary>
+
+A large language model reads the surrounding page for context, lets you choose
+the model, and is what the capture-enrichment pass runs on. It costs a server
+and a multi-gigabyte download:
 
 ```bash
 ollama pull qwen3
 ollama serve
 ```
 
-That is the whole setup. There is no environment variable to set and no
-allowlist to edit — see
-[the note on `OLLAMA_ORIGINS`](#why-there-is-no-ollama_origins-step) for how
-that step was removed rather than documented.
+Then pick **Ollama** in the popup. There is no environment variable to set —
+see [the note on `OLLAMA_ORIGINS`](#why-there-is-no-ollama_origins-step).
 
-Open the toolbar popup to confirm the connection, pick a model, and choose a
-target language.
+</details>
+
+The toolbar popup is where you choose the translator and the target language.
 
 <p align="center">
   <img src="docs/screenshots/popup.png" alt="Popup settings" width="300" />
@@ -186,6 +197,31 @@ is. A test pins the CLI's defaults against the extension's, because the same
 text coming back differently depending on how you asked would be a bug nothing
 else would catch.
 
+## Two engines
+
+|                           | Chrome built-in _(default)_ | Ollama                    |
+| ------------------------- | --------------------------- | ------------------------- |
+| To install                | nothing                     | a server + a 5.2 GB model |
+| First use                 | 131 s, once, automatic      | manual setup              |
+| A 44-block article        | **~2 s**                    | 54 s                      |
+| Reads surrounding context | no                          | yes                       |
+| Choose the model          | no                          | yes                       |
+| Capture enrichment        | no                          | yes                       |
+
+Both run entirely on your machine. The default is Chrome's own translation
+model because it is the difference between an extension that works when you
+install it and one that first asks you to install a server.
+
+Measured on the same sentences the Ollama path was benchmarked on, the
+built-in engine produced `使用者介面`, `資料庫連線字串` and
+`本地電腦上運行大型語言模型` — the Taiwan conventions the OpenCC layer below
+exists to produce, arrived at natively because `zh-Hant` is a first-class
+target rather than a post-processing step.
+
+Switch in the popup. A request the built-in engine cannot serve — a language
+Chrome has no pack for, a source it cannot identify, an older browser — falls
+through to Ollama automatically rather than failing.
+
 ## Privacy
 
 The selected text is sent to one place: the Ollama server at the URL you
@@ -215,6 +251,15 @@ OpenRead treats that as an **engineering problem with a measurable target**. The
 cleanup logic is a pure, dependency-free core, unit-tested in isolation and
 scored by an offline eval harness so improvements are quantified, not vibes.
 
+One honest caveat, since 2.7.0 made Chrome's built-in translator the default:
+**everything in this section is about the Ollama path.** Chrome ships a
+dedicated translation model, and a dedicated translation model does not emit a
+preamble, think out loud, or echo its input — so the reliability layer has
+nothing to clean up on the default path. It is still load-bearing for anyone
+who switches to a local LLM, which is where those artifacts come from and why
+the layer was built. Saying otherwise would be claiming credit for work the
+default engine never needs.
+
 ## Reliability eval
 
 `pnpm eval` replays a curated set of real failure modes through the **shipped
@@ -232,7 +277,7 @@ mid-artifact exactly as they do in a live stream.
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](eval/RESULTS.md)._
 
-**363 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
+**391 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
 pure core at **100% function / 97% line** coverage, the selection and capture UI
 driven through jsdom with a stubbed extension port, and the background worker —
 which owns cancellation, error translation and PDF routing. Overall: 92%

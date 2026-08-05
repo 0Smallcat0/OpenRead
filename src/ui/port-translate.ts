@@ -86,6 +86,9 @@ export function translateViaPort({
       targetLang,
       model,
       retryCount,
+      // The page knows what it is written in; a detector handed one caption
+      // does not.
+      sourceLang: document.documentElement.lang || undefined,
     };
     port.postMessage(message);
   });
