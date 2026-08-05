@@ -81,6 +81,12 @@ async function selectAndTranslate(text: string): Promise<void> {
 }
 
 /** Text currently rendered in the panel. */
+function panelContent(): HTMLElement | null {
+  return document
+    .getElementById('oit-translate-panel')
+    ?.querySelector<HTMLElement>('.content-div') ?? null;
+}
+
 function panelText(): string {
   const panel = document.getElementById('oit-translate-panel');
   return panel?.querySelector('.content-div')?.textContent ?? '';
@@ -161,6 +167,29 @@ describe('streaming a translation', () => {
 
     expect(panelText()).toContain('Ollama 404: model not found');
     expect(ports).toHaveLength(1);
+  });
+
+  it('marks the translated text with the target language', async () => {
+    // The panel is a live region, so a screen reader reads whatever lands in
+    // it. Unmarked, it read Chinese in an English voice.
+    await selectAndTranslate('Hello, world!');
+    const content = panelContent();
+    expect(content?.getAttribute('lang')).toBeNull();
+
+    ports[0]?.emit({ status: 'streaming', chunk: '你好，世界！' });
+    ports[0]?.emit({ status: 'done' });
+
+    expect(content?.getAttribute('lang')).toBe('zh-Hant');
+  });
+
+  it('drops the language marking again for an English status line', async () => {
+    await selectAndTranslate('Hello, world!');
+    ports[0]?.emit({ status: 'streaming', chunk: '你好' });
+    expect(panelContent()?.getAttribute('lang')).toBe('zh-Hant');
+
+    ports[0]?.emit({ status: 'error', message: 'Ollama 404: model not found' });
+    // Otherwise "Ollama 404: model not found" is announced in a Chinese voice.
+    expect(panelContent()?.getAttribute('lang')).toBeNull();
   });
 });
 
