@@ -150,6 +150,20 @@ function ensureStyle(doc: Document): void {
   (doc.head ?? doc.documentElement).appendChild(style);
 }
 
+/**
+ * Say something in the corner, in the same place progress appears.
+ *
+ * Used where whole-page translation cannot run at all: the bundled PDF viewer
+ * offers the action through the context menu like any other page, and doing
+ * nothing there is the worst of the three options — worse than refusing, and
+ * worse than not offering.
+ */
+export function showPageNotice(doc: Document, message: string): void {
+  ensureStyle(doc);
+  const progress = mountProgress(doc, () => undefined);
+  progress.finish(message);
+}
+
 interface Progress {
   update: (done: number, total: number) => void;
   downloading: (loaded: number) => void;
@@ -249,6 +263,17 @@ export async function translatePage(
   let translated = 0;
   let failed = 0;
   let next = 0;
+  /**
+   * The first real reason a block failed.
+   *
+   * The broker already produces something a user can act on — "Can't reach
+   * Ollama at http://…. Is the server running?" — and the selection panel
+   * shows it. This path used to throw it away and print "translation failed"
+   * once per block: twenty-eight identical lines, none of them saying what to
+   * do. Kept once and shown in the summary, which is the one place it is
+   * worth reading.
+   */
+  let firstError: string | null = null;
 
   // `limit` exists for the ramp-up below. Without it the first `await
   // worker()` drains the entire queue on its own and the run is sequential.
@@ -284,8 +309,11 @@ export async function translatePage(
           attach(block, '⚠️ no translation returned', deps.targetLang, true);
           failed++;
         }
-      } catch {
+      } catch (error) {
         if (controller.signal.aborted) return;
+        const reason =
+          error instanceof Error ? error.message.trim() : String(error);
+        if (!firstError && reason) firstError = reason;
         attach(block, '⚠️ translation failed', deps.targetLang, true);
         failed++;
       }
@@ -319,12 +347,13 @@ export async function translatePage(
   const stopped = controller.signal.aborted;
   if (active === controller) active = null;
 
+  const summary = stopped
+    ? `Stopped — ${String(translated)} translated`
+    : failed > 0
+      ? `Done — ${String(translated)} translated, ${String(failed)} failed`
+      : `Done — ${String(translated)} translated`;
   progress.finish(
-    stopped
-      ? `Stopped — ${String(translated)} translated`
-      : failed > 0
-        ? `Done — ${String(translated)} translated, ${String(failed)} failed`
-        : `Done — ${String(translated)} translated`,
+    failed > 0 && firstError ? `${summary} — ${firstError}` : summary,
   );
 
   return { translated, failed, stopped };

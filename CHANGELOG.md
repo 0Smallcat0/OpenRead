@@ -5,6 +5,42 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.5] - 2026-08-05
+
+### Fixed
+
+- **"Translate this page" did nothing in the PDF viewer.** The context menu
+  offers the action on every page, the bundled viewer included, and there was
+  no receiver there — `pdf-viewer.ts` mounted only the selection translator.
+  A click, then silence.
+
+  It stays unavailable, and now says so. A PDF text layer is absolutely
+  positioned spans, one per line, laid over the rendered page; a translation
+  appended under each would land on top of the next line and destroy the
+  document. Selection translate is the right interaction for a PDF and works
+  there — verified end to end on the Bitcoin whitepaper, which came back
+  `比特幣：點對點電子現金系統`. Of the three options — do nothing, hide the
+  menu item, refuse out loud — the first was the one shipped and the worst.
+
+- **Whole-page translation threw away the reason it failed.** The broker
+  produces something a user can act on (`Can't reach Ollama at http://…. Is
+the server running?`) and the selection panel shows it. This path discarded
+  it and printed `⚠️ translation failed` once per block: on a real article,
+  twenty-eight identical lines, none of them saying what to do.
+
+  The first real reason is now carried into the run summary —
+  _Done — 0 translated, 2 failed — Can't reach Ollama at http://127.0.0.1:1.
+  Is the server running?_ — which is the one place worth reading it.
+
+### Notes
+
+Found by auditing rather than by waiting for a report. Also exercised and
+found healthy in the same pass: selection translate through a real mouse drag,
+the capture button, Escape dismissal, PDF routing and PDF selection translate,
+the Ollama engine end to end, and a Simplified-Chinese target confirming the
+Taiwan vocabulary pass correctly does **not** run for it
+(`此域用于文档示例，无需许可。`).
+
 ## [2.7.4] - 2026-08-05
 
 ### Fixed
