@@ -207,9 +207,13 @@ export function resetTranslatorCache(): void {
  * download away for whoever asks next. What must not happen is Stop appearing
  * to hang for the two minutes the download still has to go.
  */
-function untilAborted<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+function untilAborted<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
   if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(new DOMException('Aborted', 'AbortError'));
+  if (signal.aborted)
+    return Promise.reject(new DOMException('Aborted', 'AbortError'));
   return new Promise<T>((resolve, reject) => {
     const onAbort = (): void => {
       reject(new DOMException('Aborted', 'AbortError'));
@@ -334,7 +338,7 @@ export async function translateBuiltin({
   if (signal?.aborted) return;
 
   // Buffered rather than streamed, on purpose.
-    //
+  //
   // Chrome's zh-Hant output is Traditional characters with mainland word
   // choices, and correcting them is a phrase-level rewrite — 用戶 to
   // 使用者, 運行 to 執行 — which a chunk boundary can split down the middle.

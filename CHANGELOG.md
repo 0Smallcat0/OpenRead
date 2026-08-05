@@ -5,6 +5,39 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.2] - 2026-08-06
+
+### Fixed
+
+- **Asking for a language the page is already in printed the whole article
+  twice.** Reported from use, with English selected as the target on the
+  English Wikipedia article: every paragraph gained a copy of itself
+  underneath, indented and quoted like a translation.
+
+  Both engines answer "translate this into the language it is already in" by
+  handing the text straight back. That is the honest answer in the selection
+  panel — the user highlighted something and gets told, in effect, that it
+  already reads that way. Whole-page translation took the same reply and
+  inserted it, so 28 blocks came back byte-identical and the page doubled in
+  length.
+
+  A block whose translation is exactly its source now has nothing inserted for
+  it, whatever the language pair: a block of proper nouns comes back unchanged
+  from a real translation too, and a duplicate of it is no more use. When that
+  accounts for the entire page the badge says so —
+  _Nothing to translate — this page is already in English_ — rather than
+  reporting `Done — 0 translated`, which is true and explains nothing.
+
+  Those blocks are deliberately left unmarked, so a later run tries them again.
+  Marking them would save the second pass, but the marker means "a translation
+  is appended below this block", and 2.7.7 exists precisely because a marker
+  without one is treated as stale. Two meanings for one attribute is how that
+  bug comes back.
+
+  Verified on the same page: English target, `inserted 0`, no paragraph
+  touched; then switched to Traditional Chinese, one press,
+  `Done — 8 translated`.
+
 ## [2.8.1] - 2026-08-06
 
 ### Fixed
