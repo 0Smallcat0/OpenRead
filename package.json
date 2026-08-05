@@ -1,7 +1,7 @@
 {
   "name": "openread",
-  "version": "2.6.3",
-  "description": "Translate web pages, PDFs and text with a local LLM through Ollama - browser extension, CLI, and MCP server. No cloud, no API key.",
+  "version": "2.7.0",
+  "description": "Translate web pages, PDFs and text on your own machine - Chrome's built-in on-device model by default, a local LLM through Ollama when you want one. Browser extension, CLI, and MCP server.",
   "type": "module",
   "license": "MIT",
   "engines": {

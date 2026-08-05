@@ -417,6 +417,7 @@ export function mountSelectionTranslator(
         targetLang: settings.targetLang,
         model: settings.modelId,
         retryCount: attempt,
+        sourceLang: document.documentElement.lang || undefined,
       };
       port.postMessage(message);
     };

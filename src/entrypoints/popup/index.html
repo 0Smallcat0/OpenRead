@@ -108,6 +108,20 @@
       label.checkbox input {
         width: auto;
       }
+      #engineNote {
+        margin: 6px 0 0;
+        font-size: 11px;
+        line-height: 1.45;
+        color: #4b5563;
+      }
+      @media (prefers-color-scheme: dark) {
+        #engineNote {
+          color: #9ca3af;
+        }
+      }
+      #ollamaOnly[hidden] {
+        display: none;
+      }
       /* The connection line sits under the URL field it reports on, so it reads
          as that field's state rather than as a second status area. */
       #connection {
@@ -187,30 +201,42 @@
       Translate this page
     </button>
     <form id="settingsForm">
-      <label for="baseUrl">Ollama Server URL</label>
-      <input id="baseUrl" type="text" placeholder="http://localhost:11434" />
-      <!-- Announced, because the whole reason this line exists is to reach a
+      <label for="engine">Translator</label>
+      <select id="engine">
+        <option value="builtin">Chrome built-in — no setup</option>
+        <option value="ollama">Ollama — local LLM</option>
+      </select>
+      <p id="engineNote"></p>
+
+      <!-- Every Ollama-only control lives here, so choosing the built-in
+           engine hides a server URL, a model name and a connection check that
+           would otherwise ask a user to configure something they do not have. -->
+      <div id="ollamaOnly">
+        <label for="baseUrl">Ollama Server URL</label>
+        <input id="baseUrl" type="text" placeholder="http://localhost:11434" />
+        <!-- Announced, because the whole reason this line exists is to reach a
            user who would otherwise learn about a 403 from a failed
            translation. -->
-      <div id="connection" role="status" aria-live="polite">Checking…</div>
-      <div id="fix" hidden>
-        <code id="fixCommand"></code>
-        <!-- type="button": inside a form, the default is submit -->
-        <button id="copyFix" type="button">Copy</button>
-      </div>
+        <div id="connection" role="status" aria-live="polite">Checking…</div>
+        <div id="fix" hidden>
+          <code id="fixCommand"></code>
+          <!-- type="button": inside a form, the default is submit -->
+          <button id="copyFix" type="button">Copy</button>
+        </div>
 
-      <label for="modelId">Model</label>
-      <!-- A list, not a select: the options come from a server that may be
+        <label for="modelId">Model</label>
+        <!-- A list, not a select: the options come from a server that may be
            unreachable, and a user must still be able to save a model name when
            it is. The list offers what is installed; the field accepts anything
            and warns when it is not there. -->
-      <input
-        id="modelId"
-        type="text"
-        list="modelOptions"
-        placeholder="qwen3:latest"
-      />
-      <datalist id="modelOptions"></datalist>
+        <input
+          id="modelId"
+          type="text"
+          list="modelOptions"
+          placeholder="qwen3:latest"
+        />
+        <datalist id="modelOptions"></datalist>
+      </div>
 
       <label for="targetLang">Target Language</label>
       <select id="targetLang"></select>

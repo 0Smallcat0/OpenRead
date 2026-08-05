@@ -13,11 +13,18 @@ import type { ConnectionProbe } from '../core/diagnostics';
 const MARKUP = `
   <button id="translatePage" type="button">Translate this page</button>
   <form id="settingsForm">
+    <select id="engine">
+      <option value="builtin">builtin</option>
+      <option value="ollama">ollama</option>
+    </select>
+    <p id="engineNote"></p>
+    <div id="ollamaOnly">
     <input id="baseUrl" type="text" />
     <div id="connection"></div>
     <div id="fix" hidden><code id="fixCommand"></code><button id="copyFix" type="button">Copy</button></div>
     <input id="modelId" type="text" list="modelOptions" />
     <datalist id="modelOptions"></datalist>
+    </div>
     <select id="targetLang"></select>
     <input id="obsidianVault" type="text" />
     <input id="obsidianFolder" type="text" />
@@ -80,6 +87,10 @@ beforeEach(() => {
   vi.spyOn(window, 'close').mockImplementation(() => undefined);
   document.body.innerHTML = MARKUP;
   stored = {
+    // These suites are about the Ollama engine's connection check, which only
+    // runs when Ollama is the chosen engine. The built-in engine gets its own
+    // describe block below.
+    engine: 'ollama',
     baseUrl: 'http://localhost:11434',
     modelId: 'qwen3:latest',
     targetLang: 'Traditional Chinese',
@@ -249,6 +260,7 @@ describe('mountPopup', () => {
     // An unreachable server must not become a reason the popup cannot be used
     // — configuring it is exactly what a user does before starting Ollama.
     expect(stored.modelId).toBe('gemma3');
+    expect(stored.engine).toBe('ollama');
     expect($('status').textContent).toBe('Saved ✓');
   });
 
@@ -277,5 +289,71 @@ describe('mountPopup', () => {
       'http://localhost:11434',
       expect.anything(),
     );
+  });
+});
+
+describe('the engine selector', () => {
+  it('defaults a fresh install to the engine that needs no setup', async () => {
+    stored = {};
+    mountPopup(document, deps());
+    await settle();
+    expect(($('engine') as HTMLSelectElement).value).toBe('builtin');
+  });
+
+  it('does not probe a server the built-in engine never uses', async () => {
+    // Probing anyway shows a red "can't reach Ollama" to a user who correctly
+    // has no Ollama — the exact false alarm this engine exists to remove.
+    stored = { engine: 'builtin' };
+    mountPopup(document, deps());
+    await settle();
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it('hides every Ollama-only control while built-in is chosen', async () => {
+    stored = { engine: 'builtin' };
+    mountPopup(document, deps());
+    await settle();
+    expect($('ollamaOnly').hasAttribute('hidden')).toBe(true);
+  });
+
+  it('reveals them and probes when the user switches to Ollama', async () => {
+    stored = { engine: 'builtin' };
+    mountPopup(document, deps());
+    await settle();
+
+    const engine = $('engine') as HTMLSelectElement;
+    engine.value = 'ollama';
+    engine.dispatchEvent(new Event('change'));
+    await settle();
+
+    expect($('ollamaOnly').hasAttribute('hidden')).toBe(false);
+    expect(probe).toHaveBeenCalled();
+  });
+
+  it('explains what each engine costs, not just its name', async () => {
+    stored = { engine: 'builtin' };
+    mountPopup(document, deps());
+    await settle();
+    expect($('engineNote').textContent).toContain('Nothing to install');
+
+    const engine = $('engine') as HTMLSelectElement;
+    engine.value = 'ollama';
+    engine.dispatchEvent(new Event('change'));
+    expect($('engineNote').textContent).toContain('context');
+  });
+
+  it('saves the chosen engine', async () => {
+    stored = { engine: 'builtin' };
+    mountPopup(document, deps());
+    await settle();
+
+    const engine = $('engine') as HTMLSelectElement;
+    engine.value = 'ollama';
+    engine.dispatchEvent(new Event('change'));
+    $('settingsForm').dispatchEvent(
+      new Event('submit', { cancelable: true, bubbles: true }),
+    );
+    await settle();
+    expect(stored.engine).toBe('ollama');
   });
 });
