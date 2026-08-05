@@ -5,6 +5,70 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-08-05
+
+### Changed
+
+- **Chrome's built-in translator is now the default; Ollama is the advanced
+  option.** Installing the extension is the whole setup. No server, no
+  5.2 GB model.
+
+  This is the answer to the question the project kept failing: it was genuinely
+  useful and nobody could reasonably install it. Every previous release chipped
+  at the setup cost — eight steps to two, an environment variable removed, a
+  connection check that explained failures — while leaving the largest item
+  untouched, because it looked like a law of nature. "Local-first means a local
+  model" turned out to be false. Chrome ships one.
+
+  Measured, all on the same machine and the same Wikipedia article (44 blocks):
+
+  |               | Chrome built-in                         | Ollama + qwen3  |
+  | ------------- | --------------------------------------- | --------------- |
+  | user installs | nothing                                 | server + 5.2 GB |
+  | first use     | 131 s, once, automatic                  | manual          |
+  | full article  | **16 s** (14 s of it the one-time pack) | 54 s            |
+  | steady state  | **~2 s**                                | 54 s            |
+  | failed blocks | 0 / 44                                  | 0 / 44          |
+
+  Verified with Ollama fully stopped — `curl` refused on 11434 in the same run
+  — so the translations came from Chrome and nothing else.
+
+  Quality is not the trade it looks like. On the sentences the Ollama path was
+  benchmarked on it produced `使用者介面`, `資料庫連線字串` and
+  `本地電腦上運行大型語言模型`: the Taiwan conventions that the OpenCC `s2twp`
+  layer exists to produce, arrived at natively because `zh-Hant` is a
+  first-class target rather than a post-processing step.
+
+  Ollama stays, and stays worth choosing: it reads the surrounding page for
+  context, lets you pick the model, and is what capture enrichment runs on.
+  It is a language model; the other is a translator.
+
+  The engine lives in the background worker beside the Ollama broker, so the
+  port protocol is unchanged and neither the selection UI nor whole-page
+  translation knows which one answered. A request the built-in engine cannot
+  serve falls through to Ollama; a genuine error from it does not, because that
+  would hide a bug behind a second engine.
+
+- **The reliability layer is not load-bearing on the default path, and the
+  README now says so.** A dedicated translation model does not emit a preamble,
+  think out loud, or echo its input. That layer is why the Ollama path is
+  trustworthy and it is why this project exists, but claiming it for an engine
+  that never needed it would be the same kind of unearned credit the eval
+  harness was caught taking in 2.2.7.
+
+### Fixed
+
+- **Six blocks of a real article failed before this shipped.** The first
+  Ollama-free run translated 38 of 44. The cause was a 0.5 confidence floor on
+  language detection: short fragments — captions, citations, proper nouns —
+  score below it, and "Ollama running Llama 3 in Linux" came back `en` at
+  **0.248**. The page had declared `lang="en"` all along.
+
+  Requests now carry the page's own `<html lang>`, and detection is a fallback
+  for pages that declare nothing, with a floor low enough to be useful. Same
+  page, Ollama still down: **44 of 44, and 28 s to 16 s** now that it is not
+  running a detector per block.
+
 ## [2.6.3] - 2026-08-05
 
 ### Changed

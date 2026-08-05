@@ -19,6 +19,16 @@ export interface StartStreamMessage {
   targetLang: string;
   model: string;
   context?: TranslationContext;
+  /**
+   * What language the page says it is in (`<html lang>`), when it says.
+   *
+   * Chrome's built-in translator needs a source language, and detecting one
+   * per block guesses badly on the short fragments a real page is full of —
+   * captions, citations, proper nouns. Measured on one Wikipedia article: six
+   * blocks came back under 0.5 confidence, including "Ollama running Llama 3
+   * in Linux" at 0.25. The page already knows the answer, so it tells us.
+   */
+  sourceLang?: string;
   /** 0 for the first attempt; the broker raises temperature on retries. */
   retryCount?: number;
 }

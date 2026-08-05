@@ -9,6 +9,7 @@
  */
 import { translateStream, enrichText } from '../api/ollama';
 import { loadSettings } from '../settings';
+import { translateBuiltin, BuiltinUnavailableError } from '../api/builtin';
 import { buildOriginStripRule, ORIGIN_STRIP_RULE_ID } from '../core/dnr-rule';
 import {
   STREAM_PORT_NAME,
@@ -164,8 +165,39 @@ export default defineBackground(() => {
       const { signal } = controller;
 
       void (async () => {
+        const { engine, baseUrl } = await loadSettings();
+
+        // Chrome's own translator first, when it is the chosen engine. It
+        // needs no server, so it is tried before the rule that exists to let
+        // one be reached.
+        if (engine === 'builtin') {
+          try {
+            await translateBuiltin({
+              text: message.text,
+              targetLang: message.targetLang,
+              sourceLang: message.sourceLang,
+              signal,
+              onChunk: (chunk) => post({ status: 'streaming', chunk }),
+            });
+            post({ status: 'done' });
+            return;
+          } catch (error) {
+            if (signal.aborted || (error as Error).name === 'AbortError') {
+              return;
+            }
+            // Anything the built-in engine simply cannot do — a language it
+            // has no pack for, an undetectable source, an older browser —
+            // falls through to Ollama rather than surfacing as a failure. A
+            // real error from it does not: that would hide a bug behind a
+            // second engine.
+            if (!(error instanceof BuiltinUnavailableError)) {
+              post({ status: 'error', message: (error as Error).message });
+              return;
+            }
+          }
+        }
+
         await originRuleReady;
-        const { baseUrl } = await loadSettings();
         try {
           await translateStream({
             text: message.text,

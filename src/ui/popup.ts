@@ -20,6 +20,7 @@ import {
   TARGET_LANGUAGES,
   DEFAULT_SETTINGS,
   type Settings,
+  type Engine,
 } from '../settings';
 import {
   describeConnection,
@@ -38,6 +39,9 @@ export interface PopupDeps {
 
 interface Elements {
   form: HTMLFormElement;
+  engine: HTMLSelectElement;
+  engineNote: HTMLElement;
+  ollamaOnly: HTMLElement;
   baseUrl: HTMLInputElement;
   model: HTMLInputElement;
   modelOptions: HTMLDataListElement;
@@ -55,6 +59,9 @@ interface Elements {
 
 function collect(root: ParentNode): Elements | null {
   const form = root.querySelector<HTMLFormElement>('#settingsForm');
+  const engine = root.querySelector<HTMLSelectElement>('#engine');
+  const engineNote = root.querySelector<HTMLElement>('#engineNote');
+  const ollamaOnly = root.querySelector<HTMLElement>('#ollamaOnly');
   const baseUrl = root.querySelector<HTMLInputElement>('#baseUrl');
   const model = root.querySelector<HTMLInputElement>('#modelId');
   const modelOptions = root.querySelector<HTMLDataListElement>('#modelOptions');
@@ -71,6 +78,9 @@ function collect(root: ParentNode): Elements | null {
 
   if (
     !form ||
+    !engine ||
+    !engineNote ||
+    !ollamaOnly ||
     !baseUrl ||
     !model ||
     !modelOptions ||
@@ -89,6 +99,9 @@ function collect(root: ParentNode): Elements | null {
   }
   return {
     form,
+    engine,
+    engineNote,
+    ollamaOnly,
     baseUrl,
     model,
     modelOptions,
@@ -152,7 +165,34 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     }
   };
 
+  const ENGINE_NOTES: Record<Engine, string> = {
+    builtin:
+      "Chrome's own on-device translator. Nothing to install — Chrome " +
+      'downloads the language pack the first time you use it. Fast, and it ' +
+      'never leaves your machine.',
+    ollama:
+      'A local LLM through Ollama. Slower and needs a server plus a model ' +
+      'download, but it reads the surrounding page for context and unlocks ' +
+      'capture enrichment.',
+  };
+
+  const currentEngine = (): Engine =>
+    el.engine.value === 'ollama' ? 'ollama' : 'builtin';
+
+  const renderEngine = (): void => {
+    const engine = currentEngine();
+    el.engineNote.textContent = ENGINE_NOTES[engine];
+    if (engine === 'ollama') {
+      el.ollamaOnly.removeAttribute('hidden');
+    } else {
+      el.ollamaOnly.setAttribute('hidden', '');
+    }
+  };
+
   const check = (): void => {
+    // Nothing to check when no server is involved. Probing anyway would show
+    // a red "can't reach Ollama" to a user who correctly has no Ollama.
+    if (currentEngine() !== 'ollama') return;
     const mine = ++generation;
     inFlight?.abort();
     const controller = new AbortController();
@@ -182,6 +222,8 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
   };
 
   void loadSettings().then((settings) => {
+    el.engine.value = settings.engine;
+    renderEngine();
     el.baseUrl.value = settings.baseUrl;
     el.model.value = settings.modelId;
     el.lang.value = settings.targetLang;
@@ -191,6 +233,10 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     check();
   });
 
+  el.engine.addEventListener('change', () => {
+    renderEngine();
+    check();
+  });
   el.baseUrl.addEventListener('change', check);
   // Re-judged locally: whether a model is installed is answered by the probe
   // already in hand, so retyping the field costs nothing.
@@ -224,6 +270,7 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
   el.form.addEventListener('submit', (event) => {
     event.preventDefault();
     const settings: Settings = {
+      engine: currentEngine(),
       baseUrl: el.baseUrl.value.trim() || DEFAULT_SETTINGS.baseUrl,
       modelId: el.model.value.trim() || DEFAULT_SETTINGS.modelId,
       targetLang: el.lang.value,
