@@ -227,6 +227,10 @@ export default defineBackground(() => {
               sourceLang: message.sourceLang,
               signal,
               onChunk: (chunk) => post({ status: 'streaming', chunk }),
+              // Without this the first use of a language pair is a silent
+              // two-minute wait, which reads as a broken extension.
+              onDownloadProgress: (loaded) =>
+                post({ status: 'downloading', loaded }),
             });
             post({ status: 'done' });
             return;

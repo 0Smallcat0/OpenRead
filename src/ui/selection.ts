@@ -393,6 +393,16 @@ export function mountSelectionTranslator(
           }
           full += res.chunk;
           appendChunk(content, res.chunk);
+        } else if (res.status === 'downloading') {
+          // Chrome fetching a language pack. Around two minutes the first time
+          // a language pair is used, and switching target language is how most
+          // people meet it — silence here reads as a broken extension.
+          setPanelText(
+            content,
+            `Downloading the language pack — ${String(
+              Math.round(res.loaded * 100),
+            )}%. This happens once per language.`,
+          );
         } else if (res.status === 'error') {
           setPanelText(content, `⚠️ ${res.message}`);
           close();

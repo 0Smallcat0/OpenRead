@@ -5,6 +5,31 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.4] - 2026-08-05
+
+### Fixed
+
+- **Switching target language looked like the extension breaking.** It was a
+  silent 95-second wait.
+
+  Chrome downloads a language pack per _pair_, on first use. English→Traditional
+  Chinese having been fetched buys nothing for English→Japanese: that is a
+  fresh download, and every one of the seven non-English targets this extension
+  offers reports `downloadable` on a clean profile. Meanwhile the badge sat at
+  `Translating 0/2` and the selection panel said `Translating…`, so the only
+  reasonable conclusion was that it had stopped working.
+
+  The plumbing for this existed and was never connected — `translateBuiltin`
+  has taken an `onDownloadProgress` callback since 2.7.0 and the broker never
+  passed one. It does now, over a new `downloading` message on the stream port.
+  The whole-page badge reads _Downloading language pack 42%_; the selection
+  panel says the same and adds that it happens once per language.
+
+  Measured on a clean profile with the target set to Japanese: progress
+  appeared at **7 s**, the page finished at **95 s**, and the translation was
+  correct. The wait is Chrome's and cannot be removed. Being told about it is
+  the whole fix.
+
 ## [2.7.3] - 2026-08-05
 
 ### Added
