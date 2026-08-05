@@ -82,9 +82,11 @@ async function selectAndTranslate(text: string): Promise<void> {
 
 /** Text currently rendered in the panel. */
 function panelContent(): HTMLElement | null {
-  return document
-    .getElementById('oit-translate-panel')
-    ?.querySelector<HTMLElement>('.content-div') ?? null;
+  return (
+    document
+      .getElementById('oit-translate-panel')
+      ?.querySelector<HTMLElement>('.content-div') ?? null
+  );
 }
 
 function panelText(): string {

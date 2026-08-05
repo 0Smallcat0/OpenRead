@@ -5,6 +5,48 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.7] - 2026-08-05
+
+### Fixed
+
+- **A single-page app said "Nothing to translate on this page" over a page of
+  untranslated text.** React and Vue reconcile a route change by reusing the
+  existing element and writing new text into it. `data-oit-translated` lives on
+  that element, and writing to `textContent` destroys the appended translation
+  while leaving the marker behind — so the marker outlived the thing it was
+  claiming, and every reused block on the new route read as already done.
+
+  Measured on a two-paragraph SPA driven through `history.pushState`:
+
+  ```
+  after route change: marked=true, translation=null   (both blocks)
+  badge:              Nothing to translate on this page
+  ```
+
+  A route that replaced its nodes outright was never affected, which is why
+  this survived: the naive router works and the popular ones do not.
+
+  The marker is now checked against the evidence for it. A block carrying the
+  marker but no `.oit-bilingual` child of its own has had its text replaced
+  underneath, so the stale claim is dropped and the block goes back into the
+  queue. Same page after the fix: `Done — 2 translated`, both paragraphs
+  bilingual.
+
+### Notes
+
+Found by driving `pushState` in a real browser rather than reloading between
+assertions. Also exercised and found healthy in the same pass: a server that
+accepts the request, streams two chunks and then destroys the socket. The panel
+shows `⚠️ Can't reach Ollama at http://…. Is the server running?` rather than
+presenting `這是被截斷的半句話` as a finished translation, and offers no capture
+button for the half that arrived.
+
+One harness note, since it cost a run: port 8799 was already held by an
+unrelated app on the test machine, and Windows let a second `0.0.0.0` bind
+succeed alongside it without `EADDRINUSE`, so Chrome quietly loaded someone
+else's page and the extension dutifully translated it. Harness servers now bind
+`127.0.0.1` explicitly.
+
 ## [2.7.6] - 2026-08-05
 
 ### Fixed
