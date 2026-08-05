@@ -38,6 +38,15 @@ export type PortRequest = StartStreamMessage;
 /** background -> content over the stream port. */
 export type StreamResponse =
   | { status: 'streaming'; chunk: string }
+  /**
+   * Chrome is fetching a language pack, 0-1 complete.
+   *
+   * Only the built-in engine sends this, and only the first time a language
+   * pair is used — but that first time is around two minutes, and without a
+   * message the UI simply sits there. Switching target language is the common
+   * way to meet it: every new pair is a new download.
+   */
+  | { status: 'downloading'; loaded: number }
   | { status: 'done' }
   | { status: 'error'; message: string };
 

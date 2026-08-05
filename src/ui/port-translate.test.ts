@@ -82,6 +82,28 @@ describe('translateViaPort', () => {
     });
   });
 
+  it('reports a language-pack download without settling', async () => {
+    // The first use of a language pair is roughly two minutes. Without this
+    // the promise just sits there and the UI says nothing, which is how
+    // switching target language came to look like a broken extension.
+    const seen: number[] = [];
+    const promise = translateViaPort({
+      text: 'The first paragraph.',
+      targetLang: 'Japanese',
+      model: 'qwen3:latest',
+      signal: new AbortController().signal,
+      onDownloadProgress: (loaded) => seen.push(loaded),
+    });
+    emit({ status: 'downloading', loaded: 0.25 });
+    emit({ status: 'downloading', loaded: 1 });
+    expect(seen).toEqual([0.25, 1]);
+    expect(port.disconnect).not.toHaveBeenCalled();
+
+    emit({ status: 'streaming', chunk: '第一段。' });
+    emit({ status: 'done' });
+    await expect(promise).resolves.toBe('第一段。');
+  });
+
   it('rejects on a broker error', async () => {
     const promise = start();
     emit({ status: 'error', message: 'Ollama refused this extension (403).' });

@@ -63,9 +63,10 @@ Then load `.output/chrome-mv3` as an unpacked extension.
 ### That is the whole setup
 
 Nothing else. OpenRead uses Chrome's own on-device translation model, which
-Chrome downloads the first time you translate something — measured at 131
-seconds, once, with a progress indicator. After that a page translates in
-about two seconds and nothing ever leaves your machine.
+Chrome downloads the first time you translate something — a minute or two,
+with a progress indicator, and once **per language pair**: switching the target
+language later means one more wait. After that a page translates in about two
+seconds and nothing ever leaves your machine.
 
 <details>
 <summary>Optional: a local LLM instead, through Ollama</summary>
@@ -285,7 +286,7 @@ mid-artifact exactly as they do in a live stream.
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](eval/RESULTS.md)._
 
-**414 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
+**416 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
 pure core at **100% function / 97% line** coverage, the selection and capture UI
 driven through jsdom with a stubbed extension port, and the background worker —
 which owns cancellation, error translation and PDF routing. Overall: 92%
