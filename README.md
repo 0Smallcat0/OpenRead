@@ -31,7 +31,8 @@ read ever leaves your computer.
   taken on faith.
 - **You read PDFs, not just web pages.** Papers, specs, whitepapers. OpenRead
   opens them in a bundled PDF.js viewer where the same selection translator
-  works on the rendered text — including `file://` PDFs already on your disk.
+  works on the rendered text — including `file://` PDFs already on your disk,
+  once you turn on **Allow access to file URLs** (see below).
 - **You want Traditional Chinese that reads like Taiwan.** Most tools translate
   into Simplified and convert character-by-character, which produces
   `界面`, `公裡`, and `數據庫` where a Taiwanese reader expects `介面`, `公里`,
@@ -113,6 +114,14 @@ translated.</sub>
   not: a PDF text layer is positioned line by line, so an inserted translation
   would land on the next line. Asking for it there says so rather than doing
   nothing.
+
+  **A PDF already on your disk needs one switch first.** Chrome withholds
+  `file://` from every extension until you allow it, so open
+  `chrome://extensions`, click **Details** on OpenRead, and turn on **Allow
+  access to file URLs**. Without it OpenRead cannot see the file, the redirect
+  is skipped, and the PDF opens in Chrome's own viewer with no translation
+  available — which looks like the extension is broken rather than like a
+  permission it was never given.
 - **Keyboard** — select with Shift+Arrow or Ctrl+A and press **`Ctrl+Shift+Y`**
   (remappable at `chrome://extensions/shortcuts`). Escape closes the panel.
 
