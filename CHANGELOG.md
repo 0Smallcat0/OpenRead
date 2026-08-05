@@ -5,6 +5,49 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.1] - 2026-08-06
+
+### Fixed
+
+- **Translating into a language whose pack was not installed crawled for
+  minutes.** Reported from use: switch the target language, press translate,
+  and the badge sits on `Translating 0/28`, advancing two blocks every thirty
+  seconds.
+
+  Every block called `Translator.create()` and destroyed the result afterwards.
+  That costs nothing once the pack is installed — 82 ms a block against 4 ms
+  for a reused instance — and is ruinous while it is not: whole-page
+  translation runs two requests at a time, so twenty-eight blocks meant
+  twenty-eight separate creates all waiting on the same download, and none of
+  them ever handed the finished pack to the next. Measured live on the reported
+  page, minutes into the run:
+
+  ```
+  availability   en->ja "downloadable"   en->zh-Hant "available"
+  en->ja timing  create 145687ms   translate 77ms   destroy 0ms
+  ```
+
+  One create took two and a half minutes; the translation it was for took 77
+  milliseconds, and `availability` never left `downloadable`.
+
+  There is now one translator per language pair, shared by every request for
+  it. Twelve blocks on a real page: **one** `Translator.create` call, where it
+  used to be twelve. A cold German pack now downloads once and the whole page
+  finishes in 4 s, with the badge reporting `Downloading language pack
+  29% … 100%` while it happens.
+
+  Abort still takes effect immediately — the shared create is deliberately left
+  running when a request gives up on it, since a user pressing Stop during a
+  language-pack download should not also throw the download away for whoever
+  asks next.
+
+### Notes
+
+The download badge itself turned out to be fine: driven against a cold French
+pack it reported `22% … 100%` within two seconds. It was invisible on the
+reported run because each block was waiting on its own download rather than on
+the one the badge was watching.
+
 ## [2.8.0] - 2026-08-06
 
 ### Fixed
