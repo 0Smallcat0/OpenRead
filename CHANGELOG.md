@@ -5,6 +5,35 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-08-06
+
+### Fixed
+
+- **Switching target language erased the page instead of retranslating it.**
+  Translate a page, pick a different language in the popup, press translate —
+  and every translation vanished. A second press then translated into the new
+  language, so changing language cost two presses and the first one looked like
+  the feature breaking.
+
+  The toggle asked one question, "is there a translation on this page", and the
+  answer was yes, so it undid. It had no way to notice that the translation
+  sitting there was in the language the user had just moved away from.
+
+  Since 2.7.6 every inserted node carries its target as a BCP-47 `lang`, so the
+  page already records what it was translated *into*. The toggle now reads it:
+  a translation in the current target still means undo, and a translation in
+  any other language means the press was a request for this one. Measured end
+  to end — `zh-Hant` × 3 nodes, switch to Japanese, one press,
+  `["ja"]` × 3 nodes reading `ローカルの翻訳ツールは…`.
+
+  Undo is untouched where nothing changed, and a target the BCP-47 table does
+  not know still undoes rather than guessing: "unknown" must not be read as
+  "wrong" and quietly retranslate a page the user asked to clear.
+
+  Reported from use, which is where the previous nine rounds of automated
+  auditing had not looked: every one of them pressed the toggle twice with the
+  same settings and saw exactly the behaviour it expected.
+
 ## [2.7.9] - 2026-08-06
 
 ### Fixed
