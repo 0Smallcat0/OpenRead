@@ -11,6 +11,7 @@ import {
   translateBuiltin,
   detectLanguage,
   isBuiltinSupported,
+  resetTranslatorCache,
   BuiltinUnavailableError,
 } from './builtin';
 
@@ -82,6 +83,9 @@ async function collect(params: {
 beforeEach(() => {
   created = [];
   translated = [];
+  // Translators are cached per language pair for the life of the worker, which
+  // is the point of them; each test needs its own worker.
+  resetTranslatorCache();
 });
 
 afterEach(() => {
@@ -231,5 +235,119 @@ describe('detectLanguage', () => {
     expect(await detectLanguage('Hello')).toBeNull();
     stub({ detected: [] });
     expect(await detectLanguage('Hello')).toBeNull();
+  });
+});
+
+describe('reusing the translator for a language pair', () => {
+  it('creates one translator for many blocks', async () => {
+    // The reported failure: switching to a language whose pack is not
+    // installed left whole-page translation crawling. Every block called
+    // `Translator.create()`, and while the pack is still downloading each of
+    // those waits on its own — measured at 145,687 ms for one create against
+    // 77 ms for the translation itself, with the badge advancing two blocks
+    // every thirty seconds.
+    stub();
+    for (let i = 0; i < 8; i++) {
+      await collect({
+        text: `Block number ${String(i)} of the article.`,
+        targetLang: 'Traditional Chinese',
+        sourceLang: 'en',
+      });
+    }
+
+    expect(translated).toHaveLength(8);
+    expect(created).toHaveLength(1);
+    expect(created[0]).toEqual({
+      sourceLanguage: 'en',
+      targetLanguage: 'zh-Hant',
+    });
+  });
+
+  it('creates a second translator when the target language changes', async () => {
+    stub();
+    await collect({
+      text: 'The first paragraph.',
+      targetLang: 'Traditional Chinese',
+      sourceLang: 'en',
+    });
+    await collect({
+      text: 'The first paragraph.',
+      targetLang: 'Japanese',
+      sourceLang: 'en',
+    });
+    await collect({
+      text: 'The second paragraph.',
+      targetLang: 'Japanese',
+      sourceLang: 'en',
+    });
+
+    expect(created).toEqual([
+      { sourceLanguage: 'en', targetLanguage: 'zh-Hant' },
+      { sourceLanguage: 'en', targetLanguage: 'ja' },
+    ]);
+  });
+
+  it('does not remember a create that failed', async () => {
+    // One bad moment must not poison the pair for the life of the worker.
+    const global = globalThis as unknown as Record<string, unknown>;
+    let attempts = 0;
+    global.Translator = {
+      availability: () => Promise.resolve('available'),
+      create: () => {
+        attempts++;
+        return attempts === 1
+          ? Promise.reject(new Error('download interrupted'))
+          : Promise.resolve({
+              translate: (input: string) => Promise.resolve(`[zh] ${input}`),
+            });
+      },
+    };
+
+    await expect(
+      collect({
+        text: 'The first attempt.',
+        targetLang: 'Traditional Chinese',
+        sourceLang: 'en',
+      }),
+    ).rejects.toThrow('download interrupted');
+
+    expect(
+      await collect({
+        text: 'The second attempt.',
+        targetLang: 'Traditional Chinese',
+        sourceLang: 'en',
+      }),
+    ).toBe('[zh] The second attempt.');
+    expect(attempts).toBe(2);
+  });
+
+  it('gives up immediately when aborted during a download', async () => {
+    // Stop has to be instant even though the create it is waiting on is shared
+    // and deliberately left running for whoever asks next.
+    const global = globalThis as unknown as Record<string, unknown>;
+    let settled = false;
+    global.Translator = {
+      availability: () => Promise.resolve('downloadable'),
+      create: () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            settled = true;
+            resolve({ translate: (input: string) => Promise.resolve(input) });
+          }, 50);
+        }),
+    };
+
+    const controller = new AbortController();
+    const run = translateBuiltin({
+      text: 'A paragraph waiting on a language pack.',
+      targetLang: 'Traditional Chinese',
+      sourceLang: 'en',
+      signal: controller.signal,
+      onChunk: () => undefined,
+    });
+    controller.abort();
+
+    await expect(run).rejects.toThrow(/abort/i);
+    expect(settled).toBe(false);
   });
 });

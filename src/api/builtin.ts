@@ -49,10 +49,12 @@ interface TranslatorFactory {
     sourceLanguage: string;
     targetLanguage: string;
   }) => Promise<'unavailable' | 'downloadable' | 'downloading' | 'available'>;
+  // No `signal`, deliberately: the instance this returns is shared between
+  // requests, so one caller's abort must not cancel the create the others are
+  // waiting on. Abort is handled around the shared promise instead.
   create: (options: {
     sourceLanguage: string;
     targetLanguage: string;
-    signal?: AbortSignal;
     monitor?: (monitor: DownloadMonitor) => void;
   }) => Promise<TranslatorInstance>;
 }
@@ -151,6 +153,81 @@ export async function detectLanguage(
  */
 const MIN_DETECTION_CONFIDENCE = 0.2;
 
+/**
+ * One translator per language pair, shared by every request for it.
+ *
+ * This used to be one `Translator.create()` per call, destroyed afterwards,
+ * which is fine while the language pack is installed — 82 ms a block against
+ * 4 ms for a reused instance — and ruinous while it is not. Whole-page
+ * translation runs two requests at a time, so a cold pack meant twenty-eight
+ * separate creates each waiting on the same download: measured on a Wikipedia
+ * article into Japanese, one `create()` took 145,687 ms while `translate()`
+ * took 77 ms, `availability` stayed `downloadable` throughout, and the badge
+ * crawled two blocks every thirty seconds for several minutes. The pack a
+ * download had already fetched was never the pack the next block got to use.
+ *
+ * Keyed by pair, and the promise rather than the instance, so requests that
+ * arrive during the download all wait on the one create instead of starting
+ * their own.
+ */
+const translatorCache = new Map<string, Promise<TranslatorInstance>>();
+
+function sharedTranslator(
+  translators: TranslatorFactory,
+  sourceLanguage: string,
+  targetLanguage: string,
+  monitor: ((monitor: DownloadMonitor) => void) | undefined,
+): Promise<TranslatorInstance> {
+  const key = `${sourceLanguage}->${targetLanguage}`;
+  const existing = translatorCache.get(key);
+  if (existing) return existing;
+
+  const created = translators
+    .create({ sourceLanguage, targetLanguage, monitor })
+    .catch((error: unknown) => {
+      // A failed create must not be remembered, or one bad moment poisons the
+      // pair for the life of the worker.
+      translatorCache.delete(key);
+      throw error;
+    });
+  translatorCache.set(key, created);
+  return created;
+}
+
+/** Forget every cached translator. Exported for tests. */
+export function resetTranslatorCache(): void {
+  translatorCache.clear();
+}
+
+/**
+ * Wait for `promise`, but give up the moment `signal` aborts.
+ *
+ * The create itself is deliberately left running: it is shared, and a user who
+ * pressed Stop during a language-pack download should not also throw the
+ * download away for whoever asks next. What must not happen is Stop appearing
+ * to hang for the two minutes the download still has to go.
+ */
+function untilAborted<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(new DOMException('Aborted', 'AbortError'));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => {
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error as Error);
+      },
+    );
+  });
+}
+
 /** Thrown when the built-in engine cannot serve a request, so a caller falls back. */
 export class BuiltinUnavailableError extends Error {
   constructor(message: string) {
@@ -239,32 +316,34 @@ export async function translateBuiltin({
     );
   }
 
-  const translator = await translators.create({
-    sourceLanguage,
-    targetLanguage,
+  const translator = await untilAborted(
+    sharedTranslator(
+      translators,
+      sourceLanguage,
+      targetLanguage,
+      onDownloadProgress
+        ? (monitor) => {
+            monitor.addEventListener('downloadprogress', (event) => {
+              onDownloadProgress(event.loaded);
+            });
+          }
+        : undefined,
+    ),
     signal,
-    monitor: onDownloadProgress
-      ? (monitor) => {
-          monitor.addEventListener('downloadprogress', (event) => {
-            onDownloadProgress(event.loaded);
-          });
-        }
-      : undefined,
-  });
+  );
+  if (signal?.aborted) return;
 
-  try {
-    // Buffered rather than streamed, on purpose.
+  // Buffered rather than streamed, on purpose.
     //
-    // Chrome's zh-Hant output is Traditional characters with mainland word
-    // choices, and correcting them is a phrase-level rewrite — 用戶 to
-    // 使用者, 運行 to 執行 — which a chunk boundary can split down the middle.
-    // The same problem OpenCC has on the Ollama path, where it is solved by
-    // holding the ambiguous tail back. Here it is solved by not streaming: a
-    // sentence comes back in 9-20 ms, so there is no first paint to protect.
-    const raw = await translator.translate(text);
-    if (signal?.aborted || !raw) return;
-    onChunk(wantsTaiwanVocabulary(targetLang) ? toTaiwanVocabulary(raw) : raw);
-  } finally {
-    translator.destroy?.();
-  }
+  // Chrome's zh-Hant output is Traditional characters with mainland word
+  // choices, and correcting them is a phrase-level rewrite — 用戶 to
+  // 使用者, 運行 to 執行 — which a chunk boundary can split down the middle.
+  // The same problem OpenCC has on the Ollama path, where it is solved by
+  // holding the ambiguous tail back. Here it is solved by not streaming: a
+  // sentence comes back in 9-20 ms, so there is no first paint to protect.
+  const raw = await translator.translate(text);
+  if (signal?.aborted || !raw) return;
+  onChunk(wantsTaiwanVocabulary(targetLang) ? toTaiwanVocabulary(raw) : raw);
+  // Deliberately not destroyed: the instance is shared with every other
+  // request for this pair, and the next block is normally microseconds away.
 }
