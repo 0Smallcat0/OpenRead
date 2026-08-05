@@ -5,6 +5,41 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.2] - 2026-08-05
+
+### Fixed
+
+- **A stylesheet was being sent to the translator.** One Wikipedia reference
+  item carried a `<style>` child, and `textContent` concatenates those: 2,158
+  characters of which **2,100 were CSS**. The model translated it — rendering
+  `no-repeat` as `無重複` and `center` as `中心` inside a rule set — and the
+  result landed on the page as a wall of mangled stylesheet.
+
+  `SKIP_WITHIN` could never have caught it. That check uses `closest()`, which
+  looks at ancestors, and the stylesheet was a _child_. Block text is now read
+  through `visibleText()`, which walks the tree and skips descendants that are
+  not prose. `innerText` would also have worked, but it forces layout and jsdom
+  does not implement it, which would have put this rule beyond the reach of
+  every test.
+
+  It also skips this extension's own insertions, so a second run over a page
+  reads the original text rather than the original plus the first run's output.
+
+- **Reference lists are no longer translated.** A bibliography is a lookup key,
+  not prose. Translated, it stops working: the same page turned the publisher
+  `Ollama` into `奧拉瑪` and the article title `"Blog"` into `"博客"`, leaving a
+  reader unable to find either. Sixteen of that article's forty-eight blocks
+  were references — skipping them is also a third off the work.
+
+  `cite` is standard HTML; the MediaWiki classes are added because a reference
+  list is where most readers will meet one. Citations are excluded both by
+  ancestor and inside `visibleText`, so a paragraph that merely _cites_
+  something has its prose translated and the work's title left findable, while
+  a paragraph that is nothing but a citation drops out on its own.
+
+  Same page, verified live against the loaded extension: 44 blocks to **28**,
+  no CSS in the output, no translated citations, no mainland vocabulary.
+
 ## [2.7.1] - 2026-08-05
 
 ### Fixed
