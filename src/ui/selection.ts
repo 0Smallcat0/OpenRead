@@ -46,6 +46,43 @@ const MAX_SELECTION_CHARS = 50000;
 /** Gap kept between the panel and the edge of the window. */
 const PANEL_VIEWPORT_MARGIN = 8;
 
+/** The 文 icon is a fixed 28px square with a small gap from the selection. */
+const ICON_SIZE = 28;
+const ICON_GAP = 6;
+
+/**
+ * Where the 文 icon goes.
+ *
+ * Beside the end of the selection, not under it. Under it is where the next
+ * line of text is, and the icon swallows the mousedown that would have started
+ * a selection there — reported as the PDF viewer being impossible to select in.
+ * Measured on a five-line PDF: line boxes at y 92, 122, 152 with a height of
+ * 20, so the ten pixels between lines could never hold a 28px button. Dragging
+ * line one put the icon at 119–147, and dragging line two afterwards selected
+ * nothing at all. Web pages hide the problem behind paragraph margins rather
+ * than avoiding it.
+ *
+ * Falls back to the old placement when there is no room to the right, which is
+ * a full-width selection running to the window edge — and there, at least, the
+ * line below is usually the same paragraph the user just finished with.
+ */
+export function iconPosition(
+  rect: { left: number; right: number; top: number; bottom: number },
+  viewport: { width: number; height: number },
+): { left: number; top: number } {
+  const clampTop = (value: number): number =>
+    Math.min(Math.max(value, 0), Math.max(0, viewport.height - ICON_SIZE));
+
+  const beside = rect.right + ICON_GAP;
+  if (beside + ICON_SIZE <= viewport.width) {
+    return { left: beside, top: clampTop(rect.bottom - ICON_SIZE) };
+  }
+  return {
+    left: Math.max(0, Math.min(rect.left, viewport.width - ICON_SIZE)),
+    top: clampTop(rect.bottom + ICON_GAP),
+  };
+}
+
 /**
  * Where the panel has to sit so all of it is on screen.
  *
@@ -209,13 +246,18 @@ export function mountSelectionTranslator(
     el.type = 'button';
     el.textContent = '文';
     el.setAttribute('aria-label', 'Translate selection');
+    const place = iconPosition(rect, {
+      width: window.innerWidth,
+      height: window.innerHeight,
+    });
     el.style.cssText = [
       'position:fixed',
-      `top:${rect.bottom + 6}px`,
-      `left:${rect.left}px`,
+      `top:${place.top}px`,
+      `left:${place.left}px`,
       `z-index:${Z}`,
-      'width:28px',
-      'height:28px',
+      // Tied to ICON_SIZE, which the placement above measures against.
+      `width:${String(ICON_SIZE)}px`,
+      `height:${String(ICON_SIZE)}px`,
       'display:flex',
       'align-items:center',
       'justify-content:center',

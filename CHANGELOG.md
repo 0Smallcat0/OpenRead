@@ -5,6 +5,35 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.3] - 2026-08-06
+
+### Fixed
+
+- **Selecting text in a PDF fought back.** Reported from use: web pages select
+  cleanly, PDFs feel sticky. They were — every other line could not be selected
+  at all.
+
+  The 文 icon is a 28-pixel button placed six pixels under the selection, and
+  in a PDF that is exactly where the next line is. Its `mousedown` handler
+  calls `preventDefault()`, so a drag starting there never begins a selection;
+  the press translates the previous line instead. Measured on a five-line PDF —
+  line boxes at y 92, 122, 152 with a height of 20, leaving ten pixels between
+  lines for a button that needs thirty-four:
+
+  ```
+  line one   -> "Line one: a local server answe"   icon at y 119 (covers 119-147)
+  line two   -> ""                                 <- nothing selected
+  line three -> "Line three: the original text "
+  ```
+
+  Web pages hide this behind paragraph margins rather than avoiding it; a dense
+  list or a table does the same thing there.
+
+  The icon now sits **beside** the end of the selection instead of under it,
+  falling back to the old placement only when the selection runs to the window
+  edge and there is no room. Same PDF after the change: **5/5 consecutive lines
+  selected**, no need to click elsewhere between them.
+
 ## [2.8.2] - 2026-08-06
 
 ### Fixed
