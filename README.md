@@ -235,7 +235,7 @@ mid-artifact exactly as they do in a live stream.
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](eval/RESULTS.md)._
 
-**359 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
+**363 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
 pure core at **100% function / 97% line** coverage, the selection and capture UI
 driven through jsdom with a stubbed extension port, and the background worker —
 which owns cancellation, error translation and PDF routing. Overall: 92%
@@ -343,7 +343,10 @@ Three findings worth calling out:
   model, so firing fifty parallel requests only builds a queue in arrival
   order, which is not the order anyone reads in. Two requests stay in flight
   and the page fills top-down. Block selection takes the leaf-most prose
-  element (a `li` wrapping a `p` is translated once, not twice), scopes to the
+  element (a `li` wrapping a `p` is translated once, not twice), drops blocks
+  that are only an address (the one cell that failed on every run of a real
+  article was `github.com/ollama/ollama` — letters, nothing to translate),
+  scopes to the
   page's `main`/`article` landmark when it declares one, drops navigational
   chrome, refuses to descend into `code`/`pre`, honours `translate="no"` and
   `.notranslate`, and skips anything already in the target language through the

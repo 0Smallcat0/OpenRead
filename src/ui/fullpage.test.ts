@@ -109,9 +109,12 @@ describe('translatePage', () => {
     );
   });
 
-  it('never runs more than CONCURRENCY requests at once', async () => {
+  it('runs the first block alone, then opens to CONCURRENCY', async () => {
+    // Ramp-up. A second request racing a cold model load does not arrive any
+    // sooner; it only lengthens the queue while the same load happens, and the
+    // cold burst is where failures cluster on a real page.
     let inFlight = 0;
-    let peak = 0;
+    const peaks: number[] = [];
     const release: (() => void)[] = [];
 
     const run = translatePage(
@@ -119,7 +122,7 @@ describe('translatePage', () => {
       deps({
         translate: (text) => {
           inFlight++;
-          peak = Math.max(peak, inFlight);
+          peaks.push(inFlight);
           return new Promise<string>((resolve) => {
             release.push(() => {
               inFlight--;
@@ -131,16 +134,20 @@ describe('translatePage', () => {
     );
 
     await Promise.resolve();
-    expect(peak).toBe(CONCURRENCY);
+    // Exactly one in flight while the model may still be loading.
+    expect(inFlight).toBe(1);
 
-    // Drain: each release lets the next queued block start.
+    release.shift()?.();
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    expect(inFlight).toBe(CONCURRENCY);
+
     for (let i = 0; i < 10 && release.length > 0; i++) {
       release.shift()?.();
       await Promise.resolve();
       await Promise.resolve();
     }
     await run;
-    expect(peak).toBe(CONCURRENCY);
+    expect(Math.max(...peaks)).toBe(CONCURRENCY);
   });
 
   it('stops when asked, keeping what already landed', async () => {
@@ -171,6 +178,34 @@ describe('translatePage', () => {
     expect(result.translated).toBe(1);
     // A stop is not an undo. What was already translated stays readable.
     expect(translations()).toHaveLength(1);
+  });
+
+  it('retries once when the model returns nothing', async () => {
+    // The selection path has always retried; this one never did, so a single
+    // empty generation printed a failure onto the page for good.
+    const attempts: number[] = [];
+    const result = await translatePage(
+      document,
+      deps({
+        translate: (text, _signal, attempt) => {
+          attempts.push(attempt);
+          return Promise.resolve(attempt === 0 ? '' : `[zh] ${text}`);
+        },
+      }),
+    );
+    expect(result).toEqual({ translated: 3, failed: 0, stopped: false });
+    // Order-independent: once the ramp-up opens, two workers interleave.
+    // What matters is that every block got a first try and exactly one retry.
+    expect(attempts.filter((a) => a === 0)).toHaveLength(3);
+    expect(attempts.filter((a) => a === 1)).toHaveLength(3);
+  });
+
+  it('gives up after the retry rather than looping', async () => {
+    const result = await translatePage(
+      document,
+      deps({ translate: () => Promise.resolve('') }),
+    );
+    expect(result.failed).toBe(3);
   });
 
   it('does not translate the same block twice across two runs', async () => {
@@ -279,6 +314,8 @@ describe('togglePageTranslation', () => {
 
     expect(await togglePageTranslation(document, deps())).toBeNull();
     await run;
-    expect(calls).toBe(CONCURRENCY);
+    // One, not CONCURRENCY: the ramp-up means only the first block had
+    // started when the toggle stopped the run.
+    expect(calls).toBe(1);
   });
 });
