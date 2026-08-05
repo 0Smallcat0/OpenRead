@@ -5,6 +5,43 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.9] - 2026-08-06
+
+### Fixed
+
+- **The README promised `file://` PDFs without mentioning the switch they
+  need.** Chrome withholds `file://` from every extension until the user turns
+  on **Allow access to file URLs**, which is off on a fresh install.
+  `routeToViewer` checks `chrome.extension.isAllowedFileSchemeAccess()` and
+  returns silently when it is false, so a local PDF opens in Chrome's own
+  viewer with no OpenRead in it and nothing anywhere saying why. Two lines of
+  the README sold that as a headline feature.
+
+  Both places now name the prerequisite and say what it looks like when it is
+  missing.
+
+### Notes
+
+Found while auditing the PDF path. The state itself could not be reproduced in
+the harness: an extension loaded through CDP's `Extensions.loadUnpacked` is
+granted file access (`isAllowedFileSchemeAccess` returned `true`) and does not
+survive a restart, so patching the profile's preferences between launches has
+nothing to patch. What is verified is the other half — with access granted, a
+`file://` PDF is redirected into the bundled viewer and renders. The claim
+being corrected rests on Chrome's documented default rather than on a
+measurement here, and is written that way.
+
+Also in the same pass, and left alone deliberately: `OPEN_PDF_VIEWER` /
+`PERMISSION_DENIED` exist in `messaging.ts` and are handled in the background
+worker, and nothing anywhere sends the message. It reads like an abandoned
+attempt to surface exactly this denial. Wiring it up would be a feature and
+deleting it would be a refactor; this pass is neither.
+
+Whole-page translation over iframes was checked and behaves as designed: three
+iframes, none of them translated, because `content.ts` restricts the whole-page
+pass to the top frame so an ad iframe cannot spend the user's GPU on someone
+else's banner. Selection translation inside an iframe still works.
+
 ## [2.7.8] - 2026-08-05
 
 ### Fixed
