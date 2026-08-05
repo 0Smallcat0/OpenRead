@@ -9,6 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
+  showPageNotice,
   translatePage,
   togglePageTranslation,
   clearPageTranslation,
@@ -94,6 +95,34 @@ describe('translatePage', () => {
     expect(
       document.querySelector('#b .' + BILINGUAL_CLASS)?.textContent,
     ).toContain('failed');
+  });
+
+  it('puts the reason in the summary rather than throwing it away', async () => {
+    // The broker produces something a user can act on. This path used to
+    // discard it and print "translation failed" once per block — twenty-eight
+    // identical lines, none of them saying what to do.
+    const result = await translatePage(
+      document,
+      deps({
+        translate: () =>
+          Promise.reject(
+            new Error(
+              "Can't reach Ollama at http://127.0.0.1:1. Is the server running?",
+            ),
+          ),
+      }),
+    );
+    expect(result.failed).toBe(3);
+    expect(document.getElementById(PROGRESS_ID)?.textContent).toContain(
+      "Can't reach Ollama",
+    );
+  });
+
+  it('says nothing extra when nothing failed', async () => {
+    await translatePage(document, deps());
+    const badge = document.getElementById(PROGRESS_ID)?.textContent ?? '';
+    expect(badge).toContain('3 translated');
+    expect(badge).not.toContain('—  ');
   });
 
   it('treats an empty generation as a failure, not as success', async () => {
@@ -345,5 +374,28 @@ describe('togglePageTranslation', () => {
     // One, not CONCURRENCY: the ramp-up means only the first block had
     // started when the toggle stopped the run.
     expect(calls).toBe(1);
+  });
+});
+
+describe('showPageNotice', () => {
+  it('says why, where progress would otherwise appear', () => {
+    // The PDF viewer offers "translate this page" through the context menu
+    // like anywhere else, and cannot do it — a text layer is absolutely
+    // positioned lines, so an inserted translation lands on the next one.
+    // Doing nothing was worse than refusing.
+    showPageNotice(document, 'Not available here.');
+    const badge = document.getElementById(PROGRESS_ID);
+    expect(badge?.textContent).toContain('Not available here.');
+    // Nothing to stop, so no Stop button.
+    expect(badge?.querySelector('button')).toBeNull();
+  });
+
+  it('replaces an earlier notice instead of stacking them', () => {
+    showPageNotice(document, 'First.');
+    showPageNotice(document, 'Second.');
+    expect(document.querySelectorAll(`#${PROGRESS_ID}`)).toHaveLength(1);
+    expect(document.getElementById(PROGRESS_ID)?.textContent).toContain(
+      'Second.',
+    );
   });
 });
