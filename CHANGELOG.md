@@ -5,6 +5,53 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.2] - 2026-08-04
+
+### Fixed
+
+- **A failure on every real page, and a cold start that multiplied it.**
+  Measured on the Wikipedia article for Ollama, before: 237 s and **9 of 45
+  blocks failed** on a cold model, 55 s and 2 of 45 once warm. After: **54 s,
+  0 of 44 failed**, reproduced twice.
+
+  Three causes, each found by running the thing rather than reasoning about it.
+
+  _A URL is not prose._ The block that failed on every single run was the
+  infobox cell reading `github.com/ollama/ollama`. It has letters, so
+  `hasTranslatableText` passed it; it has nothing to translate, so the model
+  returned an empty generation and the page printed a failure the reader could
+  do nothing about. Addresses — URLs, bare hosts, emails — are now
+  removed before the length check, so a cell that is only an address is
+  skipped while a sentence that merely mentions one is kept. The host pattern
+  requires a two-letter word after the dot, which is what keeps it away from
+  `version 2.5.0` and `e.g.`.
+
+  _No retry._ The selection path has always retried an empty generation with a
+  raised temperature. Whole-page translation never did, so one empty sample
+  printed a permanent failure. It now retries once, through the same broker
+  path, which is a different sample rather than the same request hopefully
+  going better.
+
+  _A cold burst._ The first request to a cold Ollama waits for the model to
+  load into VRAM — about 5 s here — and a second request racing it does
+  not arrive sooner, it only lengthens the queue while the same load happens.
+  That burst is where the cold-run failures clustered. The first block now runs
+  alone and the queue opens to full concurrency once it returns, against a warm
+  server. This costs nothing when the model is already resident.
+
+  The ramp-up shipped broken on the first attempt — `await worker()` drains
+  the whole queue, so the run went fully sequential — and the concurrency
+  test caught it before it left the branch.
+
+### Known limits
+
+- Whole-page translation on a long article is a background job, not an
+  interactive one. The Wikipedia article for large language models is 157
+  blocks and takes over five minutes end to end. Blocks are translated in
+  document order and first paint is 2–4 s, so a reader working down from
+  the top is never waiting on the queue — but the badge will be counting
+  for a while.
+
 ## [2.6.1] - 2026-08-03
 
 ### Added
