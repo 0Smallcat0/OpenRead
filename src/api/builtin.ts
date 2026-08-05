@@ -7,11 +7,12 @@
  * with no server to install and no multi-gigabyte model to pull. After that a
  * sentence comes back in 9–20 ms, against roughly 2,000 ms for a local 8B LLM.
  *
- * Quality is not the trade it looks like. Measured against the same sentences
- * the Ollama path was benchmarked on, it produced `使用者介面`,
- * `資料庫連線字串` and `本地電腦上運行大型語言模型` — the Taiwan conventions
- * that the OpenCC `s2twp` layer exists to produce, arrived at natively because
- * `zh-Hant` is a first-class target rather than a post-processing step.
+ * Its `zh-Hant` is Traditional characters with mainland word choices, which is
+ * not the same thing as Taiwan Chinese: one translated Wikipedia article
+ * carried 本地 twelve times, 運行 ten, 用戶 three. `core/tw-vocab.ts` corrects
+ * that on the way out. An earlier version of this comment claimed the engine
+ * arrived at Taiwan conventions natively — that came from three sentences that
+ * happened to come out right, and 2.7.1 retracted it.
  *
  * What it does not do is the reason Ollama stays: no surrounding-page context,
  * no choice of model, no prompt to steer, and nothing to build the capture
