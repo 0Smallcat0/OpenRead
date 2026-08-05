@@ -109,7 +109,10 @@ translated.</sub>
   right-click and choose **Translate selection with OpenRead**. The
   translation streams into a panel.
 - **PDFs** — open any `.pdf`; OpenRead redirects it into the bundled PDF.js
-  viewer, where selection works exactly the same.
+  viewer, where selection works exactly the same. Whole-page translation does
+  not: a PDF text layer is positioned line by line, so an inserted translation
+  would land on the next line. Asking for it there says so rather than doing
+  nothing.
 - **Keyboard** — select with Shift+Arrow or Ctrl+A and press **`Ctrl+Shift+Y`**
   (remappable at `chrome://extensions/shortcuts`). Escape closes the panel.
 
@@ -286,7 +289,7 @@ mid-artifact exactly as they do in a live stream.
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](eval/RESULTS.md)._
 
-**416 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
+**420 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
 pure core at **100% function / 97% line** coverage, the selection and capture UI
 driven through jsdom with a stubbed extension port, and the background worker —
 which owns cancellation, error translation and PDF routing. Overall: 92%
