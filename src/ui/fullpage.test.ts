@@ -251,6 +251,34 @@ describe('translatePage', () => {
     );
   });
 
+  it('says when it is downloading a language pack', async () => {
+    // Two minutes of silence on the first use of a language pair is the bug
+    // this replaces: the badge sat at "Translating 0/3" and looked stuck.
+    let release: (value: string) => void = () => undefined;
+    const run = translatePage(
+      document,
+      deps({
+        translate: (text, _signal, _attempt, onDownload) => {
+          onDownload?.(0.42);
+          // Held open: in a real run the pack finishes downloading before the
+          // translation resolves, and the block counter then takes the badge
+          // back over. Resolving here immediately would race that.
+          return new Promise<string>((resolve) => {
+            release = () => resolve(`[zh] ${text}`);
+          });
+        },
+      }),
+    );
+    await Promise.resolve();
+    expect(document.getElementById(PROGRESS_ID)?.textContent).toContain(
+      'Downloading language pack 42%',
+    );
+
+    stopPageTranslation();
+    release('');
+    await run;
+  });
+
   it('shows progress while running and a summary at the end', async () => {
     const run = translatePage(document, deps());
     expect(document.getElementById(PROGRESS_ID)?.textContent).toContain(

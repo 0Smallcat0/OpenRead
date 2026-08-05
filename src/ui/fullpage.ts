@@ -54,6 +54,8 @@ export interface PageTranslateDeps {
     text: string,
     signal: AbortSignal,
     attempt: number,
+    /** Report a language-pack download, 0-1, so the badge can say so. */
+    onDownloadProgress?: (loaded: number) => void,
   ) => Promise<string>;
   /** Target language, used for the `lang` attribute on inserted nodes. */
   targetLang: string;
@@ -150,6 +152,7 @@ function ensureStyle(doc: Document): void {
 
 interface Progress {
   update: (done: number, total: number) => void;
+  downloading: (loaded: number) => void;
   finish: (message: string) => void;
 }
 
@@ -173,6 +176,13 @@ function mountProgress(doc: Document, onStop: () => void): Progress {
   return {
     update: (done, total) => {
       label.textContent = `Translating ${String(done)}/${String(total)}`;
+    },
+    downloading: (loaded) => {
+      // The one-time language-pack fetch. Around two minutes, and the reason
+      // switching target language used to look like the extension breaking.
+      label.textContent = `Downloading language pack ${String(
+        Math.round(loaded * 100),
+      )}%`;
     },
     finish: (message) => {
       label.textContent = message;
@@ -254,7 +264,9 @@ export async function translatePage(
       // through `visibleText`, so a stylesheet child is never sent to a model.
       const source = visibleText(block).trim();
       try {
-        let result = await deps.translate(source, controller.signal, 0);
+        let result = await deps.translate(source, controller.signal, 0, (l) =>
+          progress.downloading(l),
+        );
         // One retry on an empty generation, which the selection path has
         // always done and this one never did. The broker raises temperature on
         // the second attempt, so it is a different sample rather than the same

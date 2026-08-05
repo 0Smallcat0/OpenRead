@@ -22,6 +22,8 @@ export interface PortTranslateParams {
   signal: AbortSignal;
   /** 0 for the first try; the broker raises temperature above that. */
   retryCount?: number;
+  /** Called while Chrome downloads a language pack, 0-1. */
+  onDownloadProgress?: (loaded: number) => void;
 }
 
 export function translateViaPort({
@@ -30,6 +32,7 @@ export function translateViaPort({
   model,
   signal,
   retryCount,
+  onDownloadProgress,
 }: PortTranslateParams): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     if (signal.aborted) {
@@ -59,6 +62,8 @@ export function translateViaPort({
     port.onMessage.addListener((response: StreamResponse) => {
       if (response.status === 'streaming') {
         full += response.chunk;
+      } else if (response.status === 'downloading') {
+        onDownloadProgress?.(response.loaded);
       } else if (response.status === 'error') {
         finish(() => {
           reject(new Error(response.message));
