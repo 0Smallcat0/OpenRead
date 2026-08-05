@@ -62,13 +62,39 @@ export const TRANSLATED_ATTR = 'data-oit-translated';
  */
 export const MIN_BLOCK_CHARS = 12;
 
+/**
+ * Addresses, not prose. A URL, a bare domain or an email has letters in it and
+ * nothing to translate, so a model handed one returns an empty generation and
+ * the page shows a failure the reader can do nothing about.
+ *
+ * Found on the Wikipedia article for Ollama: the infobox cell reading
+ * `github.com/ollama/ollama` was the one block that failed on every run.
+ */
+const ADDRESS_LIKE = [
+  /https?:\/\/\S+/gi,
+  /\b[\w.-]+@[\w.-]+\.\w+\b/g,
+  // A bare domain, optionally with a path. The `[a-z]{2,}` tail keeps this off
+  // ordinary prose: "version 2.5.0" and "e.g." have no two-letter word after
+  // the dot, so neither is mistaken for a host.
+  /\b(?:[\w-]+\.)+[a-z]{2,}(?:\/\S*)?/gi,
+];
+
 /** Does this text contain anything a translator could act on? */
 export function hasTranslatableText(text: string): boolean {
   const trimmed = text.trim();
   if (trimmed.length < MIN_BLOCK_CHARS) return false;
   // A block of digits, punctuation, or emoji has nothing to translate but
   // would still cost a round trip and come back mangled.
-  return /\p{L}/u.test(trimmed);
+  if (!/\p{L}/u.test(trimmed)) return false;
+
+  // Measure what is left once the addresses are removed. A sentence that
+  // merely mentions a URL keeps its prose and stays; a cell that is only a URL
+  // has nothing left and goes.
+  let prose = trimmed;
+  for (const pattern of ADDRESS_LIKE) prose = prose.replace(pattern, ' ');
+  prose = prose.trim();
+
+  return prose.length >= MIN_BLOCK_CHARS && /\p{L}/u.test(prose);
 }
 
 export interface CollectOptions {

@@ -20,6 +20,8 @@ export interface PortTranslateParams {
   targetLang: string;
   model: string;
   signal: AbortSignal;
+  /** 0 for the first try; the broker raises temperature above that. */
+  retryCount?: number;
 }
 
 export function translateViaPort({
@@ -27,6 +29,7 @@ export function translateViaPort({
   targetLang,
   model,
   signal,
+  retryCount,
 }: PortTranslateParams): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     if (signal.aborted) {
@@ -82,6 +85,7 @@ export function translateViaPort({
       text,
       targetLang,
       model,
+      retryCount,
     };
     port.postMessage(message);
   });

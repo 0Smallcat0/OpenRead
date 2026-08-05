@@ -42,8 +42,18 @@ const STYLE_ID = 'oit-page-style';
 export const CONCURRENCY = 2;
 
 export interface PageTranslateDeps {
-  /** Translate one block's text. Rejects on failure; aborts on the signal. */
-  translate: (text: string, signal: AbortSignal) => Promise<string>;
+  /**
+   * Translate one block's text. Rejects on failure; aborts on the signal.
+   *
+   * `attempt` is 0 for the first try. The broker raises temperature above
+   * that, which is what turns a model that returned nothing into one that
+   * returns something.
+   */
+  translate: (
+    text: string,
+    signal: AbortSignal,
+    attempt: number,
+  ) => Promise<string>;
   /** Target language, used for the `lang` attribute on inserted nodes. */
   targetLang: string;
   isVisible?: CollectOptions['isVisible'];
@@ -229,8 +239,11 @@ export async function translatePage(
   let failed = 0;
   let next = 0;
 
-  const worker = async (): Promise<void> => {
-    while (!controller.signal.aborted) {
+  // `limit` exists for the ramp-up below. Without it the first `await
+  // worker()` drains the entire queue on its own and the run is sequential.
+  const worker = async (limit = Infinity): Promise<void> => {
+    let handled = 0;
+    while (!controller.signal.aborted && handled < limit) {
       const index = next++;
       const block = blocks[index];
       if (!block) return;
@@ -239,7 +252,14 @@ export async function translatePage(
       // changed while the queue drained is translated as it currently reads.
       const source = (block.textContent ?? '').trim();
       try {
-        const result = await deps.translate(source, controller.signal);
+        let result = await deps.translate(source, controller.signal, 0);
+        // One retry on an empty generation, which the selection path has
+        // always done and this one never did. The broker raises temperature on
+        // the second attempt, so it is a different sample rather than the same
+        // request hopefully going better.
+        if (!result.trim() && !controller.signal.aborted) {
+          result = await deps.translate(source, controller.signal, 1);
+        }
         if (controller.signal.aborted) return;
         if (result.trim()) {
           attach(block, result.trim(), deps.targetLang, false);
@@ -256,15 +276,31 @@ export async function translatePage(
         failed++;
       }
       done++;
+      handled++;
       progress.update(done, blocks.length);
     }
   };
 
-  await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, blocks.length) }, () =>
-      worker(),
-    ),
-  );
+  // Ramp up rather than opening at full width.
+  //
+  // The first request to a cold Ollama waits for the model to load into VRAM —
+  // measured at ~5 s here — and a second request racing it does not arrive any
+  // sooner, it only makes the queue longer while the same load happens. Worse,
+  // the cold burst is where failures cluster: 9 of 45 blocks on the first run
+  // of a real article, 1 of 45 once warm.
+  //
+  // So the first block runs alone. By the time it returns the model is
+  // resident, and the rest of the queue opens at full concurrency against a
+  // warm server. Costs nothing when the model was already loaded.
+  await worker(1);
+
+  if (!controller.signal.aborted && next < blocks.length) {
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, blocks.length - next) }, () =>
+        worker(),
+      ),
+    );
+  }
 
   const stopped = controller.signal.aborted;
   if (active === controller) active = null;

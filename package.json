@@ -1,6 +1,6 @@
 {
   "name": "openread",
-  "version": "2.6.1",
+  "version": "2.6.2",
   "description": "Translate web pages, PDFs and text with a local LLM through Ollama - browser extension, CLI, and MCP server. No cloud, no API key.",
   "type": "module",
   "license": "MIT",

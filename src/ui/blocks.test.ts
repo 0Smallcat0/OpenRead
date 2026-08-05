@@ -39,6 +39,33 @@ describe('hasTranslatableText', () => {
     expect(hasTranslatableText('🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉')).toBe(false);
   });
 
+  it('rejects text that is only an address', () => {
+    // Found on the Wikipedia article for Ollama: the infobox cell reading
+    // `github.com/ollama/ollama` was the one block that failed on every run.
+    // It has letters and nothing to translate, so the model returned nothing
+    // and the page showed a failure the reader could do nothing about.
+    expect(hasTranslatableText('github.com/ollama/ollama')).toBe(false);
+    expect(hasTranslatableText('https://ollama.com/download')).toBe(false);
+    expect(hasTranslatableText('maintainers@ollama.com')).toBe(false);
+  });
+
+  it('keeps a sentence that merely mentions one', () => {
+    expect(
+      hasTranslatableText('The source lives at github.com/ollama/ollama.'),
+    ).toBe(true);
+  });
+
+  it('does not mistake ordinary prose for an address', () => {
+    // `version 2.5.0` and `e.g.` have no two-letter word after the dot, which
+    // is what keeps the host pattern off normal writing.
+    expect(
+      hasTranslatableText('Upgrade to version 2.5.0 before you begin.'),
+    ).toBe(true);
+    expect(
+      hasTranslatableText('Use a small model, e.g. one of the 8B ones.'),
+    ).toBe(true);
+  });
+
   it('accepts non-Latin scripts', () => {
     expect(hasTranslatableText('これは日本語の文章です。')).toBe(true);
     expect(hasTranslatableText('Это предложение на русском.')).toBe(true);

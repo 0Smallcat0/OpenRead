@@ -43,12 +43,13 @@ export default defineContentScript({
         const settings = await loadSettings();
         await togglePageTranslation(document, {
           targetLang: settings.targetLang,
-          translate: (text, signal) =>
+          translate: (text, signal, attempt) =>
             translateViaPort({
               text,
               targetLang: settings.targetLang,
               model: settings.modelId,
               signal,
+              retryCount: attempt,
             }),
           // The same short-circuit selection uses: a block already in the
           // target language costs a full round trip to say nothing.
