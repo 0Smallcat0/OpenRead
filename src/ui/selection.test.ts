@@ -6,7 +6,11 @@
  * and assert on what the panel would show, not on internals.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mountSelectionTranslator, clampPanelTop } from './selection';
+import {
+  mountSelectionTranslator,
+  clampPanelTop,
+  iconPosition,
+} from './selection';
 import { STREAM_PORT_NAME, type StreamResponse } from '../messaging';
 
 const SETTINGS = {
@@ -461,5 +465,54 @@ describe('keeping the panel inside the window', () => {
 
   it('respects a caller-supplied margin', () => {
     expect(clampPanelTop(900, 100, VIEWPORT, 20)).toBe(VIEWPORT - 20 - 100);
+  });
+});
+
+describe('where the 文 icon goes', () => {
+  // Measured on a five-line PDF: line boxes at y 92, 122, 152, height 20. The
+  // icon used to sit at `bottom + 6`, so translating line one put a 28px
+  // button across 119-147 and line two (122-142) could not be selected at all
+  // — its mousedown hit the icon, which preventDefaults it.
+  const VIEWPORT = { width: 1000, height: 700 };
+  const line = { left: 30, right: 480, top: 92, bottom: 112 };
+
+  it('sits beside the end of the selection, clear of the next line', () => {
+    const at = iconPosition(line, VIEWPORT);
+    expect(at.left).toBe(486);
+    // Level with the line it belongs to, and nowhere near 122-142.
+    expect(at.top).toBe(84);
+    expect(at.top + 28).toBeLessThanOrEqual(112);
+  });
+
+  it('does not overlap the line below, whatever the line spacing', () => {
+    const next = { top: 122, bottom: 142 };
+    const at = iconPosition(line, VIEWPORT);
+    const overlapsVertically = at.top < next.bottom && at.top + 28 > next.top;
+    const overlapsHorizontally = at.left < line.right;
+    expect(overlapsVertically && overlapsHorizontally).toBe(false);
+  });
+
+  it('falls back below when a selection runs to the window edge', () => {
+    const full = { left: 30, right: 995, top: 92, bottom: 112 };
+    const at = iconPosition(full, VIEWPORT);
+    expect(at.left).toBe(30);
+    expect(at.top).toBe(118);
+  });
+
+  it('keeps the icon on screen for a selection at the bottom', () => {
+    const at = iconPosition(
+      { left: 30, right: 400, top: 690, bottom: 700 },
+      VIEWPORT,
+    );
+    expect(at.top).toBeGreaterThanOrEqual(0);
+    expect(at.top + 28).toBeLessThanOrEqual(VIEWPORT.height);
+  });
+
+  it('keeps the icon on screen for a selection at the very top', () => {
+    const at = iconPosition(
+      { left: 30, right: 400, top: 0, bottom: 10 },
+      VIEWPORT,
+    );
+    expect(at.top).toBe(0);
   });
 });

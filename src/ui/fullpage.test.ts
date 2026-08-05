@@ -57,7 +57,12 @@ describe('translatePage', () => {
   it('appends a translation to each block without touching the original', async () => {
     const result = await translatePage(document, deps());
 
-    expect(result).toEqual({ translated: 3, failed: 0, unchanged: 0, stopped: false });
+    expect(result).toEqual({
+      translated: 3,
+      failed: 0,
+      unchanged: 0,
+      stopped: false,
+    });
     const first = document.getElementById('a');
     // The original text is still the first child; the translation is beside
     // it, not over it. A local model is good, not perfect — a reader has to
@@ -144,7 +149,12 @@ describe('translatePage', () => {
       document,
       deps({ translate: () => Promise.resolve('   ') }),
     );
-    expect(result).toEqual({ translated: 0, failed: 3, unchanged: 0, stopped: false });
+    expect(result).toEqual({
+      translated: 0,
+      failed: 3,
+      unchanged: 0,
+      stopped: false,
+    });
     expect(translations().every((t) => t.includes('no translation'))).toBe(
       true,
     );
@@ -234,7 +244,12 @@ describe('translatePage', () => {
         },
       }),
     );
-    expect(result).toEqual({ translated: 3, failed: 0, unchanged: 0, stopped: false });
+    expect(result).toEqual({
+      translated: 3,
+      failed: 0,
+      unchanged: 0,
+      stopped: false,
+    });
     // Order-independent: once the ramp-up opens, two workers interleave.
     // What matters is that every block got a first try and exactly one retry.
     expect(attempts.filter((a) => a === 0)).toHaveLength(3);
@@ -317,7 +332,12 @@ describe('translatePage', () => {
   it('reports an empty page instead of pretending to work', async () => {
     document.body.innerHTML = '<nav><li>Home</li></nav>';
     const result = await translatePage(document, deps());
-    expect(result).toEqual({ translated: 0, failed: 0, unchanged: 0, stopped: false });
+    expect(result).toEqual({
+      translated: 0,
+      failed: 0,
+      unchanged: 0,
+      stopped: false,
+    });
     expect(document.getElementById(PROGRESS_ID)?.textContent).toContain(
       'Nothing to translate',
     );
@@ -502,7 +522,10 @@ describe('a page already in the target language', () => {
     // byte-identical, the whole article printed twice.
     const result = await translatePage(
       document,
-      deps({ targetLang: 'English', translate: (text) => Promise.resolve(text) }),
+      deps({
+        targetLang: 'English',
+        translate: (text) => Promise.resolve(text),
+      }),
     );
 
     expect(result).toEqual({
@@ -520,7 +543,10 @@ describe('a page already in the target language', () => {
   it('says why nothing happened rather than "0 translated"', async () => {
     await translatePage(
       document,
-      deps({ targetLang: 'English', translate: (text) => Promise.resolve(text) }),
+      deps({
+        targetLang: 'English',
+        translate: (text) => Promise.resolve(text),
+      }),
     );
     expect(document.getElementById(PROGRESS_ID)?.textContent).toContain(
       'already in English',
@@ -536,7 +562,10 @@ describe('a page already in the target language', () => {
     // cheaper thing to be wrong about.
     await translatePage(
       document,
-      deps({ targetLang: 'English', translate: (text) => Promise.resolve(text) }),
+      deps({
+        targetLang: 'English',
+        translate: (text) => Promise.resolve(text),
+      }),
     );
     expect(document.querySelectorAll(`[${TRANSLATED_ATTR}]`)).toHaveLength(0);
 
