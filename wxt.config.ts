@@ -35,11 +35,19 @@ export default defineConfig({
         description: 'Translate the current selection',
       },
       // Whole-page translation is a toggle, so one binding covers translating
-      // and undoing it. Ctrl+Shift+G is unbound in a default Chrome.
+      // and undoing it.
+      //
+      // Not Ctrl+Shift+G, which this shipped as for five releases: that is
+      // Chrome's own "find previous", and Chrome answers a reserved suggestion
+      // by leaving the command unassigned rather than by refusing to install.
+      // `chrome.commands.getAll()` reported `shortcut: ""` for it while
+      // `translate-selection` reported `Ctrl+Shift+Y`, so the documented
+      // keyboard route to whole-page translation did nothing at all. Probed
+      // against a real Chrome: G dropped, U/L/K each assigned.
       'translate-page': {
         suggested_key: {
-          default: 'Ctrl+Shift+G',
-          mac: 'Command+Shift+G',
+          default: 'Ctrl+Shift+L',
+          mac: 'Command+Shift+L',
         },
         description: 'Translate the whole page (again to undo)',
       },

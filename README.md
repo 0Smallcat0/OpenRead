@@ -101,7 +101,7 @@ translated.</sub>
 
 - **Whole page** — right-click anywhere and choose **Translate this page with
   OpenRead**, click the same thing in the toolbar popup, or press
-  **`Ctrl+Shift+G`**. Each paragraph gets its translation underneath it, the
+  **`Ctrl+Shift+L`**. Each paragraph gets its translation underneath it, the
   page fills from the top, and a badge in the corner counts progress and offers
   a Stop. Press the shortcut again to remove every translation and get the
   original page back.
