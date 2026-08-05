@@ -42,6 +42,21 @@ const NAVIGATION =
   'nav, header, footer, aside, [role="navigation"], [role="banner"], [role="contentinfo"], [role="complementary"], [role="search"], .toc, #toc, .navbox, .sidebar';
 
 /**
+ * Citations and reference lists.
+ *
+ * A bibliography is a lookup key, not prose. Translated, it stops working:
+ * one real article turned the publisher `Ollama` into `奧拉瑪` and the article
+ * title `"Blog"` into `"博客"`, so a reader could no longer find either. Half
+ * of that page's remaining blocks were references — 16 of 48 — so skipping
+ * them is also most of a third off the work.
+ *
+ * `cite` is standard HTML; the rest are the classes MediaWiki emits, which is
+ * where a reader is most likely to meet a reference list at all.
+ */
+const CITATIONS =
+  'cite, .citation, .reference, .reflist, .references, ol.references, .mw-references-wrap, .mw-cite-backlink';
+
+/**
  * Where a page keeps the thing it is about. Scoping to this is what makes
  * "document order" mean "reading order": these landmarks exclude the chrome by
  * construction rather than by blocklist, and a page without one falls back to
@@ -78,6 +93,50 @@ const ADDRESS_LIKE = [
   // the dot, so neither is mistaken for a host.
   /\b(?:[\w-]+\.)+[a-z]{2,}(?:\/\S*)?/gi,
 ];
+
+/**
+ * The text of an element as a reader sees it, ignoring descendants that are
+ * not prose.
+ *
+ * `textContent` is the obvious call and it is wrong: it concatenates the
+ * contents of `<style>` and `<script>` children too. Measured on one Wikipedia
+ * reference item, `textContent` was **2,158 characters of which 2,100 were a
+ * stylesheet** — and that CSS went to the translator, which dutifully rendered
+ * `no-repeat` as `無重複` and `center` as `中心` inside a rule set.
+ *
+ * `closest()` cannot catch this, because it looks at ancestors and the problem
+ * is a child. `innerText` would, but it forces layout and jsdom does not
+ * implement it, which would put this rule beyond the reach of every test.
+ *
+ * Skipping our own insertions here too means a re-run reads the original text
+ * rather than the original plus last run's translation.
+ */
+export function visibleText(element: Element): string {
+  let out = '';
+  for (const node of Array.from(element.childNodes)) {
+    // 3 = TEXT_NODE, 1 = ELEMENT_NODE. Numeric because `Node` is a DOM global
+    // and this file is read in environments that do not define it.
+    if (node.nodeType === 3) {
+      out += node.nodeValue ?? '';
+    } else if (node.nodeType === 1) {
+      const child = node as Element;
+      if (
+        child.matches(SKIP_WITHIN) ||
+        child.matches(OWN_UI) ||
+        // Citations are excluded here as well as by `closest` above, because
+        // the same ancestor-only blind spot applies: a paragraph that ends in
+        // an inline <cite> should have its prose translated and the citation
+        // left alone, and a paragraph that is *only* a citation then has no
+        // visible text at all and drops out by itself.
+        child.matches(CITATIONS)
+      ) {
+        continue;
+      }
+      out += visibleText(child);
+    }
+  }
+  return out;
+}
 
 /** Does this text contain anything a translator could act on? */
 export function hasTranslatableText(text: string): boolean {
@@ -126,6 +185,7 @@ export function collectBlocks(
     if (element.hasAttribute(TRANSLATED_ATTR)) return false;
     if (element.closest(SKIP_WITHIN)) return false;
     if (element.closest(NAVIGATION)) return false;
+    if (element.closest(CITATIONS)) return false;
     if (element.closest(OWN_UI)) return false;
 
     // Leaf-most wins. A `li` wrapping a `p` would otherwise be translated
@@ -133,13 +193,13 @@ export function collectBlocks(
     // shows the same translation twice.
     if (element.querySelector(BLOCK_SELECTOR)) return false;
 
-    if (!hasTranslatableText(element.textContent ?? '')) return false;
+    if (!hasTranslatableText(visibleText(element))) return false;
     if (!isVisible(element)) return false;
     return true;
   });
 
   if (!shouldSkipText) return kept;
-  return kept.filter((element) => !shouldSkipText(element.textContent ?? ''));
+  return kept.filter((element) => !shouldSkipText(visibleText(element)));
 }
 
 /**
