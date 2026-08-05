@@ -15,6 +15,7 @@ import {
   isElementVisible,
   MIN_BLOCK_CHARS,
   TRANSLATED_ATTR,
+  BILINGUAL_CLASS,
 } from './blocks';
 
 const visible = { isVisible: () => true };
@@ -145,8 +146,35 @@ describe('collectBlocks', () => {
   });
 
   it('skips blocks that already carry a translation', () => {
-    render(`<p ${TRANSLATED_ATTR}>An already-translated paragraph here.</p>`);
+    render(
+      `<p ${TRANSLATED_ATTR}>An already-translated paragraph here.<span class="${BILINGUAL_CLASS}">已經翻譯過的段落。</span></p>`,
+    );
     expect(collectBlocks(document.body, visible)).toHaveLength(0);
+  });
+
+  it('re-collects a marked block whose translation is gone', () => {
+    // How React and Vue reconcile a route change: the element is reused and
+    // new text is written into it, which destroys the appended translation
+    // and leaves the marker behind. Measured on a real SPA — both blocks kept
+    // the marker, neither kept a translation, and the whole-page run reported
+    // "Nothing to translate on this page" over untranslated content.
+    render(`<p ${TRANSLATED_ATTR}>Brand new text from the next route here.</p>`);
+    const collected = collectBlocks(document.body, visible);
+    expect(textsOf(collected)).toEqual([
+      'Brand new text from the next route here.',
+    ]);
+    // And the stale claim is dropped rather than left to lie again.
+    expect(collected[0]?.hasAttribute(TRANSLATED_ATTR)).toBe(false);
+  });
+
+  it('does not treat a descendant translation as this block being done', () => {
+    // `:scope >` and not a bare descendant search: a marker on an outer
+    // element must be backed by its own translation, not by one further down.
+    render(
+      `<div ${TRANSLATED_ATTR}><p>Outer block text that was replaced wholesale.<span class="${BILINGUAL_CLASS}">內層譯文。</span></p></div>`,
+    );
+    const collected = collectBlocks(document.body, visible);
+    expect(collected.some((el) => el.tagName === 'DIV')).toBe(false);
   });
 
   it('never feeds its own injected UI back into itself', () => {
