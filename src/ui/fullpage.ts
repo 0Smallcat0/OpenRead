@@ -27,11 +27,14 @@ import {
   isElementVisible,
   visibleText,
   TRANSLATED_ATTR,
+  BILINGUAL_CLASS,
   type CollectOptions,
 } from './blocks';
 import { toBcp47 } from '../core/bcp47';
 
-export const BILINGUAL_CLASS = 'oit-bilingual';
+// Defined next to the collector, which needs it to tell a live marker from a
+// stale one; re-exported here because this is where callers import it from.
+export { BILINGUAL_CLASS };
 export const PROGRESS_ID = 'oit-page-progress';
 const STYLE_ID = 'oit-page-style';
 

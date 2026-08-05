@@ -72,6 +72,15 @@ const OWN_UI =
 export const TRANSLATED_ATTR = 'data-oit-translated';
 
 /**
+ * Class on the inserted translation node.
+ *
+ * Lives here rather than in `fullpage.ts` because the collector needs it: the
+ * marker above is a claim, and this node is the evidence for it. Re-exported
+ * from `fullpage.ts`, which is where callers have always imported it from.
+ */
+export const BILINGUAL_CLASS = 'oit-bilingual';
+
+/**
  * Shorter than this is almost always chrome — "Home", "12", "Read more" — and
  * each one still costs a full model round trip.
  */
@@ -182,7 +191,21 @@ export function collectBlocks(
   );
 
   const kept = candidates.filter((element) => {
-    if (element.hasAttribute(TRANSLATED_ATTR)) return false;
+    if (element.hasAttribute(TRANSLATED_ATTR)) {
+      // The marker claims a translation is appended below this block. React
+      // and Vue reconcile a route change by reusing the element and writing
+      // new text into it, which destroys the appended node and leaves the
+      // marker behind — so the claim outlives the thing it is about, and the
+      // new route reads as already translated. Measured on a two-paragraph
+      // SPA: after `p.textContent = …`, both blocks still carried the marker,
+      // neither carried a translation, and asking for one answered "Nothing
+      // to translate on this page".
+      //
+      // The appended node is the evidence. Without it the marker is stale, so
+      // drop it and let the block back into the queue.
+      if (element.querySelector(`:scope > .${BILINGUAL_CLASS}`)) return false;
+      element.removeAttribute(TRANSLATED_ATTR);
+    }
     if (element.closest(SKIP_WITHIN)) return false;
     if (element.closest(NAVIGATION)) return false;
     if (element.closest(CITATIONS)) return false;

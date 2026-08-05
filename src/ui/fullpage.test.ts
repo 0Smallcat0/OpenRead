@@ -272,6 +272,37 @@ describe('translatePage', () => {
     expect(translations()).toHaveLength(3);
   });
 
+  it('re-translates a block whose text was replaced under it', async () => {
+    // An SPA route change, as React and Vue perform one: the element is
+    // reused and new text is written into it, which destroys the appended
+    // translation while leaving the marker behind. Verified in a real browser
+    // before this fix — the badge read "Nothing to translate on this page"
+    // over two fully untranslated paragraphs.
+    await translatePage(document, deps());
+    expect(translations()).toHaveLength(3);
+
+    const reused = document.getElementById('a');
+    if (reused) reused.textContent = 'The next route says something else here.';
+    expect(reused?.hasAttribute(TRANSLATED_ATTR)).toBe(true);
+
+    const seen: string[] = [];
+    const second = await translatePage(
+      document,
+      deps({
+        translate: (text) => {
+          seen.push(text);
+          return Promise.resolve(`[zh] ${text}`);
+        },
+      }),
+    );
+
+    expect(seen).toEqual(['The next route says something else here.']);
+    expect(second.translated).toBe(1);
+    expect(reused?.querySelector(`.${BILINGUAL_CLASS}`)?.textContent).toBe(
+      '[zh] The next route says something else here.',
+    );
+  });
+
   it('picks up blocks that appeared after the first run', async () => {
     await translatePage(document, deps());
     const fresh = document.createElement('p');
