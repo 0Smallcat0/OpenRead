@@ -74,6 +74,12 @@ export interface PageTranslateDeps {
 export interface PageResult {
   translated: number;
   failed: number;
+  /**
+   * Blocks the engine returned unchanged, so nothing was inserted for them.
+   * Asked for a language the text is already in, both engines hand it back
+   * verbatim; a page of those is a page that needed no translating.
+   */
+  unchanged: number;
   /** True when the user stopped the run before it finished. */
   stopped: boolean;
 }
@@ -297,7 +303,7 @@ export async function translatePage(
     active = null;
     const progress = mountProgress(root, stopPageTranslation);
     progress.finish('Nothing to translate on this page');
-    return { translated: 0, failed: 0, stopped: false };
+    return { translated: 0, failed: 0, unchanged: 0, stopped: false };
   }
 
   const progress = mountProgress(root, stopPageTranslation);
@@ -306,6 +312,8 @@ export async function translatePage(
   let done = 0;
   let translated = 0;
   let failed = 0;
+  /** Blocks the engine handed back exactly as they went in. */
+  let unchanged = 0;
   let next = 0;
   /**
    * The first real reason a block failed.
@@ -344,7 +352,26 @@ export async function translatePage(
           result = await deps.translate(source, controller.signal, 1);
         }
         if (controller.signal.aborted) return;
-        if (result.trim()) {
+        if (result.trim() === source) {
+          // Nothing came back but what went in. The engines do this on
+          // purpose: asked for a language the text is already in, they return
+          // it verbatim, which is the honest answer in the selection panel and
+          // useless here — inserting it prints the paragraph twice. Measured
+          // on the English Wikipedia article with English as the target: all
+          // 28 blocks came back byte-identical and the page was doubled.
+          //
+          // Not restricted to that case on purpose. A block of proper nouns
+          // comes back unchanged from a real translation too, and a duplicate
+          // of it is just as useless.
+          //
+          // Left unmarked, so a later run tries it again. Marking it would be
+          // cheaper, but the marker means "a translation is appended below
+          // this block" and 2.7.7 exists precisely because a marker without
+          // one is treated as stale — an SPA had wiped the translation out
+          // from under it. Two meanings for one attribute is how that bug
+          // comes back.
+          unchanged++;
+        } else if (result.trim()) {
           attach(block, result.trim(), deps.targetLang, false);
           translated++;
         } else {
@@ -393,14 +420,19 @@ export async function translatePage(
 
   const summary = stopped
     ? `Stopped — ${String(translated)} translated`
-    : failed > 0
-      ? `Done — ${String(translated)} translated, ${String(failed)} failed`
-      : `Done — ${String(translated)} translated`;
+    : // Every block came back as it went in, so the page is already in the
+      // language that was asked for. "Done — 0 translated" is true and tells
+      // the reader nothing about why.
+      translated === 0 && failed === 0 && unchanged > 0
+      ? `Nothing to translate — this page is already in ${deps.targetLang}`
+      : failed > 0
+        ? `Done — ${String(translated)} translated, ${String(failed)} failed`
+        : `Done — ${String(translated)} translated`;
   progress.finish(
     failed > 0 && firstError ? `${summary} — ${firstError}` : summary,
   );
 
-  return { translated, failed, stopped };
+  return { translated, failed, unchanged, stopped };
 }
 
 /**
