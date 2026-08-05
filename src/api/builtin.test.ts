@@ -16,7 +16,7 @@ import {
 
 interface Stub {
   availability?: string;
-  streaming?: boolean;
+  translation?: string;
   detected?: { detectedLanguage: string; confidence: number }[] | null;
   noDetector?: boolean;
   noTranslator?: boolean;
@@ -27,7 +27,7 @@ let translated: string[];
 
 function stub({
   availability = 'available',
-  streaming = false,
+  translation,
   detected = [{ detectedLanguage: 'en', confidence: 0.9 }],
   noDetector = false,
   noTranslator = false,
@@ -49,20 +49,8 @@ function stub({
           return Promise.resolve({
             translate: (input: string) => {
               translated.push(input);
-              return Promise.resolve(`[zh] ${input}`);
+              return Promise.resolve(translation ?? `[zh] ${input}`);
             },
-            translateStreaming: streaming
-              ? (input: string) => {
-                  translated.push(input);
-                  return new ReadableStream<string>({
-                    start(controller) {
-                      controller.enqueue('[zh] ');
-                      controller.enqueue(input);
-                      controller.close();
-                    },
-                  });
-                }
-              : undefined,
             destroy: () => undefined,
           });
         },
@@ -126,11 +114,20 @@ describe('translateBuiltin', () => {
     });
   });
 
-  it('streams when Chrome offers streaming', async () => {
-    stub({ streaming: true });
+  it('rewrites mainland vocabulary into Taiwan usage', async () => {
+    // Chrome's zh-Hant is Traditional characters with mainland word choices:
+    // one real article produced 12 x 本地, 10 x 運行, 3 x 用戶.
+    stub({ translation: '允許用戶在本地機器上運行模型' });
     expect(
-      await collect({ text: 'Hello', targetLang: 'Traditional Chinese' }),
-    ).toBe('[zh] Hello');
+      await collect({ text: 'x', targetLang: 'Traditional Chinese' }),
+    ).toBe('允許使用者在本機上執行模型');
+  });
+
+  it('leaves Simplified targets to OpenCC', async () => {
+    stub({ translation: '允許用戶運行' });
+    expect(await collect({ text: 'x', targetLang: 'Simplified Chinese' })).toBe(
+      '允許用戶運行',
+    );
   });
 
   it('trusts the page over the detector', async () => {
