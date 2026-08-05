@@ -13,7 +13,16 @@ export default defineConfig({
     // requests to the configured Ollama server, which is what removes the
     // OLLAMA_ORIGINS setup step entirely. Scoped in `core/dnr-rule.ts` so it
     // cannot apply to a web page's requests.
-    permissions: ['storage', 'activeTab', 'declarativeNetRequest'],
+    // `contextMenus` earns its place: right-click is where a user looks for
+    // "translate this page", and until 2.7.3 the feature lived only behind a
+    // toolbar popup and a keyboard shortcut — findable by someone who read the
+    // README, invisible to everyone else.
+    permissions: [
+      'storage',
+      'activeTab',
+      'declarativeNetRequest',
+      'contextMenus',
+    ],
     // A keyboard user can select text but never produces a mouseup, so the
     // floating 文 icon is not a route they can take. This is: remappable at
     // chrome://extensions/shortcuts, and it needs no extra permission.

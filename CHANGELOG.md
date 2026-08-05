@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.3] - 2026-08-05
+
+### Added
+
+- **Right-click to translate.** Two context-menu items: _Translate selection
+  with OpenRead_ when text is selected, _Translate this page with OpenRead_
+  otherwise.
+
+  Whole-page translation shipped in 2.4.0 reachable only from the toolbar
+  popup and `Ctrl+Shift+G`. Both work, and neither is where anyone looks. A
+  user with the extension installed opened the context menu, found Chrome's
+  own _翻譯成中文（繁體）_ item and not this one, and asked where the feature
+  had gone — which answers the question of whether a popup button counts as
+  discoverable.
+
+  The menu is rebuilt rather than appended to on every worker start, because
+  an MV3 worker restarts whenever it likes and `contextMenus.create` on an id
+  that already exists is an error.
+
+  `contextMenus` is the fourth permission this extension asks for, and it
+  earns its place the way `declarativeNetRequest` did in 2.5.0: one concrete
+  job, visible to the user, with the alternative being a feature people cannot
+  find.
+
 ## [2.7.2] - 2026-08-05
 
 ### Fixed

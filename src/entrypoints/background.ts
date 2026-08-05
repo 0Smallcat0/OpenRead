@@ -145,6 +145,55 @@ export default defineBackground(() => {
     })();
   });
 
+  /**
+   * Right-click entry points.
+   *
+   * The whole-page feature shipped reachable only from the toolbar popup and
+   * `Ctrl+Shift+G`. Both work; neither is where anyone looks. A user with the
+   * extension installed opened the context menu, found Chrome's own translate
+   * item and not this one, and asked where the feature had gone — which is the
+   * answer to whether a popup button counts as discoverable.
+   *
+   * Two items, so the menu offers whichever one matches what is under the
+   * cursor: a selection, or the page.
+   */
+  const MENU_PAGE = 'openread-translate-page';
+  const MENU_SELECTION = 'openread-translate-selection';
+
+  function createMenus(): void {
+    // Rebuild rather than add: the worker can restart at any time, and
+    // `create` on an id that already exists is an error.
+    chrome.contextMenus?.removeAll(() => {
+      chrome.contextMenus.create({
+        id: MENU_SELECTION,
+        title: 'Translate selection with OpenRead',
+        contexts: ['selection'],
+      });
+      chrome.contextMenus.create({
+        id: MENU_PAGE,
+        title: 'Translate this page with OpenRead',
+        contexts: ['page'],
+      });
+      // `create` reports failures here rather than throwing.
+      void chrome.runtime.lastError;
+    });
+  }
+
+  createMenus();
+  chrome.runtime.onInstalled.addListener(createMenus);
+
+  chrome.contextMenus?.onClicked.addListener((info, tab) => {
+    const message: TranslateSelectionMessage | TranslatePageMessage | null =
+      info.menuItemId === MENU_SELECTION
+        ? { type: 'TRANSLATE_SELECTION' }
+        : info.menuItemId === MENU_PAGE
+          ? { type: 'TRANSLATE_PAGE' }
+          : null;
+    if (!message || tab?.id === undefined) return;
+    // No receiver on a page without our content script; that is expected.
+    void chrome.tabs.sendMessage(tab.id, message).catch(() => undefined);
+  });
+
   // Streaming translation broker.
   chrome.runtime.onConnect.addListener((port) => {
     if (port.name !== STREAM_PORT_NAME) return;

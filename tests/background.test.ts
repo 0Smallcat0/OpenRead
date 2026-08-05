@@ -84,6 +84,8 @@ let tabsQuery: ReturnType<typeof vi.fn>;
 let tabsSendMessage: ReturnType<typeof vi.fn>;
 let fileSchemeAllowed: boolean;
 let sessionRules: ReturnType<typeof vi.fn>;
+let createdMenus: { id: string; title: string; contexts: string[] }[];
+let menuClick: (info: { menuItemId: string }, tab?: { id?: number }) => void;
 let startupListeners: (() => void)[];
 let installedListeners: (() => void)[];
 
@@ -102,6 +104,8 @@ beforeEach(async () => {
   tabsQuery = vi.fn().mockResolvedValue([{ id: 7 }]);
   tabsSendMessage = vi.fn().mockResolvedValue(undefined);
   sessionRules = vi.fn().mockResolvedValue(undefined);
+  createdMenus = [];
+  menuClick = () => undefined;
   startupListeners = [];
   installedListeners = [];
 
@@ -161,6 +165,20 @@ beforeEach(async () => {
     },
     declarativeNetRequest: {
       updateSessionRules: sessionRules,
+    },
+    contextMenus: {
+      removeAll: (done: () => void) => {
+        createdMenus = [];
+        done();
+      },
+      create: (item: { id: string; title: string; contexts: string[] }) => {
+        createdMenus.push(item);
+      },
+      onClicked: {
+        addListener: (fn: typeof menuClick) => {
+          menuClick = fn;
+        },
+      },
     },
   });
   partial.onStartup = () => {
@@ -614,5 +632,50 @@ describe('the Origin-strip rule', () => {
       removeRuleIds: number[];
     };
     expect(call.removeRuleIds).toEqual([1]);
+  });
+});
+
+describe('the right-click menu', () => {
+  it('offers an item for a selection and one for the page', () => {
+    // Whole-page translation shipped reachable only from a toolbar popup and
+    // a keyboard shortcut. A user with it installed opened the context menu,
+    // found Chrome's own translate item and not this one, and asked where the
+    // feature had gone.
+    expect(
+      createdMenus
+        .map((m) => m.contexts)
+        .flat()
+        .sort(),
+    ).toEqual(['page', 'selection']);
+    for (const item of createdMenus) {
+      expect(item.title).toContain('OpenRead');
+    }
+  });
+
+  it('translates the page when the page item is clicked', () => {
+    const page = createdMenus.find((m) => m.contexts.includes('page'));
+    menuClick({ menuItemId: page!.id }, { id: 7 });
+    expect(tabsSendMessage).toHaveBeenCalledWith(7, { type: 'TRANSLATE_PAGE' });
+  });
+
+  it('translates the selection when the selection item is clicked', () => {
+    const sel = createdMenus.find((m) => m.contexts.includes('selection'));
+    menuClick({ menuItemId: sel!.id }, { id: 7 });
+    expect(tabsSendMessage).toHaveBeenCalledWith(7, {
+      type: 'TRANSLATE_SELECTION',
+    });
+  });
+
+  it('ignores a click with no tab, and an id that is not ours', () => {
+    menuClick({ menuItemId: 'openread-translate-page' }, undefined);
+    menuClick({ menuItemId: 'someone-elses-item' }, { id: 7 });
+    expect(tabsSendMessage).not.toHaveBeenCalled();
+  });
+
+  it('rebuilds the menu rather than adding to it', () => {
+    // The worker restarts at any time, and `create` on an existing id errors.
+    const before = createdMenus.length;
+    registered.onInstalled();
+    expect(createdMenus.length).toBe(before);
   });
 });
