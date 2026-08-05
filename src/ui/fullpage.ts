@@ -25,6 +25,7 @@
 import {
   collectBlocks,
   isElementVisible,
+  visibleText,
   TRANSLATED_ATTR,
   type CollectOptions,
 } from './blocks';
@@ -248,9 +249,10 @@ export async function translatePage(
       const block = blocks[index];
       if (!block) return;
 
-      // Text is read now rather than at collection time so a block that
-      // changed while the queue drained is translated as it currently reads.
-      const source = (block.textContent ?? '').trim();
+      // Read now rather than at collection time, so a block that changed
+      // while the queue drained is translated as it currently reads — and
+      // through `visibleText`, so a stylesheet child is never sent to a model.
+      const source = visibleText(block).trim();
       try {
         let result = await deps.translate(source, controller.signal, 0);
         // One retry on an empty generation, which the selection path has

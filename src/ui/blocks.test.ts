@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import {
   collectBlocks,
   contentRoot,
+  visibleText,
   hasTranslatableText,
   isElementVisible,
   MIN_BLOCK_CHARS,
@@ -202,6 +203,81 @@ describe('collectBlocks', () => {
   it('returns nothing for a page with no prose', () => {
     render(`<nav><li>Home</li></nav><script>const x = 1;</script>`);
     expect(collectBlocks(document.body, visible)).toEqual([]);
+  });
+});
+
+describe('visibleText', () => {
+  it('ignores a stylesheet living inside the block', () => {
+    // The bug: `textContent` on one Wikipedia reference item returned 2,158
+    // characters, 2,100 of them CSS — and the translator rendered `no-repeat`
+    // as 無重複 inside a rule set. `closest()` cannot catch this: it looks at
+    // ancestors, and the stylesheet is a child.
+    render(
+      `<li id="ref">Retrieved April 29, 2026.<style>.x{background:url(a.svg) center no-repeat}</style></li>`,
+    );
+    const li = document.getElementById('ref') as HTMLElement;
+    expect(li.textContent).toContain('no-repeat');
+    expect(visibleText(li)).toBe('Retrieved April 29, 2026.');
+  });
+
+  it('ignores a script for the same reason', () => {
+    render(`<p id="p">Real prose.<script>var x = "hidden";</script></p>`);
+    expect(visibleText(document.getElementById('p') as HTMLElement)).toBe(
+      'Real prose.',
+    );
+  });
+
+  it('ignores a translation this extension inserted earlier', () => {
+    // So a second run reads the original text, not the original plus the
+    // first run's output.
+    render(
+      `<p id="p">The original sentence.<span class="oit-bilingual">原本的句子。</span></p>`,
+    );
+    expect(visibleText(document.getElementById('p') as HTMLElement)).toBe(
+      'The original sentence.',
+    );
+  });
+
+  it('keeps inline markup, which is part of the sentence', () => {
+    render(`<p id="p">A <em>strongly</em> worded <b>claim</b>.</p>`);
+    expect(visibleText(document.getElementById('p') as HTMLElement)).toBe(
+      'A strongly worded claim.',
+    );
+  });
+});
+
+describe('citations', () => {
+  it('leaves a reference list alone, because it is a lookup key', () => {
+    // Translated, a bibliography stops working: one real article turned the
+    // publisher `Ollama` into 奧拉瑪 and the title "Blog" into "博客".
+    render(`
+      <ol class="references"><li>Bort, Julie. "Ollama raises $65M". TechCrunch.</li></ol>
+      <p>The opening sentence of the actual article.</p>
+    `);
+    expect(textsOf(collectBlocks(document.body, visible))).toEqual([
+      'The opening sentence of the actual article.',
+    ]);
+  });
+
+  it('drops a paragraph that is nothing but a citation', () => {
+    render(`
+      <p><cite>The Structure of Scientific Revolutions, 1962</cite></p>
+      <p>The opening sentence of the actual article.</p>
+    `);
+    expect(textsOf(collectBlocks(document.body, visible))).toEqual([
+      'The opening sentence of the actual article.',
+    ]);
+  });
+
+  it('keeps the prose of a paragraph that merely cites something', () => {
+    render(
+      `<p id="p">Kuhn argued this at length in <cite>The Structure of Scientific Revolutions</cite>.</p>`,
+    );
+    // The sentence is translated; the work's title is left findable.
+    expect(visibleText(document.getElementById('p') as HTMLElement)).toBe(
+      'Kuhn argued this at length in .',
+    );
+    expect(collectBlocks(document.body, visible)).toHaveLength(1);
   });
 });
 
