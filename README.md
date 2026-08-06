@@ -136,6 +136,7 @@ pnpm build        # -> .output/chrome-mv3, load it unpacked
 pnpm test         # 491 unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)
+pnpm shoot        # re-shoot every screenshot and the clip on this page
 ```
 
 **[How it is built →](docs/ENGINEERING.md)** — the reliability layer, the
