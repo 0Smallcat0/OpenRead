@@ -5,6 +5,33 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] - 2026-08-06
+
+### Added
+
+- **Copy, beside Save to Obsidian.** The most common thing to do with a
+  translation is put it somewhere, and until now the only somewhere was an
+  Obsidian vault. It also gives the capture path an honest fallback: handing a
+  URL to the OS protocol handler produces no completion signal, so if Obsidian
+  is not installed the panel says "Sent" and nothing happens — and now there is
+  a second button right there that does work.
+
+  It goes through the same clipboard helper the oversized-capture path already
+  used, which tries `navigator.clipboard.writeText` and falls back to
+  `execCommand`. Written straight against `writeText` first, it was measured
+  failing inside a real click handler on a plain `http://127.0.0.1` page; with
+  the fallback the clipboard comes back holding exactly what the panel shows.
+
+### Fixed
+
+- **The panel's × scrolled away with the text.** The close button is positioned
+  against the panel, and the panel was the scrolling element, so reading to the
+  end of a long translation carried it off the top — measured at `top: -51`.
+  The text is now the part that scrolls, so the × above it and the buttons
+  below it stay where the user left them. Same panel after the change, scrolled
+  to the end: close at `top: 138`, Copy at 649, Save at 651, all three
+  hit-testable.
+
 ## [2.8.5] - 2026-08-06
 
 ### Fixed

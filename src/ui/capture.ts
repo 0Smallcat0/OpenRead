@@ -61,7 +61,20 @@ function openUri(uri: string): void {
   a.remove();
 }
 
-async function copyToClipboard(text: string): Promise<boolean> {
+/**
+ * Put `text` on the clipboard, by whichever route the page allows.
+ *
+ * `navigator.clipboard.writeText` is the one to want and not the one to rely
+ * on: it is refused outside a secure context, refused without a gesture the
+ * browser recognises, and refused outright by some permissions policies —
+ * measured failing on a plain `http://127.0.0.1` page inside a real click
+ * handler. The `execCommand` path is deprecated and works everywhere that one
+ * does not.
+ *
+ * Exported because the selection panel's Copy button needs exactly this, and a
+ * second implementation of it would be a second thing to get wrong.
+ */
+export async function copyToClipboard(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
     return true;
