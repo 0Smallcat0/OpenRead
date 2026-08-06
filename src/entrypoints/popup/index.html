@@ -119,6 +119,7 @@
           color: #9ca3af;
         }
       }
+      #enrichOnly[hidden],
       #ollamaOnly[hidden] {
         display: none;
       }
@@ -249,7 +250,10 @@
       <label for="obsidianFolder">Capture Folder</label>
       <input id="obsidianFolder" type="text" placeholder="OpenRead" />
 
-      <label class="checkbox">
+      <!-- Enrichment is an Ollama feature: it asks a local model for a title,
+           a summary and tags. Offering it under the built-in engine promised
+           something that could only fail, quietly, into a plain capture. -->
+      <label class="checkbox" id="enrichOnly">
         <input id="enrichOnCapture" type="checkbox" />
         Enrich captures with the local model
       </label>
