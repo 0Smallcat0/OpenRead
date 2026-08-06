@@ -12,11 +12,7 @@
 import { shouldBypassAI } from '../core/language';
 import { toBcp47 } from '../core/bcp47';
 import { resolveSourceUrl } from '../core/capture';
-import {
-  captureNote,
-  copyToClipboard,
-  type CaptureConfig,
-} from './capture';
+import { captureNote, copyToClipboard, type CaptureConfig } from './capture';
 import type { CaptureNote } from '../core/types';
 import {
   STREAM_PORT_NAME,
