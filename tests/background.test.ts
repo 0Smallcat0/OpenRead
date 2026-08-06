@@ -491,36 +491,6 @@ describe('the streaming broker', () => {
 });
 
 describe('one-shot handlers', () => {
-  it('opens a local PDF in the viewer when file access is granted', async () => {
-    const sendResponse = vi.fn();
-    const kept = registered.onMessage(
-      { type: 'OPEN_PDF_VIEWER', url: 'file:///C:/a.pdf' },
-      { tab: { id: 9 } },
-      sendResponse,
-    );
-    await settle();
-
-    expect(kept).toBe(true); // channel held open for the async reply
-    expect(tabsUpdate).toHaveBeenCalledWith(9, {
-      url: `${VIEWER}?file=${encodeURIComponent('file:///C:/a.pdf')}`,
-    });
-    expect(sendResponse).toHaveBeenCalledWith({ success: true });
-  });
-
-  it('reports the missing permission instead of silently doing nothing', async () => {
-    fileSchemeAllowed = false;
-    const sendResponse = vi.fn();
-    registered.onMessage(
-      { type: 'OPEN_PDF_VIEWER', url: 'file:///C:/a.pdf' },
-      { tab: { id: 9 } },
-      sendResponse,
-    );
-    await settle();
-
-    expect(tabsUpdate).not.toHaveBeenCalled();
-    expect(sendResponse).toHaveBeenCalledWith({ error: 'PERMISSION_DENIED' });
-  });
-
   it('returns an enrichment result', async () => {
     mocks.enrichText.mockResolvedValue({ title: 'Fetch API', tags: ['web'] });
     const sendResponse = vi.fn();

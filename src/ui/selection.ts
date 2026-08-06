@@ -587,7 +587,12 @@ export function mountSelectionTranslator(
         settled = true;
         window.clearTimeout(slowHintTimer);
         if (activePort === port) activePort = null;
-        if (!panel) return;
+        // Only report into the panel this attempt belongs to. Starting a
+        // second translation tears the first port down, and without this the
+        // message would be written into a content div that has already been
+        // detached — or worse, read as belonging to the translation now on
+        // screen.
+        if (!panel?.contains(content)) return;
         setPanelText(
           content,
           full.trim()

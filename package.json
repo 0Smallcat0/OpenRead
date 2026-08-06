@@ -1,6 +1,6 @@
 {
   "name": "openread",
-  "version": "2.10.4",
+  "version": "2.10.5",
   "description": "Translate web pages, PDFs and text on your own machine - Chrome's built-in on-device model by default, a local LLM through Ollama when you want one. Browser extension, CLI, and MCP server.",
   "type": "module",
   "license": "MIT",
@@ -83,7 +83,7 @@
     "url": "git+https://github.com/0Smallcat0/OpenRead.git"
   },
   "homepage": "https://github.com/0Smallcat0/OpenRead#readme",
-  "main": "eslint.config.js",
+  "main": "./dist/node/cli.js",
   "directories": {
     "doc": "docs",
     "test": "tests"
