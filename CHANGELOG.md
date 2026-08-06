@@ -13,13 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   above the language selector.** So the obvious sequence — open the popup, pick
   a different target language, press the big button next to it — translated
   into the language you had just moved away from. Verified in the real popup
-  before the change: firing  on the selector left
-   empty.
+  before the change: firing `change` on the selector left
+  `chrome.storage.sync` empty.
 
   Every control now writes through as it changes, and "Translate this page"
   persists before it hands off, so the page is translated with what the popup
   is showing rather than with what was last saved. Text fields write on
-   rather than , so a half-typed server URL is not probed and
+  `change` rather than `input`, so a half-typed server URL is not probed and
   stored on every keystroke.
 
   The Save button stays, and is still the only thing that says "Saved ✓": a
