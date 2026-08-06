@@ -42,6 +42,7 @@ interface Elements {
   engine: HTMLSelectElement;
   engineNote: HTMLElement;
   ollamaOnly: HTMLElement;
+  enrichOnly: HTMLElement | null;
   baseUrl: HTMLInputElement;
   model: HTMLInputElement;
   modelOptions: HTMLDataListElement;
@@ -62,6 +63,7 @@ function collect(root: ParentNode): Elements | null {
   const engine = root.querySelector<HTMLSelectElement>('#engine');
   const engineNote = root.querySelector<HTMLElement>('#engineNote');
   const ollamaOnly = root.querySelector<HTMLElement>('#ollamaOnly');
+  const enrichOnly = root.querySelector<HTMLElement>('#enrichOnly');
   const baseUrl = root.querySelector<HTMLInputElement>('#baseUrl');
   const model = root.querySelector<HTMLInputElement>('#modelId');
   const modelOptions = root.querySelector<HTMLDataListElement>('#modelOptions');
@@ -102,6 +104,7 @@ function collect(root: ParentNode): Elements | null {
     engine,
     engineNote,
     ollamaOnly,
+    enrichOnly,
     baseUrl,
     model,
     modelOptions,
@@ -184,8 +187,10 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     el.engineNote.textContent = ENGINE_NOTES[engine];
     if (engine === 'ollama') {
       el.ollamaOnly.removeAttribute('hidden');
+      el.enrichOnly?.removeAttribute('hidden');
     } else {
       el.ollamaOnly.setAttribute('hidden', '');
+      el.enrichOnly?.setAttribute('hidden', '');
     }
   };
 
