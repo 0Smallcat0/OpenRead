@@ -23,6 +23,8 @@ import {
   type Engine,
 } from '../settings';
 import { isExcepted, type AutoTranslate } from '../core/auto-translate';
+import { toBcp47 } from '../core/bcp47';
+import type { PackAvailability } from '../api/builtin';
 import {
   describeConnection,
   type ConnectionProbe,
@@ -42,6 +44,24 @@ export interface PopupDeps {
    * has nothing to name in that case and hides itself.
    */
   activeHost: () => Promise<string | null>;
+  /**
+   * `<html lang>` of the tab the popup was opened over, or null when it cannot
+   * be asked or the page does not say. Chrome's translation models are per
+   * language *pair*, so there is no such thing as "is the pack ready" without
+   * knowing what the page is in.
+   */
+  pageLanguage: () => Promise<string | null>;
+  /** Has Chrome fetched the model for this pair? Null when it has no answer. */
+  packAvailability: (
+    source: string,
+    target: string,
+  ) => Promise<PackAvailability | null>;
+  /** Fetch it. Called from the click, which is what satisfies Chrome's gate. */
+  downloadPack: (
+    source: string,
+    target: string,
+    onProgress: (loaded: number) => void,
+  ) => Promise<void>;
 }
 
 interface Elements {
@@ -54,6 +74,9 @@ interface Elements {
   model: HTMLInputElement;
   modelOptions: HTMLDataListElement;
   lang: HTMLSelectElement;
+  pack: HTMLElement | null;
+  packNote: HTMLElement | null;
+  downloadPack: HTMLButtonElement | null;
   auto: HTMLSelectElement;
   autoNote: HTMLElement | null;
   siteExceptRow: HTMLElement | null;
@@ -80,6 +103,9 @@ function collect(root: ParentNode): Elements | null {
   const model = root.querySelector<HTMLInputElement>('#modelId');
   const modelOptions = root.querySelector<HTMLDataListElement>('#modelOptions');
   const lang = root.querySelector<HTMLSelectElement>('#targetLang');
+  const pack = root.querySelector<HTMLElement>('#pack');
+  const packNote = root.querySelector<HTMLElement>('#packNote');
+  const downloadPack = root.querySelector<HTMLButtonElement>('#downloadPack');
   const auto = root.querySelector<HTMLSelectElement>('#autoTranslate');
   const autoNote = root.querySelector<HTMLElement>('#autoNote');
   const siteExceptRow = root.querySelector<HTMLElement>('#siteExceptRow');
@@ -127,6 +153,9 @@ function collect(root: ParentNode): Elements | null {
     model,
     modelOptions,
     lang,
+    pack,
+    packNote,
+    downloadPack,
     auto,
     autoNote,
     siteExceptRow,
@@ -208,6 +237,89 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
   /** The hosts the user has excluded, and the one this popup was opened over. */
   let except: string[] = [];
   let host: string | null = null;
+
+  /**
+   * What the page in front of the user is written in, once it has answered.
+   *
+   * `en` when it will not say, because it is what most of the web is in and a
+   * pack that turns out to be the wrong one only costs the reader the same
+   * wait they would have had anyway.
+   */
+  let pageLang = 'en';
+  /** Rising, so a slow availability check cannot overwrite a newer one. */
+  let packGeneration = 0;
+  /** Whether stored settings have reached the form yet. */
+  let settingsLoaded = false;
+
+  const setPackNote = (message: string, tone = ''): void => {
+    el.pack?.removeAttribute('hidden');
+    if (el.packNote) {
+      el.packNote.textContent = message;
+      el.packNote.className = tone;
+    }
+  };
+
+  const hidePack = (): void => {
+    el.pack?.setAttribute('hidden', '');
+  };
+
+  /**
+   * Say whether the next translation will have to wait for a download.
+   *
+   * Only for the built-in engine: Ollama has its own readiness story, told by
+   * the connection line above, and a second one about Chrome's packs would
+   * report on an engine that is not going to be used.
+   */
+  const renderPack = (): void => {
+    // Nothing to say until the stored engine has reached the form. The page's
+    // language and the settings arrive on separate promises in either order,
+    // and rendering from the form's initial value would report on the built-in
+    // engine to a user who is on Ollama — for as long as it took the other
+    // promise to land, or for good if it landed first.
+    if (!settingsLoaded) return;
+    const mine = ++packGeneration;
+    if (currentEngine() !== 'builtin') {
+      hidePack();
+      return;
+    }
+    const target = toBcp47(el.lang.value);
+    if (!target) {
+      // A language only Ollama can serve. The engine note already says so.
+      hidePack();
+      return;
+    }
+    void deps.packAvailability(pageLang, target).then((availability) => {
+      if (mine !== packGeneration) return;
+      const pair = `${pageLang} → ${target}`;
+      el.downloadPack?.setAttribute('hidden', '');
+      switch (availability) {
+        case 'available':
+          setPackNote(`Ready to translate ${pair} instantly.`, 'ready');
+          break;
+        case 'downloading':
+          setPackNote(`Downloading the ${pair} model…`);
+          break;
+        case 'downloadable':
+          setPackNote(
+            `Chrome has not downloaded the ${pair} model yet. The first ` +
+              `translation will wait a minute or two for it.`,
+            'warn',
+          );
+          el.downloadPack?.removeAttribute('hidden');
+          break;
+        case 'unavailable':
+          setPackNote(
+            `Chrome cannot translate ${pair}. Switch to Ollama for this pair.`,
+            'warn',
+          );
+          break;
+        default:
+          // No built-in translator in this browser at all. The engine note
+          // covers that; a second line about packs would only confuse.
+          hidePack();
+      }
+    });
+  };
 
   const AUTO_NOTES: Record<AutoTranslate, string> = {
     off: 'Pages are translated only when you ask.',
@@ -335,6 +447,8 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     el.vault.value = settings.obsidianVault;
     el.folder.value = settings.obsidianFolder;
     el.enrich.checked = settings.enrichOnCapture;
+    settingsLoaded = true;
+    renderPack();
     check();
   });
 
@@ -343,6 +457,45 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
   void deps.activeHost().then((value) => {
     host = value;
     renderAuto();
+  });
+
+  void deps.pageLanguage().then((value) => {
+    if (value?.trim()) pageLang = value.trim();
+    renderPack();
+  });
+
+  el.downloadPack?.addEventListener('click', () => {
+    const target = toBcp47(el.lang.value);
+    if (!target) return;
+    const source = pageLang;
+    el.downloadPack?.setAttribute('hidden', '');
+    // No percentage in the first message on purpose. The monitor's granularity
+    // is not something a caller can rely on — measured at 479 events for one
+    // pair and exactly two, 0 then 1, for another that took 81 seconds — so a
+    // readout that opens at "0%" would sit there looking stuck for most of the
+    // download. A number appears only once one has actually moved.
+    setPackNote(
+      `Downloading the ${source} → ${target} model. This takes a minute or two, once.`,
+    );
+    void deps
+      .downloadPack(source, target, (loaded) => {
+        const percent = Math.round(loaded * 100);
+        if (percent > 0 && percent < 100) {
+          setPackNote(
+            `Downloading the ${source} → ${target} model — ${String(percent)}%`,
+          );
+        }
+      })
+      .then(
+        () => {
+          renderPack();
+        },
+        (error: unknown) => {
+          const reason = error instanceof Error ? error.message : String(error);
+          setPackNote(`Could not download it — ${reason}`, 'warn');
+          el.downloadPack?.removeAttribute('hidden');
+        },
+      );
   });
 
   el.auto.addEventListener('change', () => {
@@ -367,6 +520,7 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
 
   el.engine.addEventListener('change', () => {
     renderEngine();
+    renderPack();
     check();
     void persist();
   });
@@ -394,6 +548,9 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
       void persist();
     });
   }
+  // A different target is a different pair, and Chrome's packs are per pair —
+  // which is the common way to meet the download at all.
+  el.lang.addEventListener('change', renderPack);
   el.model.addEventListener('change', () => {
     void persist();
   });

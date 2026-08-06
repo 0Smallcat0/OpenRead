@@ -121,8 +121,38 @@
       }
       #enrichOnly[hidden],
       #siteExceptRow[hidden],
+      #pack[hidden],
+      #downloadPack[hidden],
       #ollamaOnly[hidden] {
         display: none;
+      }
+      #packNote {
+        margin-top: 6px;
+        font-size: 11px;
+        line-height: 1.45;
+        color: #4b5563;
+      }
+      #packNote.ready {
+        color: #15803d;
+      }
+      #packNote.warn {
+        color: #b45309;
+      }
+      @media (prefers-color-scheme: dark) {
+        #packNote {
+          color: #9ca3af;
+        }
+        #packNote.ready {
+          color: #16a34a;
+        }
+        #packNote.warn {
+          color: #fbbf24;
+        }
+      }
+      #downloadPack {
+        margin-top: 8px;
+        padding: 6px 10px;
+        font-size: 12px;
       }
       #autoNote {
         margin: 6px 0 0;
@@ -253,6 +283,16 @@
 
       <label for="targetLang">Target Language</label>
       <select id="targetLang"></select>
+      <!-- Chrome downloads a model per language pair, once per profile, and it
+           takes 30 s to two minutes. Met on a first press it is
+           indistinguishable from the extension being broken, so it is said here
+           instead — where the wait can be got out of the way while nobody is
+           waiting for a translation. -->
+      <div id="pack" hidden>
+        <div id="packNote" role="status" aria-live="polite"></div>
+        <button id="downloadPack" type="button">Download it now</button>
+      </div>
+
       <!-- Off by default. The one thing worse than a translator that has to be
            asked is one that rewrites a page the reader could already read. -->
       <label for="autoTranslate">Translate automatically</label>

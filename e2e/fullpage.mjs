@@ -411,6 +411,74 @@ try {
   );
   check(!excluded.badged, 'the excluded host still started a run');
 
+  // ---- the language pack, said before it is needed ----
+  //
+  // The longest wait in the product — 30 s to two minutes, once per language
+  // pair per profile — and until now it was only ever met as an unexplained
+  // pause after a first press.
+  console.log('\n--- the language pack ---');
+  const popup = await browser.newPage();
+  await popup.goto(`chrome-extension://${id}/popup.html`, {
+    waitUntil: 'domcontentloaded',
+  });
+  // The popup asks the *active* tab what language it is in, so the page has to
+  // be the active one — otherwise this would only ever exercise the fallback.
+  await page.bringToFront();
+  await popup.reload({ waitUntil: 'domcontentloaded' });
+  await sleep(2000);
+
+  const packState = () =>
+    popup.evaluate(() => ({
+      hidden: document.getElementById('pack')?.hasAttribute('hidden') ?? true,
+      note: document.getElementById('packNote')?.textContent ?? '',
+      offered: !(
+        document.getElementById('downloadPack')?.hasAttribute('hidden') ?? true
+      ),
+    }));
+
+  const first = await packState();
+  console.log(`  on open: ${JSON.stringify(first)}`);
+  check(!first.hidden, 'the popup said nothing about the language pack');
+  check(
+    first.note.includes('en → zh-Hant'),
+    `the pack line did not name the pair it will use (${first.note})`,
+  );
+
+  // A different target is a different pair, and that is the common way to meet
+  // a download at all.
+  await popup.evaluate(() => {
+    const select = document.getElementById('targetLang');
+    select.value = 'Japanese';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await sleep(1500);
+  const switched = await packState();
+  console.log(`  after switching to Japanese: ${JSON.stringify(switched)}`);
+  check(
+    switched.note.includes('en → ja'),
+    `switching target language did not re-ask (${switched.note})`,
+  );
+
+  // Whichever state this profile is in, the end state is the same: ready. On a
+  // fresh profile that means clicking through a real download.
+  if (switched.offered) {
+    await popup.evaluate(() => {
+      document.getElementById('downloadPack')?.click();
+    });
+    let note = '';
+    for (let waited = 0; waited < 240000; waited += 2000) {
+      await sleep(2000);
+      note = (await packState()).note;
+      if (note.startsWith('Ready') || note.startsWith('Could not')) break;
+    }
+    console.log(`  after downloading: ${note}`);
+    check(note.startsWith('Ready'), `the download did not finish (${note})`);
+  } else {
+    check(
+      switched.note.startsWith('Ready'),
+      `neither ready nor offered (${switched.note})`,
+    );
+  }
 } catch (error) {
   failures.push(error?.message ?? String(error));
 } finally {

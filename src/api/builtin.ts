@@ -205,6 +205,82 @@ export function resetTranslatorCache(): void {
   translatorCache.clear();
 }
 
+export type PackAvailability =
+  'unavailable' | 'downloadable' | 'downloading' | 'available';
+
+/**
+ * Has Chrome downloaded the model for this language pair yet?
+ *
+ * Null when the browser has no built-in translator at all, which is a different
+ * answer from `unavailable` — that one means this Chrome has it and will not
+ * do this pair.
+ *
+ * Exists so the popup can say so *before* the first translation rather than
+ * after it. The download is once per pair per profile and takes 30 s to two
+ * minutes; met on a first press it is indistinguishable from the extension
+ * being broken, and it is the longest wait anywhere in this product.
+ */
+export async function packAvailability(
+  sourceLanguage: string,
+  targetLanguage: string,
+): Promise<PackAvailability | null> {
+  const translators = factory();
+  if (!translators) return null;
+  const source = normaliseLang(sourceLanguage);
+  if (!source) return null;
+  try {
+    return await translators.availability({
+      sourceLanguage: source,
+      targetLanguage,
+    });
+  } catch {
+    // A pair Chrome will not even be asked about — an unknown code, a
+    // malformed tag. Not knowing is the honest report.
+    return null;
+  }
+}
+
+/**
+ * Fetch the pack for a pair, reporting progress.
+ *
+ * **Must be called from a user gesture** while availability is `downloadable`
+ * or `downloading`: Chrome throws `NotAllowedError` otherwise, in a page or an
+ * extension page alike. The service worker has no such gate, which is why a
+ * translation started from the toolbar can download one and a popup can only
+ * do it from a click.
+ *
+ * `onProgress` reports 0-1, but coarsely and unpredictably: measured at 479
+ * events for `en`→`zh-Hant` and exactly two — 0 then 1 — for `en`→`ko`, which
+ * took 81 s. A caller that renders a percentage will sometimes render 0% for a
+ * minute and a half, so it needs to say something that stays true either way.
+ */
+export async function downloadPack(
+  sourceLanguage: string,
+  targetLanguage: string,
+  onProgress?: (loaded: number) => void,
+): Promise<void> {
+  const translators = factory();
+  if (!translators) throw new BuiltinUnavailableError('No built-in translator');
+  const source = normaliseLang(sourceLanguage);
+  if (!source) {
+    throw new BuiltinUnavailableError(`Not a language code: ${sourceLanguage}`);
+  }
+  const translator = await translators.create({
+    sourceLanguage: source,
+    targetLanguage,
+    monitor: onProgress
+      ? (monitor) => {
+          monitor.addEventListener('downloadprogress', (event) => {
+            onProgress(event.loaded);
+          });
+        }
+      : undefined,
+  });
+  // Not kept. The pack is what this was for, and it is browser-wide; the
+  // instance belongs to whichever context translates next.
+  translator.destroy?.();
+}
+
 /**
  * Wait for `promise`, but give up the moment `signal` aborts.
  *

@@ -5,6 +5,52 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.15.0] - 2026-08-06
+
+### Added
+
+- **The popup says whether the next translation will have to wait, and offers
+  to get the wait over with.** Chrome downloads a translation model per
+  language pair, once per browser profile, and it takes 30 seconds to two
+  minutes. It is the longest wait anywhere in this product, and until now it
+  was only ever met as an unexplained pause after a first press — which is
+  indistinguishable from the extension being broken.
+
+  The popup now reads the language of the page you are on, asks Chrome about
+  that exact pair, and says one of four things: ready, downloading, not
+  downloaded yet with a **Download it now** button, or a pair Chrome will not
+  do at all and Ollama should. The pair matters — models are per pair, so
+  telling a reader of Japanese pages that `en`→`zh-Hant` is ready would be
+  worse than saying nothing.
+
+  The download runs in the popup rather than through the background, because
+  Chrome refuses to start one outside a user gesture: measured directly, an
+  extension page throws `NotAllowedError: Requires a user gesture` while
+  availability is `downloadable`, and the button click is the gesture. The
+  service worker has no such gate, which is why a translation started from the
+  toolbar can still download one by itself.
+
+  Verified in a real browser: the popup opened over a live page named
+  `en → zh-Hant` and reported it ready, switching the target to Japanese
+  re-asked and reported `en → ja` not downloaded, and the button downloaded it
+  and ended at ready.
+
+### Fixed
+
+- **The progress badge no longer sits at "0%" for a minute and a half.** The
+  download monitor's granularity is not something a caller can rely on:
+  measured at 479 progress events for `en`→`zh-Hant` and exactly two — 0 then 1
+  — for `en`→`ko`, which took 81 seconds. A percentage that opens at zero and
+  stays there reads as stuck, which is the impression the line exists to
+  prevent. It now says "Downloading language pack…" until a number has actually
+  moved.
+
+- **The popup could report on the wrong engine.** The stored settings and the
+  page's language arrive on separate promises, in either order, and the new
+  language-pack line rendered from whichever landed last — so a user on Ollama
+  could be shown Chrome's pack status, permanently if the page answered first.
+  It now waits for the settings to reach the form.
+
 ## [2.14.0] - 2026-08-06
 
 ### Added

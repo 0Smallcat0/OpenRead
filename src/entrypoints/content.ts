@@ -4,6 +4,7 @@ import { translateViaPort } from '../ui/port-translate';
 import { shouldBypassAI } from '../core/language';
 import { shouldAutoTranslate } from '../core/auto-translate';
 import { loadSettings, type Settings } from '../settings';
+import type { PageLanguageResponse } from '../messaging';
 
 /**
  * Web-page content script: mounts the shared selection translator on every
@@ -60,15 +61,27 @@ export default defineContentScript({
         shouldBypassAI(text, settings.targetLang),
     });
 
-    chrome.runtime.onMessage.addListener((message: unknown) => {
-      if ((message as { type?: string } | null)?.type !== 'TRANSLATE_PAGE') {
-        return;
-      }
-      void (async () => {
-        const settings = await loadSettings();
-        await togglePageTranslation(document, pageDeps(settings));
-      })();
-    });
+    chrome.runtime.onMessage.addListener(
+      (message: unknown, _sender, sendResponse) => {
+        const type = (message as { type?: string } | null)?.type;
+
+        // Answered synchronously, so no `return true` is needed and the popup
+        // is never left waiting on a channel that closed.
+        if (type === 'PAGE_LANGUAGE') {
+          const response: PageLanguageResponse = {
+            lang: document.documentElement.getAttribute('lang'),
+          };
+          sendResponse(response);
+          return;
+        }
+
+        if (type !== 'TRANSLATE_PAGE') return;
+        void (async () => {
+          const settings = await loadSettings();
+          await togglePageTranslation(document, pageDeps(settings));
+        })();
+      },
+    );
 
     // Translate without being asked, when the user has asked for that in
     // general. `translatePage` rather than the toggle: a page that arrives
