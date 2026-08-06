@@ -17,7 +17,7 @@
  * appear at every depth, and including them means translating a paragraph and
  * each of its three ancestors as well.
  */
-const BLOCK_SELECTOR =
+export const BLOCK_SELECTOR =
   'p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, figcaption, td, th, summary';
 
 /**

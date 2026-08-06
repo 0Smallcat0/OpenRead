@@ -36,6 +36,12 @@ const MARKUP = `
       <option value="dashed">dashed</option>
       <option value="highlight">highlight</option>
     </select>
+    <select id="hoverTranslate">
+      <option value="alt">alt</option>
+      <option value="ctrl">ctrl</option>
+      <option value="shift">shift</option>
+      <option value="off">off</option>
+    </select>
     <select id="translationScale">
       <option value="small">small</option>
       <option value="same">same</option>
