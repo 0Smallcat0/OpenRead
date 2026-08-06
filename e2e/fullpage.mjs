@@ -22,6 +22,7 @@
  *      page that is already translated without translating it again
  *  10. holding a key and pointing at a paragraph translates that paragraph
  *  11. a text box is translated in place, and Ctrl+Z still takes it back
+ *  12. a PDF is translated page by page in the bundled viewer, and undone
  *
  * The last two cannot be tested anywhere else. jsdom lays nothing out, so every
  * block sits at 0,0 and "near the viewport" is true of all of them, and it has
@@ -733,6 +734,76 @@ try {
     undone === beforeInput,
     'Ctrl+Z did not take the translation back, so the undo stack was wiped',
   );
+
+
+  // ---- the bundled PDF viewer ----
+  //
+  // The viewer's own sample paper: two columns, fourteen pages, and a text
+  // layer the viewer only builds for the pages it has drawn.
+  console.log('\n--- the bundled PDF viewer ---');
+  const pdf = await browser.newPage();
+  await pdf.setViewport({ width: 1200, height: 900 });
+  const sample = `chrome-extension://${id}/pdfjs/web/compressed.tracemonkey-pldi-09.pdf`;
+  await pdf.goto(
+    `chrome-extension://${id}/pdfjs/web/viewer.html?file=${encodeURIComponent(sample)}`,
+    { waitUntil: 'domcontentloaded' },
+  );
+  await pdf.bringToFront();
+  await sleep(7000);
+
+  const askPdf = () =>
+    worker.evaluate(async () => {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id !== undefined)
+        await chrome.tabs.sendMessage(tab.id, { type: 'TRANSLATE_PAGE' });
+    });
+
+  const pdfState = () =>
+    pdf.evaluate(() => {
+      const blocks = Array.from(document.querySelectorAll('.oit-pdf-translation'));
+      return {
+        pages: blocks.length,
+        paragraphs: blocks.reduce((n, b) => n + b.children.length, 0),
+        badge: document.getElementById('oit-page-progress')?.textContent ?? '',
+        sample: (blocks[0]?.textContent ?? '').slice(0, 40),
+        // Placed after the page, not inside it — which is the whole design.
+        placedAfterPage: blocks.every(
+          (b) => b.previousElementSibling?.classList.contains('page') === true,
+        ),
+      };
+    });
+
+  await askPdf();
+  let pdfDone = await pdfState();
+  for (let waited = 0; waited < 120000; waited += 2000) {
+    await sleep(2000);
+    pdfDone = await pdfState();
+    if (pdfDone.badge.startsWith('Done') || pdfDone.badge.startsWith('Nothing')) break;
+  }
+  console.log(`  translated: ${JSON.stringify(pdfDone)}`);
+
+  check(pdfDone.pages > 0, 'the PDF viewer translated no pages');
+  check(
+    pdfDone.paragraphs > 5,
+    `only ${String(pdfDone.paragraphs)} paragraphs came out of a two-column paper`,
+  );
+  check(
+    pdfDone.placedAfterPage,
+    'a translation landed somewhere other than after its page',
+  );
+  check(
+    /[一-鿿]/.test(pdfDone.sample),
+    `what came back is not in the target language (${pdfDone.sample})`,
+  );
+
+  // The same control, the same second meaning it has everywhere else.
+  await askPdf();
+  await sleep(2000);
+  const pdfCleared = await pdfState();
+  console.log(`  after undo: ${JSON.stringify({ pages: pdfCleared.pages })}`);
+  check(pdfCleared.pages === 0, 'pressing again did not put the document back');
+  await pdf.close();
+  await page.bringToFront();
 
 } catch (error) {
   failures.push(error?.message ?? String(error));

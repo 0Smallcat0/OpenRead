@@ -1,5 +1,7 @@
 import { mountSelectionTranslator } from '../ui/selection';
-import { showPageNotice } from '../ui/fullpage';
+import { togglePdfTranslation } from '../ui/pdf-translate';
+import { translateViaPort } from '../ui/port-translate';
+import { shouldBypassAI } from '../core/language';
 import { loadSettings } from '../settings';
 
 /**
@@ -9,12 +11,15 @@ import { loadSettings } from '../settings';
  * verbatim — collapsing v1's pdf-integration.js (a ~90% copy of content.js)
  * into a one-line reuse of the shared `ui/selection.ts` module.
  *
- * Whole-page translation deliberately does not work here, and says so. A PDF
- * text layer is absolutely-positioned spans laid over the rendered page, one
- * per line; appending a translation under each would land it on top of the
- * next line and destroy the document. The context menu still offers the action
- * on this page, as it does everywhere, so the honest response is a refusal
- * rather than a click that appears to do nothing.
+ * Whole-document translation works here too, and the constraint that used to
+ * rule it out is the reason it looks the way it does. A PDF text layer is
+ * absolutely-positioned spans laid over the rendered page, so a translation
+ * appended under a line lands on the next one. But the pages are ordinary
+ * block elements stacked in `#viewer`, so a translation placed *after a page*
+ * costs nothing — and reads in order: the page as the author laid it out, then
+ * that page in the reader's language. Which is also how a paper is read.
+ * Nobody wants a two-column PDF reflowed into one; they want to see the figure
+ * and read the argument. See `ui/pdf-translate.ts`.
  */
 /**
  * Make the text layer as easy to grab as a paragraph is.
@@ -155,9 +160,22 @@ export default defineUnlistedScript(() => {
     if ((message as { type?: string } | null)?.type !== 'TRANSLATE_PAGE') {
       return;
     }
-    showPageNotice(
-      document,
-      'Whole-page translation is not available in the PDF viewer — select text to translate it.',
-    );
+    void (async () => {
+      const settings = await loadSettings();
+      await togglePdfTranslation(document, {
+        targetLang: settings.targetLang,
+        translate: (text, signal) =>
+          translateViaPort({
+            text,
+            targetLang: settings.targetLang,
+            model: settings.modelId,
+            signal,
+            // The viewer page is the extension's own document and says it is in
+            // English; the paper inside it is whatever the author wrote.
+            fromPageLanguage: false,
+          }),
+        shouldSkipText: (text) => shouldBypassAI(text, settings.targetLang),
+      });
+    })();
   });
 });
