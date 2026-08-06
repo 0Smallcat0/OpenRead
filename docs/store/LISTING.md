@@ -1,18 +1,24 @@
 # Chrome Web Store listing copy
 
-Paste-ready copy for the store listing. Two languages are provided; pick one as
-the listing language (zh-TW recommended for the primary audience) and add the
-other via the dashboard's localized-listing option if desired.
+Paste-ready copy for the store listing, current as of **2.11.0**. Two languages
+are provided; pick one as the listing language (zh-TW recommended for the
+primary audience) and add the other via the dashboard's localized-listing
+option if desired.
+
+> Rewritten for 2.11.0. The previous copy described an Ollama-only product and
+> told the reader to set `OLLAMA_ORIGINS` before starting the server — a step
+> 2.5.0 removed, and a requirement 2.7.0 removed, since the default engine is
+> Chrome's own on-device translator and needs nothing installed.
 
 ## Name (≤ 45 chars)
 
-- **zh-TW:** `OpenRead — 本地 LLM 網頁/PDF 翻譯（Ollama）`
-- **EN:** `OpenRead — Local LLM Web & PDF Translator`
+- **zh-TW:** `OpenRead — 網頁/PDF 雙語翻譯，全在本機`
+- **EN:** `OpenRead — Private Web & PDF Translation`
 
 ## Short description (≤ 132 chars)
 
-- **zh-TW:** `用你自己的本地 LLM（Ollama）翻譯整頁網頁與 PDF——雙語對照、完全本機、免帳號免金鑰、零追蹤。`
-- **EN:** `Translate whole pages and PDFs with your own local LLM via Ollama — bilingual, private, no account, no cloud, no tracking.`
+- **zh-TW:** `整頁雙語翻譯網頁與 PDF，譯文附在原文下方。全程在你的電腦上完成，免帳號、免金鑰、零追蹤，裝好就能用。`
+- **EN:** `Bilingual whole-page translation for web pages and PDFs, entirely on your own machine. No account, no API key, no setup.`
 
 ## Detailed description
 
@@ -20,30 +26,33 @@ other via the dashboard's localized-listing option if desired.
 
 ```
 按一下「翻譯整頁」，每一段的譯文就出現在原文下方——雙語對照，全部在你自己的
-電腦上完成。也可以只選取一句，翻譯直接串流顯示在原地。
+電腦上完成。也可以只選取一句，翻譯直接顯示在原地。
 
-OpenRead 透過本地 Ollama 伺服器推論，不需要 API 金鑰、不需要帳號、沒有雲端、
-沒有任何遙測。你讀的內容只會送到你自己設定的 Ollama 位址（預設
-http://localhost:11434），不會離開你的機器。適合不能上傳雲端的文件：未發表的
-論文、合約、內部資料。
+裝好就能用。預設使用 Chrome 內建的裝置端翻譯模型，不需要安裝伺服器、不需要
+API 金鑰、不需要帳號。第一次翻某個語言對時，Chrome 會下載該語言包（一兩分鐘，
+有進度顯示），之後一整頁大約兩秒。
+
+沒有雲端，沒有遙測。你讀的內容不會離開你的機器，也不會傳給開發者或任何第三方。
+適合不能上傳雲端的文件：未發表的論文、合約、內部資料。
 
 特色
 • 整頁雙語翻譯：譯文附在原文下方而非取代原文，看起來怪的句子可以立刻對照原文
-• 網頁與 PDF 通用：內建 PDF.js 檢視器，.pdf 連結自動導入
-• 串流輸出 + 可靠性層：以離線評測驅動的清理管線，實測將模型前言、原文回聲、
-  簡體字洩漏從 34.8%/17.4%/42.9% 全部降到 0%（數據與方法見 GitHub）
-• 台灣用語在地化：OpenCC s2twp 詞組級簡繁轉換（界面→介面、公里不會變公裡）
-• 同語言短路：內容已是目標語言時直接跳過模型，零延遲零成本
-• 設定面板會實測連線：Ollama 沒開或沒授權時，直接給出可複製的修正指令
+• 網頁與 PDF 通用：內建 PDF.js 檢視器，.pdf 連結自動導入，選字翻譯用法完全相同
+• 台灣用語在地化：OpenCC s2twp 詞組級簡繁轉換（界面→介面、公里不會變公裡），
+  另有一層針對內建引擎的台灣詞彙修正（用戶→使用者、運行→執行）
+• 同語言短路：內容已是目標語言時直接跳過翻譯，零延遲零成本
 • 一鍵存到 Obsidian：翻譯結果連同原文與 YAML frontmatter 寫成筆記
-• 預設模型 qwen3 —— 由 4 模型 × 27 題的實測基準選出（chrF、TTFT 皆公開）
+• 想要更強的可以換引擎：接本機 Ollama 用大型語言模型翻譯，它會參考頁面上下文、
+  可以自己選模型，並且解鎖擷取筆記的自動摘要與標籤
+• 鍵盤可用：Ctrl+Shift+Y 翻譯選取範圍，Esc 關閉面板，面板本身是有標記的對話框
 
 需求
-• 安裝 Ollama（0.9 以上）並拉取一個模型，例如：ollama pull qwen3
-• 啟動前設定環境變數 OLLAMA_ORIGINS=chrome-extension://*
+• Chrome 138 以上（內建翻譯模型由 Chrome 提供）
+• 選用 Ollama 引擎時才需要：安裝 Ollama（0.9 以上）並拉取一個模型，
+  例如 ollama pull qwen3。不需要設定任何環境變數。
 
 開源（MIT）：https://github.com/0Smallcat0/OpenRead
-完整基準與評測方法：https://github.com/0Smallcat0/OpenRead/blob/main/docs/BENCHMARK.md
+工程細節與評測方法：https://github.com/0Smallcat0/OpenRead/blob/main/docs/ENGINEERING.md
 ```
 
 ### EN
@@ -51,37 +60,43 @@ http://localhost:11434），不會離開你的機器。適合不能上傳雲端�
 ```
 Click "Translate this page" and every paragraph's translation appears
 underneath the original — bilingual, entirely on your own machine. Or select
-a single sentence and watch the translation stream in place.
+a single sentence and read the translation in place.
 
-OpenRead runs inference through a local Ollama server. No API key, no
-account, no cloud, no telemetry. What you read is sent only to the Ollama
-URL you configure (default http://localhost:11434) and never leaves your
-device — which makes it usable on the documents a cloud translator is not:
-unpublished drafts, contracts, internal material.
+It works the moment you install it. The default engine is Chrome's own
+on-device translation model: no server to install, no API key, no account.
+The first time you use a language pair Chrome downloads that language pack
+(a minute or two, with a progress indicator); after that a whole page takes
+about two seconds.
+
+No cloud, no telemetry. What you read does not leave your machine and is
+never sent to the developer or any third party — which makes this usable on
+the documents a cloud translator is not: unpublished drafts, contracts,
+internal material.
 
 Features
 • Whole-page bilingual translation — the translation is appended under the
   original, never over it, so a sentence that looks wrong can be checked
-• Works on web pages and PDFs — .pdf navigations open in a bundled PDF.js
+• Web pages and PDFs alike — .pdf navigations open in a bundled PDF.js
   viewer with the same select-to-translate UI
-• Streaming output with an eval-backed reliability layer: measured to cut
-  model preamble / input echo / Simplified-character leakage from
-  34.8% / 17.4% / 42.9% to 0% on a curated fixture set (data on GitHub)
-• Taiwan-convention localization via OpenCC s2twp phrase-level conversion
-• Same-language short-circuit: content already in the target language skips
-  the model entirely
-• The settings panel tests the connection — when Ollama is not running or
-  has not allowed the extension, it says so and hands you the fix to copy
+• Taiwan-convention Chinese — OpenCC s2twp phrase-level conversion, plus a
+  vocabulary pass that fixes the mainland word choices Chrome's zh-Hant
+  output uses (用戶 -> 使用者, 運行 -> 執行)
+• Same-language short-circuit: content already in the target language is
+  skipped entirely
 • One-tap capture to Obsidian: original + translation + YAML frontmatter
-• Default model qwen3 — chosen by a live 4-model × 27-fixture benchmark
-  (chrF and TTFT published)
+• A stronger engine when you want one: point it at a local Ollama server to
+  translate with an LLM that reads the surrounding page, choose your own
+  model, and unlock automatic titles, summaries and tags on captures
+• Keyboard-workable: Ctrl+Shift+Y translates the selection, Escape closes
+  the panel, and the panel is a labelled dialog with a live region
 
 Requirements
-• Install Ollama (≥ 0.9) and pull a model, e.g. `ollama pull qwen3`
-• Set OLLAMA_ORIGINS=chrome-extension://* before starting Ollama
+• Chrome 138 or later (the built-in translation model ships with Chrome)
+• Only if you switch to the Ollama engine: Ollama 0.9+ with a model pulled,
+  e.g. `ollama pull qwen3`. No environment variables to set.
 
 Open source (MIT): https://github.com/0Smallcat0/OpenRead
-Benchmark & methodology: https://github.com/0Smallcat0/OpenRead/blob/main/docs/BENCHMARK.md
+Engineering & evaluation: https://github.com/0Smallcat0/OpenRead/blob/main/docs/ENGINEERING.md
 ```
 
 ## Category & language
@@ -92,38 +107,57 @@ Benchmark & methodology: https://github.com/0Smallcat0/OpenRead/blob/main/docs/B
 ## Graphics
 
 - Icon: taken from the package (`icon/128.png`) automatically.
-- Screenshots (1280×800, in [`screenshots/`](screenshots/)):
-  1. `screenshot-1-translate-web.png` — streamed translation + capture button on Wikipedia
-  2. `screenshot-2-select-icon.png` — selection + floating icon
-  3. `screenshot-3-pdf.png` — same UI inside the bundled PDF.js viewer
-  4. `screenshot-4-popup.png` — settings popup
+- Screenshots (1280×800, in [`screenshots/`](screenshots/)), re-shot against
+  2.11.0 on the default built-in engine:
+  1. `screenshot-1-translate-web.png` — whole-page bilingual translation on a
+     Wikipedia article, with the progress badge showing the finished count.
+     This is the one that appears in search results, so it leads with the
+     headline feature.
+  2. `screenshot-2-select-icon.png` — one paragraph selected, the translation
+     panel, and its Save-to-Obsidian and Copy actions.
+  3. `screenshot-3-pdf.png` — the same selection UI inside the bundled PDF.js
+     viewer, on a paper.
+  4. `screenshot-4-popup.png` — the settings popup, showing the built-in
+     engine selected and no server fields to fill in.
 
-  **Stale as of 2.4.0** — all four predate whole-page translation and the
-  popup's connection check, and the store's first screenshot is the one a
-  browser shows in search results. Re-shoot before submitting, leading with a
-  bilingual whole-page capture. Keep them honest: real runs against a live
-  local model, no mock-ups.
+  All four are real end-to-end captures of the built extension running in
+  Chrome — no mock-ups. Only the popup shot is staged, and only in placement:
+  the popup document is ~350 px wide, so it is centred in the 1280×800 frame
+  rather than stranded in a corner. If they are re-shot, keep them honest.
 
 - Promo tile (440×280): optional; not provided.
 
 ## Privacy tab answers
 
 - **Single purpose:** Translate web page and PDF content — a user selection or
-  the whole page — using the user's own local LLM server (Ollama), with
-  optional saving of the result as a note.
+  the whole page — on the user's own machine, using Chrome's built-in
+  on-device translator or a local LLM server the user runs, with optional
+  saving of the result as a note.
 - **Permission justifications:**
-  - `storage` — persist user settings (Ollama server URL, model, target
-    language, Obsidian vault/folder, enrichment toggle).
+  - `storage` — persist user settings (engine, Ollama server URL, model,
+    target language, Obsidian vault/folder, enrichment toggle).
   - `activeTab` — interact with the currently active tab when the user invokes
     the selection UI, asks for a whole-page translation, or opens a local PDF
     in the bundled viewer.
-  - Host permission `<all_urls>` — the selection-translate UI must work on any
-    site the user reads, and `.pdf` navigations on any host are routed into the
-    bundled PDF.js viewer. Page content is read only when the user selects text
-    and clicks the translate icon, or explicitly asks for the whole page.
-- **Remote code:** No. All code is packaged; the only network traffic is to the
-  user-configured Ollama server.
+  - `contextMenus` — add the two right-click entries the features are invoked
+    from ("Translate selection with OpenRead", "Translate this page with
+    OpenRead"). It reads no page content.
+  - `declarativeNetRequest` — strip the `Origin` header from this extension's
+    own requests to the user-configured Ollama server. Ollama rejects requests
+    whose origin it does not recognise, and an extension's origin is never on
+    its list, so without this every install began with an environment variable
+    and a server restart. One session rule, scoped to requests with no owning
+    tab (`tabIds: [-1]`) and to that server's URL, so requests originating from
+    web pages never match it. Declarative only: no traffic is observed.
+  - Host permission `<all_urls>` — the selection- and page-translate UI must
+    work on any site the user reads, and `.pdf` navigations on any host are
+    routed into the bundled PDF.js viewer. Page content is read only when the
+    user selects text and invokes a translation, or explicitly asks for the
+    whole page.
+- **Remote code:** No. All code is packaged. On the default engine the
+  extension makes no network requests at all; on the Ollama engine, only to the
+  user-configured server.
 - **Data usage:** Does **not** collect or transmit any user data to the
-  developer or third parties. Selected text is processed by the user's own
-  Ollama server. Check "No, I do not collect user data"; certify compliance.
+  developer or third parties. Check "No, I do not collect user data"; certify
+  compliance.
 - **Privacy policy URL:** `https://github.com/0Smallcat0/OpenRead/blob/main/PRIVACY.md`

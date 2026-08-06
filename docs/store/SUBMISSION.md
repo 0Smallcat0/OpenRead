@@ -1,14 +1,11 @@
 # Chrome Web Store submission guide
 
 > **Everything in this guide is ready except the parts only you can do.** The
-> package builds, the listing copy is written and current as of 2.4.0, and the
-> privacy answers are drafted. What remains is a one-time **$5 developer
-> registration**, paid with your own card, and the upload from your own
-> account — account creation and payment are yours to perform, not something
-> to hand to a tool. Budget about 20 minutes plus review time.
->
-> One asset is genuinely outstanding: the four listing screenshots predate
-> whole-page translation. See the note in [`LISTING.md`](LISTING.md#graphics).
+> package builds, the listing copy and the four screenshots are current as of
+> 2.11.0, and the privacy answers are drafted. What remains is a one-time **$5
+> developer registration**, paid with your own card, and the upload from your
+> own account — account creation and payment are yours to perform, not
+> something to hand to a tool. Budget about 20 minutes plus review time.
 
 Everything below is prepared in this repo; the only steps that need a human are
 the developer account and the final clicks.
@@ -62,8 +59,10 @@ tab address exactly that. Typical turnaround is a few days.
   by hand — WXT excludes source maps and sets the layout the store expects.
 - Don't change the manifest permissions between review cycles unless necessary;
   every permission change re-triggers in-depth review.
-- The listing screenshots are real end-to-end captures (live Ollama + qwen3);
-  if they are re-shot, keep them honest — no mock-ups.
-- The listing screenshots are the store's shop window — the first one appears
-  in search results. As of 2.4.0 all four are stale (they predate whole-page
-  translation), so a re-shoot is part of submitting, not a nicety.
+- The listing screenshots are real end-to-end captures of the built extension
+  running in Chrome; if they are re-shot, keep them honest — no mock-ups.
+- The first screenshot is what appears in search results, so it leads with
+  whole-page bilingual translation rather than the settings popup.
+- Re-shoot them whenever the UI changes. The set before 2.11.0 showed an
+  Ollama-only product and no whole-page translation, which by then described
+  something the extension no longer was.
