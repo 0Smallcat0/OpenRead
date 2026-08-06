@@ -57,8 +57,10 @@ seconds.
 ## Use it
 
 - **Whole page** — right-click → **Translate this page with OpenRead**, or the
-  button in the popup. A badge counts progress and offers Stop. Do it again to
-  put the page back.
+  button in the popup. What you can see is translated first, and the page keeps
+  up on its own as you scroll and as it loads more, so an article or a feed
+  needs one press rather than one per screen. A badge counts progress and
+  offers Stop. Do it again to put the page back.
 - **One selection** — select text, click the floating **文**, or press
   **`Ctrl+Shift+Y`**. Escape closes the panel.
 - **PDFs** — open any `.pdf` and it lands in the bundled viewer. For a PDF

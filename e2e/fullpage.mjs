@@ -16,20 +16,26 @@
  *   4. the original text survives (bilingual, not replacement)
  *   5. short chrome is skipped rather than burning a round trip
  *   6. toggling again restores the page byte for byte
+ *   7. a long page translates what the reader can see, not all of it
+ *   8. scrolling and later-loading content are picked up with no second press
  *
- * Requires a local Ollama with the model pulled, and a Chrome on disk. Not in
- * CI: GitHub's runners have no GPU and no model, and a translation harness that
- * stubs the model is measuring the stub.
+ * The last two cannot be tested anywhere else. jsdom lays nothing out, so every
+ * block sits at 0,0 and "near the viewport" is true of all of them, and it has
+ * no IntersectionObserver at all.
+ *
+ * Requires a Chrome on disk, and a local Ollama with the model pulled if
+ * `OPENREAD_ENGINE=ollama`. Not in CI: GitHub's runners have no GPU and no
+ * model, and a translation harness that stubs the model is measuring the stub.
  *
  *   pnpm build
- *   OLLAMA_ORIGINS='chrome-extension://*' ollama serve
  *   pnpm e2e:page
  *
- * Environment overrides: OPENREAD_CHROME, OPENREAD_MODEL, OPENREAD_URL.
+ * Environment overrides: OPENREAD_CHROME, OPENREAD_MODEL, OPENREAD_URL,
+ * OPENREAD_ENGINE, OPENREAD_PROFILE.
  */
 import puppeteer from 'puppeteer-core';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,6 +44,7 @@ const CHROME =
   process.env.OPENREAD_CHROME ??
   'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const MODEL = process.env.OPENREAD_MODEL ?? 'qwen3:latest';
+const ENGINE = process.env.OPENREAD_ENGINE ?? 'builtin';
 const TARGET = process.env.OPENREAD_URL ?? 'https://example.com/';
 const PORT = 9333;
 
@@ -68,7 +75,20 @@ if (!existsSync(EXTENSION)) {
   process.exit(1);
 }
 
-const profile = mkdtempSync(join(tmpdir(), 'openread-e2e-'));
+/**
+ * A throwaway profile by default, so a run cannot pass on state a previous one
+ * left behind.
+ *
+ * The cost is that Chrome's translation language pack reports "downloadable"
+ * in a profile that has never seen it, and registering it again takes 30-130 s
+ * at the front of every run — which is also how a once-ever setup cost got
+ * mistaken for a per-use one and sent a whole performance investigation down
+ * the wrong road. `OPENREAD_PROFILE` reuses a directory when iterating, and is
+ * closer to what a real user has.
+ */
+const profile =
+  process.env.OPENREAD_PROFILE ?? mkdtempSync(join(tmpdir(), 'openread-e2e-'));
+mkdirSync(profile, { recursive: true });
 const chrome = spawn(
   CHROME,
   [
@@ -111,13 +131,15 @@ try {
   const worker = await workerTarget.worker();
 
   await worker.evaluate(
-    async (model) =>
+    async (model, engine) =>
       chrome.storage.sync.set({
+        engine,
         baseUrl: 'http://localhost:11434',
         modelId: model,
         targetLang: 'Traditional Chinese',
       }),
     MODEL,
+    ENGINE,
   );
 
   const page = await browser.newPage();
@@ -204,6 +226,110 @@ try {
     after.text.trim() === before.trim(),
     'undo did not restore the original page text',
   );
+
+  // ---- a page longer than a screen ----
+  //
+  // Built in place rather than fetched, so the assertions below are about the
+  // extension rather than about whatever Wikipedia shipped this week. The tab
+  // keeps its origin and its already-injected content script.
+  const TALL_BLOCKS = 60;
+  await page.evaluate((count) => {
+    const main = document.createElement('main');
+    for (let i = 0; i < count; i++) {
+      const p = document.createElement('p');
+      p.id = `tall-${String(i)}`;
+      p.style.minHeight = '200px';
+      p.textContent = `Paragraph number ${String(i)} of a long article, written out at enough length to be worth translating.`;
+      main.appendChild(p);
+    }
+    document.body.replaceChildren(main);
+    window.scrollTo(0, 0);
+  }, TALL_BLOCKS);
+  await sleep(600);
+
+  console.log(`\nmessage: ${await translatePage()}`);
+
+  /**
+   * Poll until the page shows a specific change, or give up loudly.
+   *
+   * Deliberately not "wait until the count stops moving": that version passed
+   * and failed on the same code depending on whether a batch happened to land
+   * inside its window, which is worse than either verdict on its own.
+   */
+  const waitUntil = async (label, wanted, timeoutMs = 30000) => {
+    const read = () =>
+      page.evaluate(() => ({
+        total: document.querySelectorAll('.oit-bilingual').length,
+        first: Boolean(document.querySelector('#tall-0 .oit-bilingual')),
+        last: Boolean(document.querySelector('#tall-59 .oit-bilingual')),
+        badge:
+          document.getElementById('oit-page-progress')?.textContent ?? null,
+      }));
+    let state = await read();
+    for (let waited = 0; waited < timeoutMs && !wanted(state); waited += 500) {
+      await sleep(500);
+      state = await read();
+    }
+    console.log(
+      `  ${label}: ${state.total}/${TALL_BLOCKS} translated` +
+        `  (first ${state.first ? 'yes' : 'no'}, last ${state.last ? 'yes' : 'no'})`,
+    );
+    return state;
+  };
+
+  console.log('\n--- a page longer than a screen ---');
+  // Settled, not merely started: the badge stops saying "Translating" only when
+  // this batch has drained, and the whole claim is about what it left alone.
+  const visible = await waitUntil(
+    'after the press',
+    (s) => s.total > 0 && !s.badge?.startsWith('Translating'),
+  );
+
+  check(visible.total > 0, 'a long page translated nothing at all');
+  check(
+    visible.total < TALL_BLOCKS,
+    `all ${String(TALL_BLOCKS)} blocks were translated — the reader can see about six, and the rest is their battery`,
+  );
+  check(visible.first, 'the block at the top of the page was not translated');
+  check(
+    !visible.last,
+    'the block at the very bottom was translated before the reader got near it',
+  );
+
+  // Scrolling is the whole point: no second press, no keyboard shortcut.
+  await page.evaluate(() => {
+    window.scrollTo(0, document.body.scrollHeight);
+  });
+  const scrolled = await waitUntil(
+    'after scrolling to the bottom',
+    (s) => s.last && s.total > visible.total,
+  );
+
+  check(
+    scrolled.total > visible.total,
+    'scrolling to the bottom translated nothing new',
+  );
+  check(scrolled.last, 'the block scrolled to was still not translated');
+
+  // And content that arrives after the fact, which is most of an infinite feed.
+  await page.evaluate(() => {
+    const fresh = document.createElement('p');
+    fresh.id = 'appended';
+    fresh.textContent =
+      'A paragraph the feed appended long after the first pass, which nobody pressed anything for.';
+    document.querySelector('main')?.appendChild(fresh);
+    fresh.scrollIntoView();
+  });
+  let appended = false;
+  for (let waited = 0; waited < 30000 && !appended; waited += 500) {
+    await sleep(500);
+    appended = await page.evaluate(() =>
+      Boolean(document.querySelector('#appended .oit-bilingual')),
+    );
+  }
+  console.log(`  appended paragraph translated: ${appended ? 'yes' : 'no'}`);
+  check(appended, 'content added after the run was never translated');
+
 } catch (error) {
   failures.push(error?.message ?? String(error));
 } finally {

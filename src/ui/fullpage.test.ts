@@ -698,3 +698,340 @@ describe('a run that is going nowhere', () => {
     expect(translations().every((t) => t.startsWith('[zh]'))).toBe(true);
   });
 });
+
+/**
+ * The properties that make a page stay translated rather than be translated
+ * once. jsdom has no IntersectionObserver and lays nothing out, so both are
+ * supplied here: the fake below records what was handed to it and lets a test
+ * say "the reader has now scrolled to this", and `place` gives an element the
+ * rectangle jsdom will not compute.
+ */
+class FakeIntersectionObserver {
+  static live: FakeIntersectionObserver[] = [];
+  readonly observed = new Set<Element>();
+  constructor(
+    private readonly notify: IntersectionObserverCallback,
+    readonly options?: IntersectionObserverInit,
+  ) {
+    FakeIntersectionObserver.live.push(this);
+  }
+  observe(element: Element): void {
+    this.observed.add(element);
+  }
+  unobserve(element: Element): void {
+    this.observed.delete(element);
+  }
+  disconnect(): void {
+    this.observed.clear();
+  }
+  /** The reader has scrolled these into range. */
+  arrive(...elements: Element[]): void {
+    this.notify(
+      elements.map((target) => ({
+        target,
+        isIntersecting: true,
+      })) as IntersectionObserverEntry[],
+      this as unknown as IntersectionObserver,
+    );
+  }
+}
+
+/** Put an element at `top` in viewport coordinates. jsdom reports zeros. */
+function place(element: HTMLElement, top: number): void {
+  element.getBoundingClientRect = () =>
+    ({
+      top,
+      bottom: top + 20,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 20,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    }) as DOMRect;
+}
+
+describe('keeping a page translated', () => {
+  /** The observer the code under test built, if it built one. */
+  const observer = (): FakeIntersectionObserver => {
+    const last = FakeIntersectionObserver.live.at(-1);
+    if (!last) throw new Error('nothing observed the viewport');
+    return last;
+  };
+
+  /** Let the debounce, the follow-up run and their microtasks all settle. */
+  const settle = async (ms = 1200): Promise<void> => {
+    await vi.advanceTimersByTimeAsync(ms);
+  };
+
+  const spy = (
+    seen: string[],
+  ): Pick<PageTranslateDeps, 'translate'>['translate'] => {
+    return (text: string) => {
+      seen.push(text);
+      return Promise.resolve(`[zh] ${text}`);
+    };
+  };
+
+  beforeEach(() => {
+    FakeIntersectionObserver.live = [];
+    (
+      window as unknown as { IntersectionObserver: unknown }
+    ).IntersectionObserver = FakeIntersectionObserver;
+  });
+
+  afterEach(() => {
+    delete (window as unknown as { IntersectionObserver?: unknown })
+      .IntersectionObserver;
+  });
+
+  it('translates what the reader can see and defers the rest', async () => {
+    // The measurement this exists for: the English Wikipedia article on
+    // artificial intelligence offers 308 blocks and shows about five. The other
+    // 303 are the reader's battery spent on text they may never scroll to.
+    document.body.innerHTML = `
+      <p id="near">A paragraph the reader can see right now.</p>
+      <p id="far">A paragraph a long way down the page.</p>
+    `;
+    const far = document.getElementById('far');
+    if (far) place(far, 5000);
+
+    const seen: string[] = [];
+    const result = await translatePage(
+      document,
+      deps({ translate: spy(seen) }),
+    );
+
+    expect(result.translated).toBe(1);
+    expect(seen).toEqual(['A paragraph the reader can see right now.']);
+    // Not dropped — handed to the observer, to be translated on arrival.
+    expect(far && observer().observed.has(far)).toBe(true);
+  });
+
+  it('translates a deferred block when the reader scrolls to it', async () => {
+    document.body.innerHTML = `
+      <p id="near">A paragraph the reader can see right now.</p>
+      <p id="far">A paragraph a long way down the page.</p>
+    `;
+    const far = document.getElementById('far');
+    if (far) place(far, 5000);
+
+    const seen: string[] = [];
+    await translatePage(document, deps({ translate: spy(seen) }));
+    if (far) observer().arrive(far);
+    await settle();
+
+    expect(seen).toContain('A paragraph a long way down the page.');
+    expect(far?.querySelector(`.${BILINGUAL_CLASS}`)?.textContent).toBe(
+      '[zh] A paragraph a long way down the page.',
+    );
+    // And it is not offered a second time on the next scroll past it.
+    expect(far && observer().observed.has(far)).toBe(false);
+  });
+
+  it('translates content the page adds later, without another press', async () => {
+    // An infinite feed, a comment thread expanding, an SPA swapping a route.
+    // Every one of those used to need a keypress per screen.
+    const seen: string[] = [];
+    await translatePage(document, deps({ translate: spy(seen) }));
+    expect(seen).toHaveLength(3);
+
+    const fresh = document.createElement('p');
+    fresh.textContent = 'A paragraph the feed appended after the first pass.';
+    document.body.appendChild(fresh);
+    await settle();
+
+    expect(fresh.querySelector(`.${BILINGUAL_CLASS}`)?.textContent).toBe(
+      '[zh] A paragraph the feed appended after the first pass.',
+    );
+  });
+
+  it('stays quiet once a page is done', async () => {
+    // Every translation is itself a mutation. Answering our own insertions
+    // would run the collector once per block and re-badge a finished page.
+    const seen: string[] = [];
+    await translatePage(document, deps({ translate: spy(seen) }));
+    document.getElementById(PROGRESS_ID)?.remove();
+    await settle();
+
+    expect(seen).toHaveLength(3);
+    expect(document.getElementById(PROGRESS_ID)).toBeNull();
+  });
+
+  it('stops watching when the translation is cleared', async () => {
+    // Undo has to mean undo. Observers that survived it would read the removals
+    // as the page changing and put the translation straight back.
+    const seen: string[] = [];
+    await translatePage(document, deps({ translate: spy(seen) }));
+    clearPageTranslation(document);
+
+    const fresh = document.createElement('p');
+    fresh.textContent = 'A paragraph that arrived after the undo.';
+    document.body.appendChild(fresh);
+    await settle();
+
+    expect(seen).toHaveLength(3);
+    expect(translations()).toEqual([]);
+  });
+
+  it('stops watching when the user presses Stop', async () => {
+    let started = 0;
+    const run = translatePage(
+      document,
+      deps({
+        translate: (text, signal) =>
+          new Promise<string>((resolve, reject) => {
+            started++;
+            if (started === 1) {
+              resolve(`[zh] ${text}`);
+              return;
+            }
+            signal.addEventListener('abort', () => {
+              reject(new Error('aborted'));
+            });
+          }),
+      }),
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    stopPageTranslation();
+    await run;
+
+    const fresh = document.createElement('p');
+    fresh.textContent = 'A paragraph that arrived after the stop.';
+    document.body.appendChild(fresh);
+    await settle();
+
+    expect(fresh.querySelector(`.${BILINGUAL_CLASS}`)).toBeNull();
+  });
+
+  it('stops watching after it gives up, rather than retrying every screen', async () => {
+    document.body.innerHTML = Array.from(
+      { length: 10 },
+      (_, i) =>
+        `<p>Paragraph number ${String(i)} of the article body here.</p>`,
+    ).join('');
+    let calls = 0;
+    await translatePage(
+      document,
+      deps({
+        translate: () => {
+          calls++;
+          return Promise.reject(new Error("Can't reach Ollama."));
+        },
+      }),
+    );
+    const gaveUpAfter = calls;
+
+    const fresh = document.createElement('p');
+    fresh.textContent = 'A paragraph that arrived after it gave up.';
+    document.body.appendChild(fresh);
+    await settle();
+
+    // Otherwise a broken engine is asked again once per screen scrolled, and
+    // each round leaves its own ⚠️ debris and its own badge.
+    expect(calls).toBe(gaveUpAfter);
+  });
+
+  it('does not queue a block twice when the page changes mid-run', async () => {
+    // A rescan that lands mid-run re-collects every block still waiting its
+    // turn, because a block that has not been reached yet is untranslated and
+    // looks exactly like new work. Found by following the badge's own label
+    // text back to a rescan it should never have caused.
+    document.body.innerHTML = Array.from(
+      { length: 5 },
+      (_, i) =>
+        `<p>Paragraph number ${String(i)} of the article body here.</p>`,
+    ).join('');
+
+    const seen: string[] = [];
+    let release: (() => void) | null = null;
+    const run = translatePage(
+      document,
+      deps({
+        translate: (text) => {
+          seen.push(text);
+          if (seen.length > 1) return Promise.resolve(`[zh] ${text}`);
+          // Held open, so the other four are still in the queue below.
+          return new Promise<string>((resolve) => {
+            release = () => {
+              resolve(`[zh] ${text}`);
+            };
+          });
+        },
+      }),
+    );
+    await Promise.resolve();
+
+    document.body.appendChild(document.createElement('hr'));
+    await vi.advanceTimersByTimeAsync(400);
+    (release as (() => void) | null)?.();
+    await run;
+
+    expect(seen).toHaveLength(5);
+    expect(new Set(seen).size).toBe(5);
+    expect(translations()).toHaveLength(5);
+  });
+
+  it('does not re-offer a block the engine handed back unchanged', async () => {
+    // Those are left unmarked on purpose, so a later press can retry them —
+    // which means every rescan collects them again. One page of proper nouns
+    // was one infinite loop.
+    const seen: string[] = [];
+    await translatePage(
+      document,
+      deps({
+        translate: (text) => {
+          seen.push(text);
+          return Promise.resolve(text);
+        },
+      }),
+    );
+    expect(seen).toHaveLength(3);
+    // Nothing inserted and nothing marked: the page is already in the target
+    // language as far as the engine is concerned.
+    expect(translations()).toEqual([]);
+
+    const fresh = document.createElement('p');
+    fresh.textContent = 'A paragraph that arrived after the first pass.';
+    document.body.appendChild(fresh);
+    await settle();
+
+    // The new paragraph, and only the new paragraph.
+    expect(seen).toHaveLength(4);
+    expect(seen.at(-1)).toBe('A paragraph that arrived after the first pass.');
+  });
+
+  it('skips a block that left the page before its turn came', async () => {
+    // An SPA route change, or a feed trimming what scrolled past. Translating
+    // it would attach text to a node nobody will ever see, and counting it as a
+    // failure would march ⚠️ down a page that is doing nothing wrong.
+    const seen: string[] = [];
+    let release: (() => void) | null = null;
+    const run = translatePage(
+      document,
+      deps({
+        translate: (text) => {
+          seen.push(text);
+          if (seen.length > 1) return Promise.resolve(`[zh] ${text}`);
+          // Hold the ramp-up block open, so the rest of the queue is still
+          // waiting when the page changes under it.
+          return new Promise<string>((resolve) => {
+            release = () => {
+              resolve(`[zh] ${text}`);
+            };
+          });
+        },
+      }),
+    );
+    await Promise.resolve();
+    document.getElementById('b')?.remove();
+    (release as (() => void) | null)?.();
+    const result = await run;
+
+    expect(seen).not.toContain('The second paragraph of the article body.');
+    expect(result.failed).toBe(0);
+    expect(result.translated).toBe(2);
+  });
+});

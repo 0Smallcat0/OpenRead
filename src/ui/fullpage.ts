@@ -7,20 +7,29 @@
  * instead of one, against a local server that is a single GPU rather than a
  * fleet, with the user watching.
  *
- * Three decisions shape everything here:
+ * Four decisions shape everything here:
  *
  * **Bilingual, not replacement.** The translation is appended under each
  * block, never over it. A local 8B model is good, not perfect; leaving the
  * original in place means a suspicious sentence can be checked, and a bad
  * translation degrades the page instead of destroying it.
  *
- * **Bounded concurrency, document order.** Ollama serves one model request at
+ * **Bounded concurrency, reading order.** Ollama serves one model request at
  * a time by default, so flooding it with fifty parallel requests only builds a
  * queue — and a queue in arrival order, which is not the order anyone reads
  * in. Two in flight keeps the server busy while the page fills from the top.
  *
  * **Every block is independent.** One failure marks one paragraph and the run
  * continues. A page is not all-or-nothing.
+ *
+ * **Translate a block when it becomes relevant, not when it is found.** The
+ * English Wikipedia article on artificial intelligence has 308 translatable
+ * blocks and shows about five of them; translating all 308 up front spends the
+ * reader's battery on text they will never scroll to, and still misses every
+ * word that loads afterwards — which on an infinite feed is most of the page.
+ * So the queue is live: it starts with what is near the viewport, an
+ * IntersectionObserver feeds it the rest as the reader arrives, and a
+ * MutationObserver feeds it whatever the page adds later.
  */
 import {
   collectBlocks,
@@ -40,10 +49,16 @@ export const PROGRESS_ID = 'oit-page-progress';
 const STYLE_ID = 'oit-page-style';
 
 /**
- * Two at a time. Ollama runs one generation per model by default, so the
- * second request is really a warm queue slot: it removes the gap between one
- * block finishing and the next arriving, without pretending the server is
- * parallel.
+ * Two at a time.
+ *
+ * Ollama runs one generation per model by default, so the second request is
+ * really a warm queue slot: it removes the gap between one block finishing and
+ * the next arriving, without pretending the server is parallel.
+ *
+ * Chrome's built-in translator does not want more either — measured across 1,
+ * 2, 4 and 8 in flight, total wall time varied by 3% while per-block latency
+ * doubled at each level, because the API serialises internally and the extra
+ * requests only queue. Two is right for both engines, for opposite reasons.
  */
 export const CONCURRENCY = 2;
 
@@ -57,6 +72,27 @@ export const CONCURRENCY = 2;
  * clear.
  */
 export const GIVE_UP_AFTER = 3;
+
+/**
+ * How far beyond the viewport counts as "about to be read", as a multiple of
+ * the window height, in both directions.
+ *
+ * One screen: far enough that scrolling at a normal pace meets finished text
+ * rather than a translation arriving under the eye, close enough that a long
+ * article still only translates a fraction of itself.
+ */
+export const VIEWPORT_MARGIN_SCREENS = 1;
+
+/**
+ * How long to wait after the page changes before looking for new blocks.
+ *
+ * A React render, a feed appending ten posts, or our own insertion each arrive
+ * as a burst of mutation records; collecting on every one of them would run the
+ * collector hundreds of times a second. Collecting is ~37 ms on a very large
+ * page, so the window has to be long enough to coalesce a burst and short
+ * enough that new text does not visibly sit untranslated.
+ */
+const RESCAN_DEBOUNCE_MS = 300;
 
 export interface PageTranslateDeps {
   /**
@@ -96,20 +132,98 @@ export interface PageResult {
   stopped: boolean;
 }
 
-let active: AbortController | null = null;
-
-export function isPageTranslationRunning(): boolean {
-  return active !== null;
+/**
+ * A batch being translated right now.
+ *
+ * Its `queue` is live: the observers below push into it while it drains, so a
+ * reader who scrolls during a run does not wait for the run to end before the
+ * text they just reached is picked up.
+ */
+interface Run {
+  controller: AbortController;
+  queue: HTMLElement[];
+  inFlight: number;
+  done: number;
 }
 
-/** Stop an in-flight run. Whatever landed already stays on the page. */
+/**
+ * What keeps a page translated after the first batch.
+ *
+ * Outlives a run on purpose — a run ends when its queue drains, and the whole
+ * point of this is that the queue fills again.
+ */
+interface Watch {
+  root: Document;
+  deps: PageTranslateDeps;
+  intersection: IntersectionObserver | null;
+  mutation: MutationObserver | null;
+  rescan: ReturnType<typeof setTimeout> | null;
+  /** Off-screen blocks handed to the IntersectionObserver, awaiting arrival. */
+  deferred: Set<HTMLElement>;
+  /**
+   * Blocks that have already been handed to a queue, so a rescan does not hand
+   * them over a second time.
+   *
+   * Two ways that goes wrong without it, both of them found in testing. A
+   * rescan that lands mid-run re-collects every block still waiting its turn —
+   * they are untranslated, because they have not been reached yet — and the
+   * page gets each of them twice. And a block the engine returns unchanged is
+   * deliberately left unmarked so a later run can retry it, which means every
+   * rescan forever collects it again: one page of proper nouns, one infinite
+   * loop.
+   *
+   * Weak, because the page owns these nodes and a feed that trims what
+   * scrolled past should be able to drop them.
+   */
+  claimed: WeakSet<HTMLElement>;
+  /** Became relevant while no run was active. */
+  pending: HTMLElement[];
+  /** Scheduled follow-up run, so a burst of arrivals starts one, not ten. */
+  soon: ReturnType<typeof setTimeout> | null;
+}
+
+let run: Run | null = null;
+let watch: Watch | null = null;
+
+/**
+ * True only while blocks are actually being translated.
+ *
+ * Deliberately not "is this page being watched": watching is the steady state
+ * of a translated page, and if it counted as running then the toolbar button
+ * would mean "stop" forever and never mean "undo".
+ */
+export function isPageTranslationRunning(): boolean {
+  return run !== null;
+}
+
+/**
+ * Stop translating, and stop watching for more.
+ *
+ * Whatever landed already stays on the page. Both halves matter: a user who
+ * presses Stop and then keeps scrolling has said no, and observers that
+ * survived would answer by translating the next screen.
+ */
 export function stopPageTranslation(): void {
-  active?.abort();
-  active = null;
+  run?.controller.abort();
+  run = null;
+  stopWatching();
+}
+
+function stopWatching(): void {
+  if (!watch) return;
+  watch.intersection?.disconnect();
+  watch.mutation?.disconnect();
+  if (watch.rescan !== null) clearTimeout(watch.rescan);
+  if (watch.soon !== null) clearTimeout(watch.soon);
+  watch = null;
 }
 
 /** Remove every inserted translation. Returns how many were removed. */
 export function clearPageTranslation(root: ParentNode): number {
+  // Clearing is the undo half of the toolbar button, so it has to take the
+  // watchers with it. Left running, they would read the removals as the page
+  // changing and translate it straight back.
+  stopPageTranslation();
   // Deep, because blocks can come from inside a web component and a
   // translation left behind there is one the toggle can never remove.
   const inserted = queryDeep(root, `.${BILINGUAL_CLASS}`);
@@ -287,39 +401,266 @@ function attach(
 }
 
 /**
- * Translate every worthwhile block on the page, filling from the top.
+ * Is this block near enough to the viewport to be worth translating now?
  *
- * Resolves when the page is done, the user stopped it, or there was nothing to
- * do. Safe to call on an already-translated page: blocks carrying a
- * translation are skipped, so this also serves as "translate what has since
- * loaded".
+ * A rect test rather than waiting on the IntersectionObserver's first callback:
+ * that callback is asynchronous, so a run started from it would begin with an
+ * empty queue and report a finished page before it had looked at one. Measured
+ * at 5 ms across 2,998 candidates, which is not worth deferring.
+ *
+ * In jsdom every rect is zero and every block therefore counts as near, which
+ * is the honest answer for a document with no layout — and it keeps the whole
+ * of this file testable without a browser.
+ */
+function nearViewport(block: HTMLElement): boolean {
+  const view = block.ownerDocument.defaultView;
+  if (!view) return true;
+  const height = view.innerHeight || 0;
+  const margin = height * VIEWPORT_MARGIN_SCREENS;
+  const rect = block.getBoundingClientRect();
+  return rect.top < height + margin && rect.bottom > -margin;
+}
+
+/** Document order, so a batch that arrives at once is still read top to bottom. */
+function inReadingOrder(blocks: HTMLElement[]): HTMLElement[] {
+  return blocks.sort((a, b) =>
+    // 4 = DOCUMENT_POSITION_FOLLOWING: b comes after a.
+    a.compareDocumentPosition(b) & 4 ? -1 : 1,
+  );
+}
+
+/**
+ * Hand blocks to the translator: straight into a running batch if there is
+ * one, otherwise into a batch started shortly.
+ *
+ * "Shortly" rather than "now" because arrivals cluster — one scroll crosses ten
+ * paragraphs at once, and each would otherwise start its own batch, its own
+ * badge and its own ramp-up.
+ */
+function offer(blocks: HTMLElement[]): void {
+  const state = watch;
+  if (blocks.length === 0 || !state) return;
+  const ordered = claim(inReadingOrder(blocks));
+  if (ordered.length === 0) return;
+  if (run) {
+    run.queue.push(...ordered);
+    return;
+  }
+  state.pending.push(...ordered);
+  if (state.soon !== null) return;
+  state.soon = setTimeout(() => {
+    if (watch !== state) return;
+    state.soon = null;
+    const next = state.pending;
+    state.pending = [];
+    if (next.length > 0) void drainQueue(state.root, state.deps, next);
+  }, RESCAN_DEBOUNCE_MS);
+}
+
+/**
+ * Split freshly collected blocks into "translate now" and "translate when the
+ * reader gets there", registering the second half with the observer.
+ *
+ * Without an IntersectionObserver — jsdom, and any environment old enough to
+ * lack it — everything counts as now, which is what this did before and is
+ * still the right fallback: translating too much is worse than translating too
+ * little, but not as bad as translating nothing.
+ */
+function triage(blocks: HTMLElement[]): HTMLElement[] {
+  const state = watch;
+  if (!state) return blocks;
+  const fresh = blocks.filter((block) => !state.claimed.has(block));
+  if (!state.intersection) return fresh;
+  const now: HTMLElement[] = [];
+  for (const block of fresh) {
+    if (nearViewport(block)) {
+      now.push(block);
+    } else if (!state.deferred.has(block)) {
+      state.deferred.add(block);
+      state.intersection.observe(block);
+    }
+  }
+  return now;
+}
+
+/** Take ownership of blocks about to be queued, and drop any already owned. */
+function claim(blocks: HTMLElement[]): HTMLElement[] {
+  const state = watch;
+  if (!state) return blocks;
+  const mine: HTMLElement[] = [];
+  for (const block of blocks) {
+    if (state.claimed.has(block)) continue;
+    state.claimed.add(block);
+    mine.push(block);
+  }
+  return mine;
+}
+
+/** Our own progress badge and our own inserted translations. */
+const OWN_UI_SELECTOR = `#${PROGRESS_ID}, .${BILINGUAL_CLASS}`;
+
+/**
+ * Did we cause this mutation ourselves?
+ *
+ * Every translation is a mutation, and so is every tick of the progress
+ * counter, so answering them would run the collector once per translated block
+ * — and the badge's own label is a text node, which an "is it an element with
+ * our class" test waves straight through.
+ */
+function isOurs(record: MutationRecord): boolean {
+  const target = record.target;
+  const scope =
+    target.nodeType === 1 ? (target as Element) : target.parentElement;
+  if (scope?.closest(OWN_UI_SELECTOR)) return true;
+  const touched = [
+    ...Array.from(record.addedNodes),
+    ...Array.from(record.removedNodes),
+  ];
+  return (
+    touched.length > 0 &&
+    touched.every(
+      (node) =>
+        // 1 = ELEMENT_NODE. `closest` includes the element itself, and works on
+        // a node already detached from the document, which is what a removed
+        // badge is by the time we see the record.
+        node.nodeType === 1 && (node as Element).closest(OWN_UI_SELECTOR),
+    )
+  );
+}
+
+function collect(root: Document, deps: PageTranslateDeps): HTMLElement[] {
+  return collectBlocks(root.body ?? root, {
+    isVisible: deps.isVisible ?? isElementVisible,
+    shouldSkipText: deps.shouldSkipText,
+  });
+}
+
+/**
+ * Watch the page for work that does not exist yet.
+ *
+ * Two sources, one queue. The IntersectionObserver answers "the reader has
+ * scrolled to a block we skipped"; the MutationObserver answers "the page grew
+ * a block nobody had seen" — a feed appending posts, a comment thread
+ * expanding, an SPA swapping a route. Before this, both cases needed the user
+ * to press translate again, which on an infinite feed is a keypress per screen.
+ */
+function startWatching(root: Document, deps: PageTranslateDeps): void {
+  stopWatching();
+  const view = root.defaultView;
+  if (!view) return;
+
+  const state: Watch = {
+    root,
+    deps,
+    intersection: null,
+    mutation: null,
+    rescan: null,
+    deferred: new Set(),
+    claimed: new WeakSet(),
+    pending: [],
+    soon: null,
+  };
+  watch = state;
+
+  if (typeof view.IntersectionObserver === 'function') {
+    state.intersection = new view.IntersectionObserver(
+      (entries) => {
+        const arrived: HTMLElement[] = [];
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const block = entry.target as HTMLElement;
+          // Unobserved on arrival, not on translation: from here the block is
+          // in a queue, and an observer still watching it would offer it again
+          // on the next scroll that recrosses the margin.
+          state.intersection?.unobserve(block);
+          state.deferred.delete(block);
+          if (!block.hasAttribute(TRANSLATED_ATTR)) arrived.push(block);
+        }
+        offer(arrived);
+      },
+      { rootMargin: `${String(VIEWPORT_MARGIN_SCREENS * 100)}% 0px` },
+    );
+  }
+
+  if (typeof view.MutationObserver === 'function') {
+    state.mutation = new view.MutationObserver((records) => {
+      if (records.every(isOurs)) return;
+      if (state.rescan !== null) clearTimeout(state.rescan);
+      state.rescan = setTimeout(() => {
+        if (watch !== state) return;
+        state.rescan = null;
+        offer(triage(collect(root, deps)));
+      }, RESCAN_DEBOUNCE_MS);
+    });
+    state.mutation.observe(root.body ?? root.documentElement, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+  }
+}
+
+/**
+ * Translate every worthwhile block on the page, starting with what the reader
+ * can see and continuing as they scroll.
+ *
+ * Resolves when the queue drains — which is the visible work, not the whole
+ * document. The observers stay attached afterwards, so scrolling, and anything
+ * the page loads later, are picked up without another press.
+ *
+ * Safe to call on an already-translated page: blocks carrying a translation are
+ * skipped, so this also serves as "translate what has since loaded".
  */
 export async function translatePage(
   root: Document,
   deps: PageTranslateDeps,
 ): Promise<PageResult> {
   stopPageTranslation();
-  const controller = new AbortController();
-  active = controller;
-
   ensureStyle(root);
 
-  const blocks = collectBlocks(root.body ?? root, {
-    isVisible: deps.isVisible ?? isElementVisible,
-    shouldSkipText: deps.shouldSkipText,
-  });
+  const blocks = collect(root, deps);
 
   if (blocks.length === 0) {
-    active = null;
     const progress = mountProgress(root, stopPageTranslation);
     progress.finish('Nothing to translate on this page');
+    // Still worth watching: on an app that renders after load, "nothing to
+    // translate" means "nothing yet", and that is the case where pressing the
+    // button felt most broken.
+    startWatching(root, deps);
     return { translated: 0, failed: 0, unchanged: 0, stopped: false };
   }
 
-  const progress = mountProgress(root, stopPageTranslation);
-  progress.update(0, blocks.length);
+  startWatching(root, deps);
+  return drainQueue(root, deps, claim(triage(blocks)));
+}
 
-  let done = 0;
+/**
+ * Drain one batch, reporting as it goes.
+ *
+ * `initial` is what is worth translating right now; the observers may add to
+ * `run.queue` while this drains, and the loop below picks that up rather than
+ * finishing and immediately starting again under a second badge.
+ */
+async function drainQueue(
+  root: Document,
+  deps: PageTranslateDeps,
+  initial: HTMLElement[],
+): Promise<PageResult> {
+  const controller = new AbortController();
+  const current: Run = {
+    controller,
+    queue: [...initial],
+    inFlight: 0,
+    done: 0,
+  };
+  run = current;
+
+  const progress = mountProgress(root, stopPageTranslation);
+  /** Recomputed, not fixed: the queue can grow under a reader who scrolls. */
+  const total = (): number =>
+    current.done + current.inFlight + current.queue.length;
+  progress.update(0, total());
+
   let translated = 0;
   let failed = 0;
   /** Blocks the engine handed back exactly as they went in. */
@@ -328,7 +669,6 @@ export async function translatePage(
   let consecutiveFailures = 0;
   /** Set when the run abandoned itself rather than being stopped by the user. */
   let gaveUp = false;
-  let next = 0;
   /**
    * The first real reason a block failed.
    *
@@ -346,14 +686,18 @@ export async function translatePage(
   const worker = async (limit = Infinity): Promise<void> => {
     let handled = 0;
     while (!controller.signal.aborted && handled < limit) {
-      const index = next++;
-      const block = blocks[index];
+      const block = current.queue.shift();
       if (!block) return;
+      // A block can leave the page between being queued and being reached — an
+      // SPA route change, a feed trimming what scrolled past. Not a failure,
+      // and translating it would attach text to a node nobody will ever see.
+      if (!block.isConnected) continue;
 
       // Read now rather than at collection time, so a block that changed
       // while the queue drained is translated as it currently reads — and
       // through `visibleText`, so a stylesheet child is never sent to a model.
       const source = visibleText(block).trim();
+      current.inFlight++;
       try {
         let result = await deps.translate(source, controller.signal, 0, (l) =>
           progress.downloading(l),
@@ -405,6 +749,8 @@ export async function translatePage(
         attach(block, '⚠️ translation failed', deps.targetLang, true);
         failed++;
         consecutiveFailures++;
+      } finally {
+        current.inFlight--;
       }
 
       // Stop rather than march the same failure down the page.
@@ -419,9 +765,9 @@ export async function translatePage(
         controller.abort();
         return;
       }
-      done++;
+      current.done++;
       handled++;
-      progress.update(done, blocks.length);
+      progress.update(current.done, total());
     }
   };
 
@@ -438,18 +784,25 @@ export async function translatePage(
   // warm server. Costs nothing when the model was already loaded.
   await worker(1);
 
-  if (!controller.signal.aborted && next < blocks.length) {
+  // A loop, because the queue is live: the observers can push a block in while
+  // these workers drain, and a run that stopped at the queue it started with
+  // would hand that block to a second badge a moment later.
+  while (!controller.signal.aborted && current.queue.length > 0) {
     await Promise.all(
-      Array.from({ length: Math.min(CONCURRENCY, blocks.length - next) }, () =>
+      Array.from({ length: Math.min(CONCURRENCY, current.queue.length) }, () =>
         worker(),
       ),
     );
   }
 
   const stopped = controller.signal.aborted && !gaveUp;
-  if (active === controller) active = null;
+  if (run === current) run = null;
 
   if (gaveUp) {
+    // Three failures in a row is a broken setup, not a page that needs more
+    // watching. Left attached, the observers would go on offering blocks to an
+    // engine that is not answering — one badge per screen scrolled.
+    stopWatching();
     // Take the debris with it. The three ⚠️ markers proved the point and are
     // now just something to clear before the page reads normally again; the
     // reason is worth keeping, and it goes in the badge.
