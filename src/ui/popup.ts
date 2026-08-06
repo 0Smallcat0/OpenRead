@@ -532,7 +532,8 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     // readout that opens at "0%" would sit there looking stuck for most of the
     // download. A number appears only once one has actually moved.
     setPackNote(
-      `Downloading the ${source} → ${target} model. This takes a minute or two, once.`,
+      `Downloading the ${source} → ${target} model. This takes a minute or two, ` +
+        `once — keep this popup open until it finishes.`,
     );
     void deps
       .downloadPack(source, target, (loaded) => {
