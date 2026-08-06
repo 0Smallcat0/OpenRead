@@ -38,6 +38,7 @@ import {
   queryDeep,
   TRANSLATED_ATTR,
   BILINGUAL_CLASS,
+  OWN_UI,
   type CollectOptions,
 } from './blocks';
 import { toBcp47 } from '../core/bcp47';
@@ -516,9 +517,6 @@ function claim(blocks: HTMLElement[]): HTMLElement[] {
   return mine;
 }
 
-/** Our own progress badge and our own inserted translations. */
-const OWN_UI_SELECTOR = `#${PROGRESS_ID}, .${BILINGUAL_CLASS}`;
-
 /**
  * Did we cause this mutation ourselves?
  *
@@ -535,7 +533,7 @@ function isOurs(record: MutationRecord): boolean {
   // see `startWatching`. A page loading a stylesheet or a script has not grown
   // anything to translate, and busy sites rewrite head constantly.
   if (scope?.closest('head')) return true;
-  if (scope?.closest(OWN_UI_SELECTOR)) return true;
+  if (scope?.closest(OWN_UI)) return true;
   const touched = [
     ...Array.from(record.addedNodes),
     ...Array.from(record.removedNodes),
@@ -547,7 +545,7 @@ function isOurs(record: MutationRecord): boolean {
         // 1 = ELEMENT_NODE. `closest` includes the element itself, and works on
         // a node already detached from the document, which is what a removed
         // badge is by the time we see the record.
-        node.nodeType === 1 && (node as Element).closest(OWN_UI_SELECTOR),
+        node.nodeType === 1 && (node as Element).closest(OWN_UI),
     )
   );
 }

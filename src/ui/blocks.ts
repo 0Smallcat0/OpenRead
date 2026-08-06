@@ -64,8 +64,16 @@ const CITATIONS =
  */
 const CONTENT_ROOT = 'main, [role="main"], article';
 
-/** Our own injected UI, which must never become input to itself. */
-const OWN_UI =
+/**
+ * Our own injected UI, which must never become input to itself.
+ *
+ * Exported because `fullpage.ts` needs the same list to tell its
+ * MutationObserver which changes it caused. It kept a second copy for a while,
+ * and the copy was missing the selection panel and the floating icon — so
+ * opening a translation panel, or every token of a streamed one, read as the
+ * page growing new text and scheduled a full re-collection of it.
+ */
+export const OWN_UI =
   '#oit-translate-panel, #oit-translate-icon, .oit-bilingual, #oit-page-progress';
 
 /** Marks a block whose translation has already been appended. */
