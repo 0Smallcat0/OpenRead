@@ -120,8 +120,20 @@
         }
       }
       #enrichOnly[hidden],
+      #siteExceptRow[hidden],
       #ollamaOnly[hidden] {
         display: none;
+      }
+      #autoNote {
+        margin: 6px 0 0;
+        font-size: 11px;
+        line-height: 1.45;
+        color: #4b5563;
+      }
+      @media (prefers-color-scheme: dark) {
+        #autoNote {
+          color: #9ca3af;
+        }
       }
       /* The connection line sits under the URL field it reports on, so it reads
          as that field's state rather than as a second status area. */
@@ -241,6 +253,19 @@
 
       <label for="targetLang">Target Language</label>
       <select id="targetLang"></select>
+      <!-- Off by default. The one thing worse than a translator that has to be
+           asked is one that rewrites a page the reader could already read. -->
+      <label for="autoTranslate">Translate automatically</label>
+      <select id="autoTranslate">
+        <option value="off">Off — only when I ask</option>
+        <option value="foreign">Pages in another language</option>
+        <option value="always">Every page</option>
+      </select>
+      <p id="autoNote"></p>
+      <label class="checkbox" id="siteExceptRow" hidden>
+        <input id="siteExcept" type="checkbox" />
+        <span id="siteExceptLabel">Never on this site</span>
+      </label>
 
       <hr />
 

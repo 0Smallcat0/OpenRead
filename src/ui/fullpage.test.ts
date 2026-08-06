@@ -344,6 +344,21 @@ describe('translatePage', () => {
     );
   });
 
+  it('says nothing about an empty page when nobody asked', async () => {
+    // An automatic pass on page load. A press that appears to do nothing looks
+    // broken and is answered; an unprompted one that finds nothing has nothing
+    // to report — and on an app that renders after load it would find nothing
+    // on every navigation, so the notice would be constant.
+    document.body.innerHTML = '<nav><li>Home</li></nav>';
+    const result = await translatePage(
+      document,
+      deps({ unprompted: true } as Partial<PageTranslateDeps>),
+    );
+
+    expect(result.translated).toBe(0);
+    expect(document.getElementById(PROGRESS_ID)).toBeNull();
+  });
+
   it('says when it is downloading a language pack', async () => {
     // Two minutes of silence on the first use of a language pair is the bug
     // this replaces: the badge sat at "Translating 0/3" and looked stuck.

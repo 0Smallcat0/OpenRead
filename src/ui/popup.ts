@@ -22,6 +22,7 @@ import {
   type Settings,
   type Engine,
 } from '../settings';
+import { isExcepted, type AutoTranslate } from '../core/auto-translate';
 import {
   describeConnection,
   type ConnectionProbe,
@@ -35,6 +36,12 @@ export interface PopupDeps {
   writeClipboard: (text: string) => Promise<void>;
   /** Ask the active tab to translate (or untranslate) itself. */
   translateActivePage: () => Promise<void>;
+  /**
+   * Hostname of the tab the popup was opened over, or null when there is not
+   * one — `chrome://` pages, the Web Store, a blank tab. The per-site exception
+   * has nothing to name in that case and hides itself.
+   */
+  activeHost: () => Promise<string | null>;
 }
 
 interface Elements {
@@ -47,6 +54,11 @@ interface Elements {
   model: HTMLInputElement;
   modelOptions: HTMLDataListElement;
   lang: HTMLSelectElement;
+  auto: HTMLSelectElement;
+  autoNote: HTMLElement | null;
+  siteExceptRow: HTMLElement | null;
+  siteExcept: HTMLInputElement | null;
+  siteExceptLabel: HTMLElement | null;
   vault: HTMLInputElement;
   folder: HTMLInputElement;
   enrich: HTMLInputElement;
@@ -68,6 +80,11 @@ function collect(root: ParentNode): Elements | null {
   const model = root.querySelector<HTMLInputElement>('#modelId');
   const modelOptions = root.querySelector<HTMLDataListElement>('#modelOptions');
   const lang = root.querySelector<HTMLSelectElement>('#targetLang');
+  const auto = root.querySelector<HTMLSelectElement>('#autoTranslate');
+  const autoNote = root.querySelector<HTMLElement>('#autoNote');
+  const siteExceptRow = root.querySelector<HTMLElement>('#siteExceptRow');
+  const siteExcept = root.querySelector<HTMLInputElement>('#siteExcept');
+  const siteExceptLabel = root.querySelector<HTMLElement>('#siteExceptLabel');
   const vault = root.querySelector<HTMLInputElement>('#obsidianVault');
   const folder = root.querySelector<HTMLInputElement>('#obsidianFolder');
   const enrich = root.querySelector<HTMLInputElement>('#enrichOnCapture');
@@ -87,6 +104,7 @@ function collect(root: ParentNode): Elements | null {
     !model ||
     !modelOptions ||
     !lang ||
+    !auto ||
     !vault ||
     !folder ||
     !enrich ||
@@ -109,6 +127,11 @@ function collect(root: ParentNode): Elements | null {
     model,
     modelOptions,
     lang,
+    auto,
+    autoNote,
+    siteExceptRow,
+    siteExcept,
+    siteExceptLabel,
     vault,
     folder,
     enrich,
@@ -182,6 +205,41 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
   const currentEngine = (): Engine =>
     el.engine.value === 'ollama' ? 'ollama' : 'builtin';
 
+  /** The hosts the user has excluded, and the one this popup was opened over. */
+  let except: string[] = [];
+  let host: string | null = null;
+
+  const AUTO_NOTES: Record<AutoTranslate, string> = {
+    off: 'Pages are translated only when you ask.',
+    foreign:
+      'A page that says it is in another language is translated as it loads. ' +
+      'One that does not say is left alone.',
+    always:
+      'Every page is translated as it loads, including ones already in your ' +
+      'language.',
+  };
+
+  const currentAuto = (): AutoTranslate =>
+    el.auto.value === 'always'
+      ? 'always'
+      : el.auto.value === 'foreign'
+        ? 'foreign'
+        : 'off';
+
+  const renderAuto = (): void => {
+    const mode = currentAuto();
+    if (el.autoNote) el.autoNote.textContent = AUTO_NOTES[mode];
+    // Nothing to exclude from a feature that is off, and nothing to name on a
+    // tab that has no host.
+    if (mode === 'off' || !host) {
+      el.siteExceptRow?.setAttribute('hidden', '');
+      return;
+    }
+    el.siteExceptRow?.removeAttribute('hidden');
+    if (el.siteExceptLabel) el.siteExceptLabel.textContent = `Never on ${host}`;
+    if (el.siteExcept) el.siteExcept.checked = isExcepted(host, except);
+  };
+
   const renderEngine = (): void => {
     const engine = currentEngine();
     el.engineNote.textContent = ENGINE_NOTES[engine];
@@ -240,6 +298,8 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
       baseUrl: el.baseUrl.value.trim() || DEFAULT_SETTINGS.baseUrl,
       modelId: el.model.value.trim() || DEFAULT_SETTINGS.modelId,
       targetLang: el.lang.value,
+      autoTranslate: currentAuto(),
+      autoTranslateExcept: except,
       obsidianVault: el.vault.value.trim(),
       obsidianFolder: el.folder.value.trim() || DEFAULT_SETTINGS.obsidianFolder,
       enrichOnCapture: el.enrich.checked,
@@ -269,10 +329,40 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     el.baseUrl.value = settings.baseUrl;
     el.model.value = settings.modelId;
     el.lang.value = settings.targetLang;
+    el.auto.value = settings.autoTranslate;
+    except = [...settings.autoTranslateExcept];
+    renderAuto();
     el.vault.value = settings.obsidianVault;
     el.folder.value = settings.obsidianFolder;
     el.enrich.checked = settings.enrichOnCapture;
     check();
+  });
+
+  // The host arrives on its own schedule, and it only changes what the
+  // exception row says, so it re-renders rather than gating the load above.
+  void deps.activeHost().then((value) => {
+    host = value;
+    renderAuto();
+  });
+
+  el.auto.addEventListener('change', () => {
+    renderAuto();
+    void persist();
+  });
+
+  el.siteExcept?.addEventListener('change', () => {
+    if (!host) return;
+    if (el.siteExcept?.checked) {
+      if (!isExcepted(host, except)) except = [...except, host];
+    } else {
+      // Every entry that covers this host, not just an exact match: a stored
+      // `example.com` is why `www.example.com` is excluded, so unchecking on
+      // the subdomain has to be able to reach it. Otherwise the box springs
+      // back on the next open and the control looks broken.
+      except = except.filter((entry) => !isExcepted(host ?? '', [entry]));
+    }
+    renderAuto();
+    void persist();
   });
 
   el.engine.addEventListener('change', () => {

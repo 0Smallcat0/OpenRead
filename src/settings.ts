@@ -17,12 +17,19 @@
  */
 export type Engine = 'builtin' | 'ollama';
 
+export type { AutoTranslate } from './core/auto-translate';
+import type { AutoTranslate } from './core/auto-translate';
+
 export interface Settings {
   engine: Engine;
   /** Base URL of the local Ollama server, e.g. http://localhost:11434. */
   baseUrl: string;
   modelId: string;
   targetLang: string;
+  /** Translate a page on load without being asked. See `core/auto-translate`. */
+  autoTranslate: AutoTranslate;
+  /** Hosts never translated automatically. An entry covers its subdomains. */
+  autoTranslateExcept: string[];
   /** Obsidian vault to capture into; empty = the user's current/last vault. */
   obsidianVault: string;
   /** Vault-relative folder for captures; empty = the vault root. */
@@ -42,6 +49,11 @@ export const DEFAULT_SETTINGS: Settings = {
   // in docs/BENCHMARK.md (chrF 46.3, TTFT-UI p50 451 ms on the test rig).
   modelId: 'qwen3:latest',
   targetLang: 'Traditional Chinese',
+  // Off until asked for. An extension that starts rewriting pages the moment it
+  // is installed is one the user did not consent to yet, whatever the setting
+  // would have been worth to them afterwards.
+  autoTranslate: 'off',
+  autoTranslateExcept: [],
   obsidianVault: '',
   obsidianFolder: 'OpenRead',
   enrichOnCapture: false,
@@ -66,6 +78,8 @@ export async function loadSettings(): Promise<Settings> {
     'baseUrl',
     'modelId',
     'targetLang',
+    'autoTranslate',
+    'autoTranslateExcept',
     'obsidianVault',
     'obsidianFolder',
     'enrichOnCapture',

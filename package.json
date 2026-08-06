@@ -1,6 +1,6 @@
 {
   "name": "openread",
-  "version": "2.13.0",
+  "version": "2.14.0",
   "description": "Translate web pages, PDFs and text on your own machine - Chrome's built-in on-device model by default, a local LLM through Ollama when you want one. Browser extension, CLI, and MCP server.",
   "type": "module",
   "license": "MIT",

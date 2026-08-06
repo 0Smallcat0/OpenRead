@@ -26,6 +26,16 @@ const MARKUP = `
     <datalist id="modelOptions"></datalist>
     </div>
     <select id="targetLang"></select>
+    <select id="autoTranslate">
+      <option value="off">off</option>
+      <option value="foreign">foreign</option>
+      <option value="always">always</option>
+    </select>
+    <p id="autoNote"></p>
+    <label class="checkbox" id="siteExceptRow" hidden>
+      <input id="siteExcept" type="checkbox" />
+      <span id="siteExceptLabel"></span>
+    </label>
     <input id="obsidianVault" type="text" />
     <input id="obsidianFolder" type="text" />
     <input id="enrichOnCapture" type="checkbox" />
@@ -57,6 +67,7 @@ function deps(overrides: Partial<PopupDeps> = {}): PopupDeps {
   return {
     probe: probe as unknown as PopupDeps['probe'],
     platformOs: () => Promise.resolve('mac'),
+    activeHost: () => Promise.resolve('example.com'),
     writeClipboard: (text: string) => {
       written.push(text);
       return Promise.resolve();
@@ -462,5 +473,89 @@ describe('settings are written through as they change', () => {
     await settle();
 
     expect(document.getElementById('status')?.textContent).toBe('');
+  });
+});
+
+describe('automatic translation', () => {
+  /** Mount over a page whose host the popup can name. */
+  async function open(host: string | null = 'example.com'): Promise<void> {
+    document.body.innerHTML = MARKUP;
+    mountPopup(document, deps({ activeHost: () => Promise.resolve(host) }));
+    await settle();
+  }
+
+  const mode = (): HTMLSelectElement =>
+    $('autoTranslate') as HTMLSelectElement;
+  const siteExcept = (): HTMLInputElement => $('siteExcept') as HTMLInputElement;
+
+  it('is off until it is asked for', async () => {
+    // An extension that starts rewriting pages the moment it is installed is
+    // one the user has not consented to yet.
+    await open();
+    expect(mode().value).toBe('off');
+    expect($('siteExceptRow').hasAttribute('hidden')).toBe(true);
+  });
+
+  it('stores the mode the moment it is picked', async () => {
+    await open();
+    mode().value = 'foreign';
+    mode().dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+
+    expect(stored.autoTranslate).toBe('foreign');
+  });
+
+  it('offers the per-site exception only once it has something to except', async () => {
+    await open();
+    mode().value = 'foreign';
+    mode().dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+
+    expect($('siteExceptRow').hasAttribute('hidden')).toBe(false);
+    expect($('siteExceptLabel').textContent).toBe('Never on example.com');
+  });
+
+  it('stays hidden on a tab with no host to name', async () => {
+    // chrome://, the Web Store, a blank tab. A checkbox reading "Never on
+    // null" is worse than no checkbox.
+    await open(null);
+    mode().value = 'always';
+    mode().dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+
+    expect($('siteExceptRow').hasAttribute('hidden')).toBe(true);
+  });
+
+  it('adds and removes the host as the box is ticked', async () => {
+    await open();
+    mode().value = 'foreign';
+    mode().dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+
+    siteExcept().checked = true;
+    siteExcept().dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+    expect(stored.autoTranslateExcept).toEqual(['example.com']);
+
+    siteExcept().checked = false;
+    siteExcept().dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+    expect(stored.autoTranslateExcept).toEqual([]);
+  });
+
+  it('unticks a subdomain by removing the parent that covered it', async () => {
+    // A stored `example.com` is why `news.example.com` is excluded. Leaving it
+    // in place would spring the box back on the next open, and the control
+    // would look broken.
+    stored.autoTranslate = 'foreign';
+    stored.autoTranslateExcept = ['example.com', 'other.test'];
+    await open('news.example.com');
+
+    expect(siteExcept().checked).toBe(true);
+    siteExcept().checked = false;
+    siteExcept().dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+
+    expect(stored.autoTranslateExcept).toEqual(['other.test']);
   });
 });

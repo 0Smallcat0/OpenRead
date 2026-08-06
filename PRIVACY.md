@@ -27,6 +27,14 @@ It depends on which engine you have chosen in the popup.
 
 In neither case is the text sent to the developer or to any third party.
 
+**Automatic translation** is off until you turn it on, and it changes what gets
+translated, not where it goes. Once on, a page you open is handed to whichever
+engine you chose without you pressing anything — so on the default engine
+nothing leaves your machine either way, but if you have pointed the Ollama URL
+at a remote server, that server now sees pages you merely visited rather than
+pages you asked about. The popup can exclude a site permanently, and the whole
+feature can be turned off in one control.
+
 ## Checking this yourself
 
 Everything above is a claim by the person who wrote the extension, which is the
@@ -52,6 +60,7 @@ you run it.
 ## What is stored, and where
 
 - **Settings** (engine, Ollama server URL, model name, target language,
+  automatic-translation mode and the list of sites excluded from it,
   Obsidian vault and folder, enrichment toggle) are stored with
   `chrome.storage.sync`. They stay inside your browser profile; Chrome may sync
   them across your own signed-in browsers as with any extension setting.
