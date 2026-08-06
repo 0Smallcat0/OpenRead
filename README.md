@@ -49,6 +49,10 @@ seconds.
 - **Eight target languages**: Traditional Chinese, Simplified Chinese, English,
   Japanese, Korean, Spanish, French, German. The source language is whatever
   the page is in — that side is not a list.
+- **The first translation of a language pair waits for a download.** Chrome
+  fetches the model itself, once per pair per browser profile — 30 seconds to
+  two minutes. The popup says whether yours is ready and offers to fetch it
+  before you need it, so the wait happens while you are not waiting.
 - **Chrome decides which pairs exist.** It downloads packs per language pair,
   and a pair it has no pack for is one the built-in engine cannot do. When that
   happens OpenRead falls back to Ollama; with no Ollama configured, that is

@@ -1,7 +1,12 @@
 import { mountPopup } from '../../ui/popup';
 import { probeOllama } from '../../api/probe';
 import type { PlatformOs } from '../../core/diagnostics';
-import type { TranslatePageMessage } from '../../messaging';
+import { packAvailability, downloadPack } from '../../api/builtin';
+import type {
+  TranslatePageMessage,
+  PageLanguageMessage,
+  PageLanguageResponse,
+} from '../../messaging';
 
 /** Map Chrome's platform list onto the three shells that need different fixes. */
 async function platformOs(): Promise<PlatformOs> {
@@ -41,10 +46,33 @@ async function activeHost(): Promise<string | null> {
   }
 }
 
+/**
+ * What the page in front of the user says it is written in.
+ *
+ * Null on anything the content script does not run in, which is the same
+ * answer as a page that declares nothing: the popup falls back to `en`.
+ */
+async function pageLanguage(): Promise<string | null> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.id === undefined) return null;
+  const message: PageLanguageMessage = { type: 'PAGE_LANGUAGE' };
+  const reply = await chrome.tabs
+    .sendMessage<PageLanguageMessage, PageLanguageResponse>(tab.id, message)
+    .catch(() => null);
+  return reply?.lang ?? null;
+}
+
 mountPopup(document, {
   probe: probeOllama,
   platformOs,
   writeClipboard: (text) => navigator.clipboard.writeText(text),
   translateActivePage,
   activeHost,
+  pageLanguage,
+  // Straight from this document rather than through the background: the popup
+  // is an extension page, `Translator` is there, and Chrome's gate on starting
+  // a download wants a user gesture — which is exactly what the button click
+  // in here is, and what a message to the service worker would throw away.
+  packAvailability,
+  downloadPack,
 });

@@ -26,6 +26,10 @@ const MARKUP = `
     <datalist id="modelOptions"></datalist>
     </div>
     <select id="targetLang"></select>
+    <div id="pack" hidden>
+      <div id="packNote"></div>
+      <button id="downloadPack" type="button">Download it now</button>
+    </div>
     <select id="autoTranslate">
       <option value="off">off</option>
       <option value="foreign">foreign</option>
@@ -45,6 +49,8 @@ const MARKUP = `
 `;
 
 let stored: Record<string, unknown>;
+let packState: 'unavailable' | 'downloadable' | 'downloading' | 'available' | null;
+let downloads: number;
 let probe: ReturnType<typeof vi.fn>;
 let written: string[];
 let pageTranslations: number;
@@ -68,6 +74,14 @@ function deps(overrides: Partial<PopupDeps> = {}): PopupDeps {
     probe: probe as unknown as PopupDeps['probe'],
     platformOs: () => Promise.resolve('mac'),
     activeHost: () => Promise.resolve('example.com'),
+    pageLanguage: () => Promise.resolve('en'),
+    packAvailability: () => Promise.resolve(packState),
+    downloadPack: (_source, _target, onProgress) => {
+      downloads++;
+      onProgress(0.5);
+      packState = 'available';
+      return Promise.resolve();
+    },
     writeClipboard: (text: string) => {
       written.push(text);
       return Promise.resolve();
@@ -108,6 +122,8 @@ beforeEach(() => {
   };
   written = [];
   pageTranslations = 0;
+  packState = 'available';
+  downloads = 0;
   probe = vi.fn((): Promise<ConnectionProbe> =>
     Promise.resolve({ kind: 'ok', models: ['qwen3:latest'] }),
   );
@@ -557,5 +573,124 @@ describe('automatic translation', () => {
     await settle();
 
     expect(stored.autoTranslateExcept).toEqual(['other.test']);
+  });
+});
+
+describe('the language pack, before it is needed', () => {
+  // The longest wait anywhere in this product: 30 s to two minutes, once per
+  // language pair per profile. Met on a first press it is indistinguishable
+  // from the extension being broken.
+  async function open(
+    overrides: Partial<PopupDeps> = {},
+    engine: 'builtin' | 'ollama' = 'builtin',
+  ): Promise<HTMLSelectElement> {
+    // The file's shared fixture stores the Ollama engine, because most of the
+    // tests around it are about the Ollama connection line. Chrome's language
+    // packs belong to the other engine.
+    stored.engine = engine;
+    document.body.innerHTML = MARKUP;
+    const select = document.getElementById('targetLang') as HTMLSelectElement;
+    mountPopup(document, deps(overrides));
+    await settle();
+    return select;
+  }
+
+  it('says so before the first press, and offers to get it over with', async () => {
+    packState = 'downloadable';
+    await open();
+
+    expect($('pack').hasAttribute('hidden')).toBe(false);
+    expect($('packNote').textContent).toContain('en → zh-Hant');
+    expect($('packNote').textContent).toContain('has not downloaded');
+    expect($('downloadPack').hasAttribute('hidden')).toBe(false);
+  });
+
+  it('downloads on the click, then reports it ready', async () => {
+    packState = 'downloadable';
+    await open();
+
+    $('downloadPack').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+
+    expect(downloads).toBe(1);
+    expect($('packNote').textContent).toContain('Ready');
+    expect($('downloadPack').hasAttribute('hidden')).toBe(true);
+  });
+
+  it('does not open a percentage readout at 0%', async () => {
+    // The monitor's granularity is not something a caller can rely on: 479
+    // events for one pair, and exactly two — 0 then 1 — for another that took
+    // 81 seconds. A readout opening at "0%" sits there looking stuck.
+    packState = 'downloadable';
+    let report: ((loaded: number) => void) | null = null;
+    await open({
+      downloadPack: (_source, _target, onProgress) => {
+        report = onProgress;
+        return new Promise<void>(() => undefined);
+      },
+    });
+
+    $('downloadPack').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+    expect($('packNote').textContent).toContain('a minute or two');
+
+    (report as unknown as (loaded: number) => void)(0);
+    expect($('packNote').textContent).not.toContain('0%');
+    (report as unknown as (loaded: number) => void)(0.4);
+    expect($('packNote').textContent).toContain('40%');
+  });
+
+  it('says what to do when Chrome will not do the pair at all', async () => {
+    packState = 'unavailable';
+    await open();
+
+    expect($('packNote').textContent).toContain('Ollama');
+    expect($('downloadPack').hasAttribute('hidden')).toBe(true);
+  });
+
+  it('stays out of the way on the Ollama engine', async () => {
+    // Ollama has its own readiness story, told by the connection line. A
+    // second one about Chrome's packs would report on an engine that is not
+    // going to be used.
+    packState = 'downloadable';
+    await open({}, 'ollama');
+
+    expect($('pack').hasAttribute('hidden')).toBe(true);
+  });
+
+  it('says nothing in a browser that has no built-in translator', async () => {
+    packState = null;
+    await open();
+
+    expect($('pack').hasAttribute('hidden')).toBe(true);
+  });
+
+  it('asks again when the target language changes, since packs are per pair', async () => {
+    const pairs: string[] = [];
+    const select = await open({
+      packAvailability: (source, target) => {
+        pairs.push(`${source}->${target}`);
+        return Promise.resolve('available');
+      },
+    });
+
+    select.value = 'Japanese';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+
+    expect(pairs).toContain('en->ja');
+  });
+
+  it('uses the language the page actually declares', async () => {
+    const pairs: string[] = [];
+    await open({
+      pageLanguage: () => Promise.resolve('ja'),
+      packAvailability: (source, target) => {
+        pairs.push(`${source}->${target}`);
+        return Promise.resolve('available');
+      },
+    });
+
+    expect(pairs).toContain('ja->zh-Hant');
   });
 });
