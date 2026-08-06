@@ -80,6 +80,22 @@ export interface TranslatePageMessage {
   type: 'TRANSLATE_PAGE';
 }
 
+/**
+ * popup -> content one-shot: what language does this page say it is in?
+ *
+ * Asked so the popup can report on the language pair the next translation will
+ * actually use. Chrome's packs are per-pair, and telling a reader of Japanese
+ * pages that `en`→`zh-Hant` is ready would be worse than saying nothing.
+ */
+export interface PageLanguageMessage {
+  type: 'PAGE_LANGUAGE';
+}
+
+/** content -> popup: `<html lang>`, or null when the page does not say. */
+export interface PageLanguageResponse {
+  lang: string | null;
+}
+
 /** The command ids declared in the manifest, and the messages they produce. */
 export const TRANSLATE_SELECTION_COMMAND = 'translate-selection';
 export const TRANSLATE_PAGE_COMMAND = 'translate-page';
@@ -87,7 +103,8 @@ export const TRANSLATE_PAGE_COMMAND = 'translate-page';
 export type RuntimeRequest =
   | EnrichCaptureMessage
   | TranslateSelectionMessage
-  | TranslatePageMessage;
+  | TranslatePageMessage
+  | PageLanguageMessage;
 
 /** background -> content: the parsed enrichment, or null on any failure. */
 export interface EnrichCaptureResponse {

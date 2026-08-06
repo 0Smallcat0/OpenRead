@@ -368,9 +368,17 @@ function mountProgress(doc: Document, onStop: () => void): Progress {
     downloading: (loaded) => {
       // The one-time language-pack fetch. Around two minutes, and the reason
       // switching target language used to look like the extension breaking.
-      label.textContent = `Downloading language pack ${String(
-        Math.round(loaded * 100),
-      )}%`;
+      //
+      // The percentage is dropped while it is still zero, because the monitor's
+      // granularity is not something a caller can rely on: measured at 479
+      // events for `en`→`zh-Hant` and exactly two — 0 then 1 — for `en`→`ko`,
+      // which took 81 seconds. "0%" held for a minute and a half reads as
+      // stuck, and stuck is the impression this line exists to prevent.
+      const percent = Math.round(loaded * 100);
+      label.textContent =
+        percent > 0
+          ? `Downloading language pack ${String(percent)}%`
+          : 'Downloading language pack…';
     },
     finish: (message) => {
       label.textContent = message;

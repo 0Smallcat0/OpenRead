@@ -387,6 +387,33 @@ describe('translatePage', () => {
     await run;
   });
 
+  it('does not sit at 0% while a download has not reported anything', async () => {
+    // The monitor's granularity is not something a caller can rely on: 479
+    // events for one pair, and exactly two — 0 then 1 — for another that took
+    // 81 seconds. "0%" held for a minute and a half reads as stuck, which is
+    // the impression this line exists to prevent.
+    let release: (value: string) => void = () => undefined;
+    const run = translatePage(
+      document,
+      deps({
+        translate: (text, _signal, _attempt, onDownload) => {
+          onDownload?.(0);
+          return new Promise<string>((resolve) => {
+            release = () => resolve(`[zh] ${text}`);
+          });
+        },
+      }),
+    );
+    await Promise.resolve();
+    const badge = document.getElementById(PROGRESS_ID)?.textContent ?? '';
+    expect(badge).toContain('Downloading language pack');
+    expect(badge).not.toContain('0%');
+
+    stopPageTranslation();
+    release('');
+    await run;
+  });
+
   it('shows progress while running and a summary at the end', async () => {
     const run = translatePage(document, deps());
     expect(document.getElementById(PROGRESS_ID)?.textContent).toContain(
