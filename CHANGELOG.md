@@ -30,6 +30,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paragraph. Undo removes it, so a page that was translated once does not keep a
   span nobody asked for.
 
+- **Hold a key, point at a paragraph, get that paragraph.** Between the two
+  things this already did. Selecting a sentence is precise and costs a drag;
+  translating the page is one press and rewrites everything. A reader working
+  through an article in their second language usually wants neither — they want
+  *this* paragraph, the one that stopped them, without losing their place.
+
+  Alt by default, with Ctrl, Shift and off in the popup. A held key rather than
+  hover alone: a paragraph that translates itself because the mouse passed over
+  it on the way to a link is a page that fights back, and a modifier is the one
+  input that cannot be produced by accident while reading. The block under the
+  pointer is outlined while the key is down, so the gesture answers "what will
+  this do" before it does it — with an outline rather than a border, because
+  outlines take no part in layout and cannot reflow the page under the cursor
+  pointing at it.
+
+  It shares `attach` and the appearance settings with a whole-page run, so a
+  paragraph translated this way is indistinguishable from the same paragraph
+  translated by a run — which is what lets undo and re-translate stay simple.
+  Form fields, anything the reader is typing into, and our own insertions are
+  never offered.
+
 - **Thirty-nine target languages, up from eight.** Arabic, Bengali, Bulgarian,
   Croatian, Czech, Danish, Dutch, Finnish, Greek, Hebrew, Hindi, Hungarian,
   Indonesian, Italian, Kannada, Lithuanian, Marathi, Norwegian, Polish,

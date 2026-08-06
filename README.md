@@ -72,6 +72,9 @@ seconds.
 - **Without asking** — in the popup, set **Translate automatically** to _Pages
   in another language_ and they translate themselves as they load. Off by
   default, and any site can be excluded with one checkbox.
+- **One paragraph** — hold **Alt** and point at it. The paragraph that stopped
+  you, without a drag and without rewriting the page. Remappable to Ctrl or
+  Shift, or off, in the popup.
 - **One selection** — select text, click the floating **文**, or press
   **`Ctrl+Shift+Y`**. Escape closes the panel.
 - **PDFs** — open any `.pdf` and it lands in the bundled viewer. For a PDF
@@ -172,7 +175,7 @@ all, since that is the easy way to send nothing and prove nothing.
 ```bash
 pnpm install
 pnpm build        # -> .output/chrome-mv3, load it unpacked
-pnpm test         # 552 unit tests
+pnpm test         # 564 unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)
 pnpm shoot        # re-shoot every screenshot and the clip on this page

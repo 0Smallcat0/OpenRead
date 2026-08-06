@@ -20,6 +20,7 @@
  *   8. scrolling and later-loading content are picked up with no second press
  *   9. the appearance settings reach the page, and switching one restyles a
  *      page that is already translated without translating it again
+ *  10. holding a key and pointing at a paragraph translates that paragraph
  *
  * The last two cannot be tested anywhere else. jsdom lays nothing out, so every
  * block sits at 0,0 and "near the viewport" is true of all of them, and it has
@@ -556,6 +557,53 @@ try {
   check(
     restyled.translations === beforeSwitch,
     'switching the display mode re-translated the page instead of restyling it',
+  );
+
+
+  // ---- one paragraph, by pointing at it ----
+  //
+  // jsdom has no hit testing, so `elementFromPoint` is a stub there and the
+  // gesture is only ever exercised for real here.
+  console.log('\n--- pointing at a paragraph ---');
+  await configure({ displayMode: 'bilingual', hoverTranslate: 'alt' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await sleep(1500);
+  await page.evaluate(() => {
+    const main = document.createElement('main');
+    for (let i = 0; i < 4; i++) {
+      const el = document.createElement('p');
+      el.id = `point-${String(i)}`;
+      el.style.minHeight = '80px';
+      el.textContent = `Paragraph number ${String(i)} of a page nobody asked to have translated whole.`;
+      main.appendChild(el);
+    }
+    document.body.replaceChildren(main);
+  });
+  await sleep(400);
+
+  const box = await page.evaluate(() => {
+    const el = document.getElementById('point-1');
+    const rect = el?.getBoundingClientRect();
+    return rect ? { x: rect.x + 20, y: rect.y + 10 } : null;
+  });
+  await page.keyboard.down('Alt');
+  await page.mouse.move(box.x, box.y);
+  await page.keyboard.up('Alt');
+
+  let pointed = null;
+  for (let waited = 0; waited < 20000; waited += 500) {
+    await sleep(500);
+    pointed = await page.evaluate(() => ({
+      one: Boolean(document.querySelector('#point-1 .oit-bilingual')),
+      total: document.querySelectorAll('.oit-bilingual').length,
+    }));
+    if (pointed.one) break;
+  }
+  console.log(`  after Alt + point at paragraph 1: ${JSON.stringify(pointed)}`);
+  check(pointed?.one === true, 'holding Alt and pointing at a paragraph did not translate it');
+  check(
+    pointed?.total === 1,
+    `pointing at one paragraph translated ${String(pointed?.total)} of them`,
   );
 
 } catch (error) {

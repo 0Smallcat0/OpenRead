@@ -549,6 +549,48 @@ function attach(
 }
 
 /**
+ * Translate one block, on its own, and attach the result.
+ *
+ * The unit behind pointing at a paragraph. It shares `attach` and the
+ * appearance with a whole-page run on purpose: a paragraph translated this way
+ * has to be indistinguishable from the same paragraph translated by a run, or
+ * undo and re-translate would have to know which was which.
+ *
+ * Resolves false when there was nothing to do — already translated, gone from
+ * the page, nothing worth a round trip, or the engine handing the text back.
+ */
+export async function translateBlock(
+  block: HTMLElement,
+  deps: PageTranslateDeps,
+): Promise<boolean> {
+  if (!block.isConnected || block.hasAttribute(TRANSLATED_ATTR)) return false;
+  const source = visibleText(block).trim();
+  if (!source) return false;
+  if (deps.shouldSkipText?.(source)) return false;
+
+  const appearance = deps.appearance ?? DEFAULT_APPEARANCE;
+  applyAppearance(block.ownerDocument, appearance);
+  ensureStyle(block.ownerDocument);
+
+  const controller = new AbortController();
+  try {
+    const result = await deps.translate(source, controller.signal, 0);
+    const trimmed = result.trim();
+    // Handed back unchanged means the block is already in the target language,
+    // and inserting it would print the paragraph twice.
+    if (!trimmed || trimmed === source) return false;
+    if (!block.isConnected || block.hasAttribute(TRANSLATED_ATTR)) return false;
+    attach(block, trimmed, deps.targetLang, false, appearance.displayMode);
+    return true;
+  } catch {
+    // Silent on purpose. A whole-page run reports failures in a badge the
+    // reader asked for; one paragraph that did not come back is not worth
+    // marking the page over, and the gesture can simply be repeated.
+    return false;
+  }
+}
+
+/**
  * Is this block near enough to the viewport to be worth translating now?
  *
  * A rect test rather than waiting on the IntersectionObserver's first callback:

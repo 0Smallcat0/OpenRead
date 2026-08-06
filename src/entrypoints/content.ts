@@ -1,7 +1,9 @@
 import { mountSelectionTranslator } from '../ui/selection';
+import { mountHoverTranslate } from '../ui/hover';
 import {
   togglePageTranslation,
   translatePage,
+  translateBlock,
   applyAppearance,
   reflowTranslations,
 } from '../ui/fullpage';
@@ -37,12 +39,6 @@ export default defineContentScript({
       },
     });
 
-    // Only the top frame translates the page. Every frame receives the
-    // broadcast, and an ad iframe running its own pass would spend the user's
-    // GPU on someone else's banner while stacking a second progress badge in
-    // the same corner.
-    if (window.top !== window) return;
-
     const pageDeps = (settings: Settings, unprompted = false) => ({
       targetLang: settings.targetLang,
       unprompted,
@@ -70,6 +66,24 @@ export default defineContentScript({
         translationScale: settings.translationScale,
       },
     });
+
+    // Point at a paragraph with a key held and get that paragraph. Mounted on
+    // every frame, like selection: the unit is one block, and a block inside an
+    // iframe is as worth translating as one outside it.
+    mountHoverTranslate(document, {
+      getKey: async () => (await loadSettings()).hoverTranslate,
+      translateBlock: async (block) => {
+        const settings = await loadSettings();
+        return translateBlock(block, pageDeps(settings));
+      },
+    });
+
+    // Only the top frame translates the page. Every frame receives the
+    // broadcast, and an ad iframe running its own pass would spend the user's
+    // GPU on someone else's banner while stacking a second progress badge in
+    // the same corner.
+    if (window.top !== window) return;
+
 
     chrome.runtime.onMessage.addListener(
       (message: unknown, _sender, sendResponse) => {
