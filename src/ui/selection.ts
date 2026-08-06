@@ -769,7 +769,10 @@ export function mountSelectionTranslator(
         const captureConfig: CaptureConfig = {
           vault: config.obsidianVault,
           folder: config.obsidianFolder,
-          enrich: config.enrichOnCapture,
+          // Enrichment goes to Ollama. Under the built-in engine there is
+          // nothing to ask, and trying produced "Enriching…" followed by a
+          // plain capture with no word about why.
+          enrich: config.enrichOnCapture && config.engine === 'ollama',
           model: config.modelId,
           targetLang: config.targetLang,
         };

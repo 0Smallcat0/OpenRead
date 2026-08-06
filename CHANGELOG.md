@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.6] - 2026-08-06
+
+### Fixed
+
+- **The popup offered capture enrichment to people who had no local model.**
+  Enrichment asks Ollama for a title, a summary and tags. The checkbox sat
+  outside the block the popup hides when the engine is Chrome's built-in
+  translator — the default — so a user with no Ollama at all could turn it on.
+  Doing so produced "Enriching…" in the panel, a failed request nobody saw, and
+  a plain capture with no word about why the summary was missing.
+
+  The checkbox is now gated with the rest of the Ollama settings, and the
+  capture path does not attempt enrichment unless Ollama is the engine, so the
+  round trip and the misleading "Enriching…" are both gone.
+
+  Everything else about capture is untouched and works on either engine: the
+  note carries the original, the translation, the source URL, the time, the
+  target language and `status: raw`, and goes to Obsidian through
+  `obsidian://new` — or to the clipboard when it is too large for a URL.
+
 ## [2.10.5] - 2026-08-06
 
 ### Removed
