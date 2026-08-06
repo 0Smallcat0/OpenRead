@@ -121,9 +121,12 @@ Both run entirely on your machine. Switch in the popup; `ollama pull qwen3` and
 ## Privacy
 
 No account, no API key, no analytics, and no remote endpoint anywhere in the
-code. The only outbound request is to the Ollama server at the URL you
-configured, on your own machine, and only when you pick that engine.
-Permissions are `storage` and `activeTab`.
+code. On the default engine the extension makes no network request at all; on
+the Ollama engine, only to the server URL you configured, on your own machine.
+Permissions are `storage`, `activeTab`, `contextMenus` and
+`declarativeNetRequest` — the last one strips the `Origin` header from this
+extension's own requests to your Ollama server, scoped so a web page's requests
+can never match it. [Full policy](PRIVACY.md).
 
 ## Development
 
