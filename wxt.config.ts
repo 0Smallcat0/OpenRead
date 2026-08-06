@@ -6,6 +6,13 @@ export default defineConfig({
   srcDir: 'src',
   manifest: {
     name: 'OpenRead',
+    // Explicit, because WXT otherwise inherits `description` from package.json,
+    // and that one is written for npm (188 chars). The Chrome Web Store rejects
+    // an upload whose manifest description exceeds 132 characters, and it
+    // prefills the listing's short description from this field — so it is kept
+    // identical to the EN short description in docs/store/LISTING.md.
+    description:
+      'Bilingual whole-page translation for web pages and PDFs, entirely on your own machine. No account, no API key, no setup.',
     // Least-privilege: v1 declared `scripting` + `declarativeNetRequest` but
     // used neither, which is a store-review red flag. `scripting` stays gone.
     // `declarativeNetRequest` is back in 2.5.0 with an actual job: one

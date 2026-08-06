@@ -65,6 +65,35 @@ export function corsFixCommand(os: PlatformOs): string {
   }
 }
 
+/**
+ * The message for a translation that lost both engines.
+ *
+ * The built-in engine hands anything it structurally cannot do — an older
+ * browser, Firefox, a language pair Chrome has no pack for — to Ollama rather
+ * than failing, which is right: a user who has Ollama gets a translation
+ * instead of an apology. What was wrong is what happened when that second
+ * attempt also failed. The built-in reason was dropped on the floor and the
+ * panel showed Ollama's message alone, so a Firefox user, or anyone on Chrome
+ * 137, was told "Can't reach Ollama" — true, and about the wrong thing. They
+ * had not chosen Ollama, did not have Ollama, and had no way to learn from that
+ * sentence that their browser was the problem.
+ *
+ * Both reasons, first cause first. `builtinReason` is null when Ollama was the
+ * engine the user actually picked, and then there is no first cause to report.
+ */
+export function describeEngineFailure(
+  builtinReason: string | null,
+  ollamaMessage: string,
+): string {
+  const first = builtinReason?.trim();
+  if (!first) return ollamaMessage;
+  // The reasons are sentences from `BuiltinUnavailableError`, but a caller
+  // could hand over anything; joining without this produces "…translator
+  // OpenRead fell back".
+  const punctuated = /[.!?]$/.test(first) ? first : `${first}.`;
+  return `${punctuated} OpenRead fell back to Ollama, which also failed: ${ollamaMessage}`;
+}
+
 export interface DescribeOptions {
   baseUrl: string;
   /** The model currently entered in the popup. */

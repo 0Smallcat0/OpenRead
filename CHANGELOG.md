@@ -5,6 +5,52 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.0] - 2026-08-06
+
+### Fixed
+
+- **"Can't reach Ollama" — told to a user who does not have Ollama, has never
+  heard of Ollama, and whose actual problem was their browser.** On Firefox, on
+  Chrome 137 or older, or on a language pair Chrome has no pack for, the
+  built-in engine raises `BuiltinUnavailableError` and the broker hands the
+  request to Ollama instead of failing. That fallback is right — a user who has
+  Ollama gets a translation rather than an apology. What was wrong is what
+  happened when the second attempt also failed: the built-in reason was
+  discarded and the panel showed Ollama's message alone, which named a server
+  the reader had never chosen and said nothing about the browser that was the
+  real cause.
+
+  The broker now keeps the reason and `core/diagnostics.ts` composes both,
+  first cause first: "This browser has no built-in translator (Chrome 138+
+  does). OpenRead fell back to Ollama, which also failed: …". A user who picked
+  Ollama deliberately still sees Ollama's message alone — there is no first
+  cause to report, and inventing a fallback step that never happened would be
+  its own kind of wrong.
+
+  Same shape as the 2.11.0 fix: a lower layer's message reaching the panel
+  unexamined. There the words were Chrome's; here they were the other engine's.
+
+- The manifest `description` was inherited from `package.json`, where it is
+  written for npm and runs to 188 characters. The Chrome Web Store rejects a
+  package whose description exceeds 132, so the store upload failed outright.
+  It is now set explicitly in `wxt.config.ts`, worded to match the listing's
+  short description.
+
+### Added
+
+- `SECURITY.md`. For a tool whose whole claim is that text stays on the
+  machine, having no route for reporting a breach of that claim was a gap in
+  the claim itself. Reports go to a private advisory; most of the document is
+  scope, naming the bugs worth hunting — content leaving the machine by any
+  path other than the user's own Ollama URL, a page reaching the broker or the
+  bundled viewer, and the `declarativeNetRequest` rule's `tabIds: [-1]` scoping
+  failing in a way that lets a page's request match it.
+
+- The README says where the default engine stops: Chrome 138+ on desktop, the
+  eight target languages, that Chrome owns the language-pair matrix, and that
+  the Firefox build is Ollama-only. All three were discoverable before this
+  only by installing and finding out.
+
 ## [2.11.0] - 2026-08-06
 
 ### Fixed
@@ -134,7 +180,7 @@ termination. Ground truth is a marker in worker memory.
 - **The 文 icon landed on top of the text when the selection spanned several
   lines.** It was placed against the selection's bounding box, and the bounding
   box of a multi-line selection is the union of its lines — its right edge is
-  the *widest* line and its bottom is the *last* one, a corner that need not be
+  the _widest_ line and its bottom is the _last_ one, a corner that need not be
   near either. Measured on a six-line paragraph in a PDF:
 
   ```
@@ -143,7 +189,7 @@ termination. Ground truth is a marker in worker memory.
   icon       x 948  y 274   sitting over "A purely peer-to-pee"
   ```
 
-  The icon now goes against the line the selection *ends* on, which is where
+  The icon now goes against the line the selection _ends_ on, which is where
   the drag finished and where a hand expects to find it. Same paragraph after
   the change: `x 804`, immediately after the last selected word.
 
@@ -152,7 +198,7 @@ termination. Ground truth is a marker in worker memory.
   host gives a Range the full interface and an icon slightly out of place beats
   a selection handler that throws.
 
-- When there is no room after the text, the icon now goes *before* the start of
+- When there is no room after the text, the icon now goes _before_ the start of
   that line rather than under it. Under it is the next line, which is the thing
   2.8.3 set out to stop it doing.
 
@@ -468,7 +514,7 @@ empty `lang` is not what was breaking this.
   it. Twelve blocks on a real page: **one** `Translator.create` call, where it
   used to be twelve. A cold German pack now downloads once and the whole page
   finishes in 4 s, with the badge reporting `Downloading language pack
-  29% … 100%` while it happens.
+29% … 100%` while it happens.
 
   Abort still takes effect immediately — the shared create is deliberately left
   running when a request gives up on it, since a user pressing Stop during a
@@ -497,7 +543,7 @@ the one the badge was watching.
   sitting there was in the language the user had just moved away from.
 
   Since 2.7.6 every inserted node carries its target as a BCP-47 `lang`, so the
-  page already records what it was translated *into*. The toggle now reads it:
+  page already records what it was translated _into_. The toggle now reads it:
   a translation in the current target still means undo, and a translation in
   any other language means the press was a request for this one. Measured end
   to end — `zh-Hant` × 3 nodes, switch to Japanese, one press,

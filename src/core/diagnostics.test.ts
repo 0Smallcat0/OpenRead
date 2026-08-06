@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   corsFixCommand,
   describeConnection,
+  describeEngineFailure,
   modelIsInstalled,
   type ConnectionProbe,
 } from './diagnostics';
@@ -130,5 +131,50 @@ describe('describeConnection', () => {
       { ...OPTS, model: '   ' },
     );
     expect(report.tone).toBe('ok');
+  });
+});
+
+describe('describeEngineFailure', () => {
+  const OLLAMA_DOWN =
+    "Can't reach Ollama at http://localhost:11434. Is the server running?";
+
+  it('leads with the browser, not with Ollama, for a user who has no built-in translator', () => {
+    // The bug this exists for: on Firefox, or on Chrome 137, the built-in
+    // engine bows out and Ollama is tried silently. The panel used to show
+    // Ollama's message alone, so the reader was told to start a server they
+    // had never heard of instead of that their browser was the problem.
+    const message = describeEngineFailure(
+      'This browser has no built-in translator (Chrome 138+ does).',
+      OLLAMA_DOWN,
+    );
+    expect(message.startsWith('This browser has no built-in translator')).toBe(
+      true,
+    );
+    expect(message).toContain(OLLAMA_DOWN);
+  });
+
+  it('names the missing language pair when that is what bowed out', () => {
+    const message = describeEngineFailure(
+      'Chrome has no en → ja language pack.',
+      OLLAMA_DOWN,
+    );
+    expect(message).toContain('en → ja');
+    expect(message).toContain(OLLAMA_DOWN);
+  });
+
+  it('passes Ollama’s message through untouched when Ollama was the chosen engine', () => {
+    // No first cause to report: the user picked Ollama, so Ollama failing is
+    // the whole story and a fallback sentence would invent a step that never
+    // happened.
+    expect(describeEngineFailure(null, OLLAMA_DOWN)).toBe(OLLAMA_DOWN);
+  });
+
+  it('treats a blank reason as no reason', () => {
+    expect(describeEngineFailure('   ', OLLAMA_DOWN)).toBe(OLLAMA_DOWN);
+  });
+
+  it('does not run two sentences together when the reason lacks a full stop', () => {
+    const message = describeEngineFailure('Something went sideways', 'nope');
+    expect(message).toContain('sideways. OpenRead fell back');
   });
 });

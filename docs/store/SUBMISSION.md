@@ -56,7 +56,15 @@ tab address exactly that. Typical turnaround is a few days.
 ## Gotchas
 
 - The zip must come from `pnpm zip` (WXT), not from zipping `.output/chrome-mv3`
-  by hand — WXT excludes source maps and sets the layout the store expects.
+  by hand — WXT sets the layout the store expects. It does keep the bundled
+  PDF.js `.map` files (about 9 MB of the 6.9 MB compressed zip); that is
+  deliberate. Reviewers read the package, and unreadable minified code is a
+  common cause of a slow or failed review.
+- The manifest `description` must be **≤ 132 characters** or the upload is
+  rejected outright. It is set explicitly in `wxt.config.ts` for that reason —
+  WXT would otherwise inherit `package.json`'s description, which is written
+  for npm and is 188 characters. Keep it in sync with the EN short description
+  in [`LISTING.md`](LISTING.md); the store prefills that field from it.
 - Don't change the manifest permissions between review cycles unless necessary;
   every permission change re-triggers in-depth review.
 - The listing screenshots are real end-to-end captures of the built extension
