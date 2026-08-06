@@ -10,18 +10,16 @@ on:
 
 permissions:
   contents: write
-  # Lets npm attach a provenance attestation, so anyone can verify the
-  # published tarball was built from this tag in this repository.
+  # What npm's trusted publishing runs on: GitHub mints a short-lived OIDC
+  # token for this workflow, npm checks it against the publisher rule on the
+  # package, and no long-lived secret is involved at all. It is also what makes
+  # the provenance attestation possible, so anyone can verify the published
+  # tarball was built from this tag in this repository.
   id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Job-level, so the publish step's `if` can see it. A step's own `env:`
-    # block is not in scope for its own condition, which would make the guard
-    # silently always-false and skip publishing forever.
-    env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +31,10 @@ jobs:
         with:
           node-version: 22
           cache: 'pnpm'
+
+      # Trusted publishing needs npm 11.5.1 or later, and Node 22 ships npm 10.
+      # Without this the publish fails on an npm that has never heard of OIDC.
+      - run: npm install -g npm@latest
 
       - run: pnpm install --frozen-lockfile
 
@@ -61,14 +63,27 @@ jobs:
       - name: Extract the changelog section for this tag
         run: pnpm release:notes "${GITHUB_REF_NAME}" > release-notes.md
 
+      # Idempotent, because a run that fails after this point can only be
+      # retried by re-running the job — and the job starts here. v2.17.0 was
+      # published to GitHub, failed at npm, and then could not be retried at
+      # all: every attempt died on "a release with the same tag name already
+      # exists" before reaching the step that had actually failed.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "OpenRead ${GITHUB_REF_NAME}" \
-            --notes-file release-notes.md \
-            ".output/openread-${GITHUB_REF_NAME#v}-chrome.zip"
+          zip=".output/openread-${GITHUB_REF_NAME#v}-chrome.zip"
+          if gh release view "${GITHUB_REF_NAME}" > /dev/null 2>&1; then
+            gh release edit "${GITHUB_REF_NAME}" \
+              --title "OpenRead ${GITHUB_REF_NAME}" \
+              --notes-file release-notes.md
+            gh release upload "${GITHUB_REF_NAME}" "${zip}" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "OpenRead ${GITHUB_REF_NAME}" \
+              --notes-file release-notes.md \
+              "${zip}"
+          fi
 
       # One release on the page, and it is always the newest.
       #
@@ -95,12 +110,16 @@ jobs:
                 gh release delete "${old}" --yes
               done
 
-      # Publishing needs an NPM_TOKEN repository secret. Without one this is a
-      # no-op and the GitHub release above still stands: the extension zip does
-      # not depend on npm. With one, `npx openread` starts working within a
-      # minute of the tag, instead of cloning and building for two.
+      # No token, and no `--provenance` flag either: publishing through trusted
+      # publishing attaches the attestation on its own. The package must carry a
+      # publisher rule naming this repository and this workflow file — set on
+      # npmjs.com under the package's settings — or npm refuses the OIDC token
+      # and this step fails loudly, which is the right way for it to fail.
+      #
+      # What it replaces: a long-lived `NPM_TOKEN` secret, and a run that died
+      # with `IDENTITY_TOKEN_READ_ERROR` while holding one.
+      #
+      # The GitHub release above does not depend on this step. The extension
+      # zip is not on npm; `npx openread` is.
       - name: Publish to npm
-        if: ${{ env.NPM_TOKEN != '' }}
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-          npm publish --provenance --access public
+        run: npm publish --access public

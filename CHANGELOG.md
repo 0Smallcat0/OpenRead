@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.17.0] - 2026-08-06
 
+### Changed
+
+- **Releases publish to npm through trusted publishing, with no token at all.**
+  GitHub mints a short-lived OIDC token for the release workflow, npm checks it
+  against a publisher rule naming this repository and this workflow file, and
+  the provenance attestation is attached automatically — the `--provenance`
+  flag is not needed and neither is `NPM_TOKEN`.
+
+  Forced by this release. `npm publish --provenance` with a token failed twice
+  on `IDENTITY_TOKEN_READ_ERROR`, having worked two hours earlier for 2.16.0.
+  The secret it removes was also due to expire on 2026-11-03, so the fix and
+  the chore were the same piece of work.
+
+  Node 22 ships npm 10; trusted publishing wants 11.5.1 or later, so the
+  workflow now installs it explicitly rather than failing on an npm that has
+  never heard of OIDC.
+
+### Fixed
+
+- **The release workflow can be retried.** It could not: a run that got past
+  the GitHub release and then failed — which is exactly what happened to
+  v2.17.0 — died on "a release with the same tag name already exists" on every
+  retry, before ever reaching the step that had actually failed. Publishing the
+  release is idempotent now: it edits and re-uploads when the release is
+  already there.
+
 ### Added
 
 - **Translate the box you are typing in.** `Ctrl+Shift+K`, and whatever is in
