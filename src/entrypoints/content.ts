@@ -1,5 +1,10 @@
 import { mountSelectionTranslator } from '../ui/selection';
-import { togglePageTranslation, translatePage } from '../ui/fullpage';
+import {
+  togglePageTranslation,
+  translatePage,
+  applyAppearance,
+  reflowTranslations,
+} from '../ui/fullpage';
 import { translateViaPort } from '../ui/port-translate';
 import { shouldBypassAI } from '../core/language';
 import { shouldAutoTranslate } from '../core/auto-translate';
@@ -59,6 +64,11 @@ export default defineContentScript({
       // target language costs a full round trip to say nothing.
       shouldSkipText: (text: string) =>
         shouldBypassAI(text, settings.targetLang),
+      appearance: {
+        displayMode: settings.displayMode,
+        translationStyle: settings.translationStyle,
+        translationScale: settings.translationScale,
+      },
     });
 
     chrome.runtime.onMessage.addListener(
@@ -82,6 +92,32 @@ export default defineContentScript({
         })();
       },
     );
+
+    // Appearance follows the popup without a reload. Style and size are pure
+    // CSS and change with the attribute alone; the display mode has to add or
+    // remove the wrapper that hides the original, which is what `reflow` does.
+    // A translated page the reader is looking at while they try the settings is
+    // exactly when this matters.
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'sync') return;
+      if (
+        !('displayMode' in changes) &&
+        !('translationStyle' in changes) &&
+        !('translationScale' in changes)
+      ) {
+        return;
+      }
+      void loadSettings().then((settings) => {
+        applyAppearance(document, {
+          displayMode: settings.displayMode,
+          translationStyle: settings.translationStyle,
+          translationScale: settings.translationScale,
+        });
+        if ('displayMode' in changes) {
+          reflowTranslations(document, settings.displayMode);
+        }
+      });
+    });
 
     // Translate without being asked, when the user has asked for that in
     // general. `translatePage` rather than the toggle: a page that arrives

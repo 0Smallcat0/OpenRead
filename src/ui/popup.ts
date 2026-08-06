@@ -74,6 +74,9 @@ interface Elements {
   model: HTMLInputElement;
   modelOptions: HTMLDataListElement;
   lang: HTMLSelectElement;
+  displayMode: HTMLSelectElement | null;
+  translationStyle: HTMLSelectElement | null;
+  translationScale: HTMLSelectElement | null;
   pack: HTMLElement | null;
   packNote: HTMLElement | null;
   downloadPack: HTMLButtonElement | null;
@@ -103,6 +106,11 @@ function collect(root: ParentNode): Elements | null {
   const model = root.querySelector<HTMLInputElement>('#modelId');
   const modelOptions = root.querySelector<HTMLDataListElement>('#modelOptions');
   const lang = root.querySelector<HTMLSelectElement>('#targetLang');
+  const displayMode = root.querySelector<HTMLSelectElement>('#displayMode');
+  const translationStyle =
+    root.querySelector<HTMLSelectElement>('#translationStyle');
+  const translationScale =
+    root.querySelector<HTMLSelectElement>('#translationScale');
   const pack = root.querySelector<HTMLElement>('#pack');
   const packNote = root.querySelector<HTMLElement>('#packNote');
   const downloadPack = root.querySelector<HTMLButtonElement>('#downloadPack');
@@ -153,6 +161,9 @@ function collect(root: ParentNode): Elements | null {
     model,
     modelOptions,
     lang,
+    displayMode,
+    translationStyle,
+    translationScale,
     pack,
     packNote,
     downloadPack,
@@ -171,6 +182,21 @@ function collect(root: ParentNode): Elements | null {
     copyFix,
     translatePage,
   };
+}
+
+/**
+ * A select's value, or the default when the control is absent or empty.
+ *
+ * Typed loosely on purpose: these three are unions of string literals and the
+ * DOM only knows about strings, so the check that matters is "is this one of
+ * ours", which the caller's default answers.
+ */
+function pick<T extends string>(
+  select: HTMLSelectElement | null,
+  fallback: T,
+): T {
+  const value = select?.value;
+  return value ? (value as T) : fallback;
 }
 
 /** Wire the popup up. Returns false when the document is not the popup. */
@@ -412,6 +438,18 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
       targetLang: el.lang.value,
       autoTranslate: currentAuto(),
       autoTranslateExcept: except,
+      // Read back through the defaults, so a document without these controls —
+      // an older popup, a test fixture — stores what was already there rather
+      // than an empty string the content script would have to guess about.
+      displayMode: pick(el.displayMode, DEFAULT_SETTINGS.displayMode),
+      translationStyle: pick(
+        el.translationStyle,
+        DEFAULT_SETTINGS.translationStyle,
+      ),
+      translationScale: pick(
+        el.translationScale,
+        DEFAULT_SETTINGS.translationScale,
+      ),
       obsidianVault: el.vault.value.trim(),
       obsidianFolder: el.folder.value.trim() || DEFAULT_SETTINGS.obsidianFolder,
       enrichOnCapture: el.enrich.checked,
@@ -442,6 +480,11 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     el.model.value = settings.modelId;
     el.lang.value = settings.targetLang;
     el.auto.value = settings.autoTranslate;
+    if (el.displayMode) el.displayMode.value = settings.displayMode;
+    if (el.translationStyle)
+      el.translationStyle.value = settings.translationStyle;
+    if (el.translationScale)
+      el.translationScale.value = settings.translationScale;
     except = [...settings.autoTranslateExcept];
     renderAuto();
     el.vault.value = settings.obsidianVault;
@@ -543,6 +586,16 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
   // `change` rather than `input` for the text fields, so a half-typed server
   // URL is not probed and stored on every keystroke; clicking anywhere else
   // blurs the field and fires it.
+  for (const field of [
+    el.displayMode,
+    el.translationStyle,
+    el.translationScale,
+  ]) {
+    field?.addEventListener('change', () => {
+      void persist();
+    });
+  }
+
   for (const field of [el.lang, el.vault, el.folder, el.enrich]) {
     field.addEventListener('change', () => {
       void persist();

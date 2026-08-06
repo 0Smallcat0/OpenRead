@@ -26,6 +26,21 @@ const MARKUP = `
     <datalist id="modelOptions"></datalist>
     </div>
     <select id="targetLang"></select>
+    <select id="displayMode">
+      <option value="bilingual">bilingual</option>
+      <option value="translationOnly">translationOnly</option>
+    </select>
+    <select id="translationStyle">
+      <option value="line">line</option>
+      <option value="plain">plain</option>
+      <option value="dashed">dashed</option>
+      <option value="highlight">highlight</option>
+    </select>
+    <select id="translationScale">
+      <option value="small">small</option>
+      <option value="same">same</option>
+      <option value="large">large</option>
+    </select>
     <div id="pack" hidden>
       <div id="packNote"></div>
       <button id="downloadPack" type="button">Download it now</button>

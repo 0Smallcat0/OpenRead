@@ -22,6 +22,7 @@ import {
   type PageTranslateDeps,
 } from './fullpage';
 import { TRANSLATED_ATTR } from './blocks';
+import { applyAppearance, reflowTranslations, ORIGINAL_CLASS } from './fullpage';
 
 const PAGE = `
   <h1>An introduction to the topic</h1>
@@ -1207,5 +1208,110 @@ describe('keeping a page translated', () => {
     expect(seen).not.toContain('The second paragraph of the article body.');
     expect(result.failed).toBe(0);
     expect(result.translated).toBe(2);
+  });
+});
+
+describe('how the translation looks', () => {
+  const originals = (): string[] =>
+    Array.from(document.querySelectorAll(`.${ORIGINAL_CLASS}`)).map(
+      (node) => node.textContent ?? '',
+    );
+
+  it('leaves the page alone in bilingual mode', async () => {
+    // The default, and the reason this project exists: a local model is good,
+    // not perfect, and a suspicious sentence has to be checkable. Wrapping the
+    // original would move nodes on a live page for no reason.
+    await translatePage(document, deps());
+    expect(originals()).toEqual([]);
+    expect(document.getElementById('a')?.firstChild?.textContent).toBe(
+      'The first paragraph of the article body.',
+    );
+  });
+
+  it('puts the original somewhere hideable in translation-only mode', async () => {
+    // A block's own text nodes cannot be hidden without hiding its children
+    // too, so they go into a wrapper that CSS can act on. The text is still
+    // there — which is what makes switching back a matter of one attribute.
+    await translatePage(
+      document,
+      deps({
+        appearance: {
+          displayMode: 'translationOnly',
+          translationStyle: 'line',
+          translationScale: 'same',
+        },
+      } as Partial<PageTranslateDeps>),
+    );
+
+    expect(originals()).toContain('The first paragraph of the article body.');
+    expect(document.documentElement.getAttribute('data-oit-display')).toBe(
+      'translationOnly',
+    );
+    // The translation is still a sibling, not inside the wrapper.
+    expect(
+      document.querySelector(`#a > .${BILINGUAL_CLASS}`)?.textContent,
+    ).toBe('[zh] The first paragraph of the article body.');
+  });
+
+  it('restores the page byte for byte when it is cleared', async () => {
+    // Undo has to undo the wrapper too, or a page that was translated once
+    // keeps a span nobody asked for for the rest of its life.
+    const before = document.body.innerHTML;
+    await translatePage(
+      document,
+      deps({
+        appearance: {
+          displayMode: 'translationOnly',
+          translationStyle: 'line',
+          translationScale: 'same',
+        },
+      } as Partial<PageTranslateDeps>),
+    );
+    expect(originals().length).toBeGreaterThan(0);
+
+    clearPageTranslation(document);
+    // The badge takes itself off a couple of seconds later, and removing it is
+    // the toggle's job rather than this one's.
+    document.getElementById(PROGRESS_ID)?.remove();
+
+    expect(document.querySelectorAll(`.${ORIGINAL_CLASS}`)).toHaveLength(0);
+    expect(document.body.innerHTML).toBe(before);
+  });
+
+  it('switches an already-translated page without translating again', async () => {
+    // Style and size are pure CSS. The display mode is not, and a reader trying
+    // the settings while looking at a translated page is exactly when it
+    // matters that nothing has to run again.
+    const seen: string[] = [];
+    await translatePage(
+      document,
+      deps({
+        translate: (text) => {
+          seen.push(text);
+          return Promise.resolve(`[zh] ${text}`);
+        },
+      }),
+    );
+    expect(seen).toHaveLength(3);
+    expect(originals()).toEqual([]);
+
+    reflowTranslations(document, 'translationOnly');
+    expect(originals().length).toBe(3);
+
+    reflowTranslations(document, 'bilingual');
+    expect(originals()).toEqual([]);
+    expect(seen).toHaveLength(3);
+    expect(translations()).toHaveLength(3);
+  });
+
+  it('records the appearance where CSS can act on it', () => {
+    applyAppearance(document, {
+      displayMode: 'bilingual',
+      translationStyle: 'highlight',
+      translationScale: 'large',
+    });
+    const root = document.documentElement;
+    expect(root.getAttribute('data-oit-style')).toBe('highlight');
+    expect(root.getAttribute('data-oit-scale')).toBe('large');
   });
 });

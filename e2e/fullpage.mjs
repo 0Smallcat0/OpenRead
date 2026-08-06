@@ -18,6 +18,8 @@
  *   6. toggling again restores the page byte for byte
  *   7. a long page translates what the reader can see, not all of it
  *   8. scrolling and later-loading content are picked up with no second press
+ *   9. the appearance settings reach the page, and switching one restyles a
+ *      page that is already translated without translating it again
  *
  * The last two cannot be tested anywhere else. jsdom lays nothing out, so every
  * block sits at 0,0 and "near the viewport" is true of all of them, and it has
@@ -479,6 +481,83 @@ try {
       `neither ready nor offered (${switched.note})`,
     );
   }
+
+  // ---- how it looks ----
+  //
+  // jsdom has no cascade, so "the original is hidden" and "the translation is
+  // larger" are claims only a real browser can settle.
+  console.log('\n--- appearance ---');
+  await configure({
+    autoTranslate: 'off',
+    targetLang: 'Traditional Chinese',
+    displayMode: 'translationOnly',
+    translationStyle: 'highlight',
+    translationScale: 'large',
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await sleep(1500);
+  await translatePage();
+  for (let waited = 0; waited < 20000; waited += 500) {
+    await sleep(500);
+    const n = await page.evaluate(
+      () => document.querySelectorAll('.oit-bilingual').length,
+    );
+    if (n > 0) break;
+  }
+
+  const styled = await page.evaluate(() => {
+    const original = document.querySelector('.oit-original');
+    const translated = document.querySelector('.oit-bilingual');
+    if (!original || !translated) return null;
+    const block = translated.parentElement;
+    return {
+      originalDisplay: getComputedStyle(original).display,
+      translationSize: parseFloat(getComputedStyle(translated).fontSize),
+      blockSize: parseFloat(getComputedStyle(block).fontSize),
+      background: getComputedStyle(translated).backgroundColor,
+      text: translated.textContent ?? '',
+    };
+  });
+  console.log(`  translation-only + highlight + large: ${JSON.stringify(styled)}`);
+
+  check(styled !== null, 'nothing was translated, so nothing could be styled');
+  check(
+    styled?.originalDisplay === 'none',
+    `translation-only left the original showing (display: ${String(styled?.originalDisplay)})`,
+  );
+  check(
+    (styled?.translationSize ?? 0) > (styled?.blockSize ?? 0),
+    'the "larger" size setting did not reach the page',
+  );
+  check(
+    styled?.background !== undefined &&
+      styled.background !== 'rgba(0, 0, 0, 0)' &&
+      styled.background !== 'transparent',
+    `the "tinted background" style did not reach the page (${String(styled?.background)})`,
+  );
+
+  // Switching back must restyle what is already there rather than re-run.
+  const beforeSwitch = await page.evaluate(
+    () => document.querySelectorAll('.oit-bilingual').length,
+  );
+  await configure({ displayMode: 'bilingual' });
+  await sleep(2500);
+  const restyled = await page.evaluate(() => ({
+    originals: document.querySelectorAll('.oit-original').length,
+    translations: document.querySelectorAll('.oit-bilingual').length,
+    firstVisible: document.querySelector('main p, p')?.textContent ?? '',
+  }));
+  console.log(`  after switching back to bilingual: ${JSON.stringify(restyled)}`);
+
+  check(
+    restyled.originals === 0,
+    'switching back to bilingual left the original wrapped and hidden',
+  );
+  check(
+    restyled.translations === beforeSwitch,
+    'switching the display mode re-translated the page instead of restyling it',
+  );
+
 } catch (error) {
   failures.push(error?.message ?? String(error));
 } finally {

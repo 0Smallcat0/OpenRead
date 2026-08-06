@@ -41,3 +41,17 @@ describe('isBuiltinTarget', () => {
     expect(isBuiltinTarget('Klingon')).toBe(false);
   });
 });
+
+describe('the popup list and the code table', () => {
+  it('maps every language the popup offers', async () => {
+    // Two lists, one meaning. They lived in different files and there was
+    // nothing stopping one from growing without the other, which would put a
+    // language in the dropdown that `toBcp47` answers null for — and null
+    // means "the built-in engine cannot serve this", so the entry would
+    // silently fall through to an Ollama the user may not have.
+    const { TARGET_LANGUAGES } = await import('../settings');
+    for (const name of TARGET_LANGUAGES) {
+      expect(toBcp47(name), `${name} has no BCP-47 code`).not.toBeNull();
+    }
+  });
+});
