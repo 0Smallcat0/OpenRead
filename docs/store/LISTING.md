@@ -106,7 +106,9 @@ Engineering & evaluation: https://github.com/0Smallcat0/OpenRead/blob/main/docs/
 
 ## Graphics
 
-- Icon: taken from the package (`icon/128.png`) automatically.
+- Store icon: **upload `public/icon/128.png` by hand**. The dashboard's
+  "Store icon" is a required field of its own — the icon inside the package is
+  what Chrome shows in the toolbar, not what the store listing shows.
 - Screenshots (1280×800, in [`screenshots/`](screenshots/)), re-shot against
   2.11.0 on the default built-in engine:
   1. `screenshot-1-translate-web.png` — whole-page bilingual translation on a
@@ -119,6 +121,10 @@ Engineering & evaluation: https://github.com/0Smallcat0/OpenRead/blob/main/docs/
      viewer, on a paper.
   4. `screenshot-4-popup.png` — the settings popup, showing the built-in
      engine selected and no server fields to fill in.
+
+  The store rejects a screenshot that carries an alpha channel — it wants JPEG
+  or 24-bit PNG. All four are 24-bit RGB, which is what `pnpm shoot` produces;
+  keep it that way if the capture path ever changes.
 
   All four are real end-to-end captures of the built extension running in
   Chrome — no mock-ups. Only the popup shot is staged, and only in placement:
