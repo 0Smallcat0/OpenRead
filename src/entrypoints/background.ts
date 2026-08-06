@@ -11,6 +11,7 @@ import { translateStream, enrichText } from '../api/ollama';
 import { loadSettings } from '../settings';
 import { translateBuiltin, BuiltinUnavailableError } from '../api/builtin';
 import { buildOriginStripRule, ORIGIN_STRIP_RULE_ID } from '../core/dnr-rule';
+import { describeEngineFailure } from '../core/diagnostics';
 import {
   STREAM_PORT_NAME,
   TRANSLATE_SELECTION_COMMAND,
@@ -216,6 +217,10 @@ export default defineBackground(() => {
       void (async () => {
         const { engine, baseUrl } = await loadSettings();
 
+        // Why the built-in engine bowed out, kept for the message below. Null
+        // whenever it never ran or never failed.
+        let builtinReason: string | null = null;
+
         // Chrome's own translator first, when it is the chosen engine. It
         // needs no server, so it is tried before the rule that exists to let
         // one be reached.
@@ -247,6 +252,7 @@ export default defineBackground(() => {
               post({ status: 'error', message: (error as Error).message });
               return;
             }
+            builtinReason = error.message;
           }
         }
 
@@ -271,7 +277,13 @@ export default defineBackground(() => {
             error instanceof TypeError
               ? `Can't reach Ollama at ${baseUrl}. Is the server running?`
               : (error as Error).message;
-          post({ status: 'error', message: message_ });
+          // Ollama's message alone is the wrong answer for a user who never
+          // chose Ollama and only landed here because the built-in engine
+          // could not serve them.
+          post({
+            status: 'error',
+            message: describeEngineFailure(builtinReason, message_),
+          });
         }
       })();
     });

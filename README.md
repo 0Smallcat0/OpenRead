@@ -41,6 +41,19 @@ seconds.
   <img src="docs/screenshots/popup.png" alt="The OpenRead popup: translator set to Chrome built-in, target language Traditional Chinese" width="290" />
 </p>
 
+### What it needs, and where it stops
+
+- **Chrome 138 or later, on desktop.** The built-in translator is Chrome's, not
+  this extension's. Firefox has no equivalent API, so the Firefox build runs on
+  the Ollama engine only.
+- **Eight target languages**: Traditional Chinese, Simplified Chinese, English,
+  Japanese, Korean, Spanish, French, German. The source language is whatever
+  the page is in — that side is not a list.
+- **Chrome decides which pairs exist.** It downloads packs per language pair,
+  and a pair it has no pack for is one the built-in engine cannot do. When that
+  happens OpenRead falls back to Ollama; with no Ollama configured, that is
+  where the attempt ends.
+
 ## Use it
 
 - **Whole page** — right-click → **Translate this page with OpenRead**, or the
