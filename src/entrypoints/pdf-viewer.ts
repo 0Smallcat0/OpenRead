@@ -41,11 +41,97 @@ const HIT_AREA_STYLE = `
 }
 `;
 
+/**
+ * How far a line's hit box may reach into the page margins.
+ *
+ * A web page's paragraph runs the width of its container, so a drag that
+ * starts in the margin still lands on the line. In the viewer the span stops
+ * at the first glyph, and a press 40px to its left selected nothing at all —
+ * which is most of what "PDFs are hard to select in" turns out to mean.
+ */
+const MARGIN_REACH = 60;
+
+/** Same-line grouping tolerance, in pixels of vertical offset. */
+const SAME_LINE = 4;
+
+/**
+ * Close the gaps between the boxes of one rendered page.
+ *
+ * PDF.js emits one span per text run, so a line is several boxes with dead
+ * space between them and dead margins either side. Each box is widened to meet
+ * its neighbours — half the gap each way — and the outermost ones reach into
+ * the margin. Padding grows the box while a matching negative margin leaves
+ * the glyphs exactly where PDF.js put them, so nothing moves on screen and
+ * character mapping inside a span is unaffected: the text still begins at the
+ * same x.
+ */
+function widenLineBoxes(layer: Element): void {
+  const spans = Array.from(layer.querySelectorAll<HTMLElement>('span')).filter(
+    (span) => span.textContent?.trim(),
+  );
+  if (spans.length === 0) return;
+
+  const measured = spans.map((span) => ({
+    span,
+    box: span.getBoundingClientRect(),
+  }));
+  const layerBox = layer.getBoundingClientRect();
+
+  // Group by line. Sorting by top then left puts a line's runs in order even
+  // when the PDF emitted them out of order, which justified text does.
+  const lines = new Map<number, typeof measured>();
+  for (const item of measured) {
+    const key = [...lines.keys()].find(
+      (top) => Math.abs(top - item.box.top) <= SAME_LINE,
+    );
+    if (key === undefined) lines.set(item.box.top, [item]);
+    else lines.get(key)?.push(item);
+  }
+
+  for (const runs of lines.values()) {
+    runs.sort((a, b) => a.box.left - b.box.left);
+    for (let i = 0; i < runs.length; i++) {
+      const current = runs[i];
+      if (!current) continue;
+      const previous = runs[i - 1];
+      const next = runs[i + 1];
+
+      const left = previous
+        ? Math.max(0, (current.box.left - previous.box.right) / 2)
+        : Math.min(MARGIN_REACH, Math.max(0, current.box.left - layerBox.left));
+      const right = next
+        ? Math.max(0, (next.box.left - current.box.right) / 2)
+        : Math.min(
+            MARGIN_REACH,
+            Math.max(0, layerBox.right - current.box.right),
+          );
+
+      current.span.style.paddingInline = `${String(left)}px ${String(right)}px`;
+      current.span.style.marginInline = `${String(-left)}px ${String(-right)}px`;
+    }
+  }
+}
+
 function widenTextLayerHitArea(): void {
   const style = document.createElement('style');
   style.id = 'oit-pdf-hit-area';
   style.textContent = HIT_AREA_STYLE;
   (document.head ?? document.documentElement).appendChild(style);
+
+  // Pages render lazily and re-render on zoom, so this cannot be a one-off.
+  const seen = new WeakSet<Element>();
+  const sweep = (): void => {
+    for (const layer of document.querySelectorAll('.textLayer')) {
+      if (seen.has(layer) || layer.childElementCount === 0) continue;
+      seen.add(layer);
+      widenLineBoxes(layer);
+    }
+  };
+  sweep();
+  new MutationObserver(sweep).observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
 }
 
 export default defineUnlistedScript(() => {
