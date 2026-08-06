@@ -77,10 +77,41 @@ export function iconPosition(
   if (beside + ICON_SIZE <= viewport.width) {
     return { left: beside, top: clampTop(rect.bottom - ICON_SIZE) };
   }
+  // No room after the text: put it before the start of the same line rather
+  // than under it, because under it is the next line.
+  const before = rect.left - ICON_GAP - ICON_SIZE;
+  if (before >= 0) {
+    return { left: before, top: clampTop(rect.bottom - ICON_SIZE) };
+  }
   return {
     left: Math.max(0, Math.min(rect.left, viewport.width - ICON_SIZE)),
     top: clampTop(rect.bottom + ICON_GAP),
   };
+}
+
+/**
+ * The line the selection ends on, which is where the icon belongs.
+ *
+ * A multi-line selection's bounding box is the union of its lines, so its
+ * right edge is the *widest* line and its bottom is the *last* one — a corner
+ * that need not be near either. Measured on a six-line paragraph in a PDF: the
+ * union was 218..942 while the last line ended at 798, and the icon landed at
+ * x 948 on top of an entirely different line of text, nowhere near where the
+ * drag had finished.
+ *
+ * `getClientRects()` gives one rectangle per line fragment, in document order,
+ * so the last of them is the end of the selection.
+ */
+export function selectionAnchor(range: Range): DOMRect {
+  // Guarded: not every host gives a Range the full interface, and an icon in
+  // a slightly wrong place beats a selection handler that throws.
+  const rects =
+    typeof range.getClientRects === 'function'
+      ? Array.from(range.getClientRects()).filter(
+          (rect) => rect.width > 0 || rect.height > 0,
+        )
+      : [];
+  return rects[rects.length - 1] ?? range.getBoundingClientRect();
 }
 
 /**
@@ -244,7 +275,7 @@ export function mountSelectionTranslator(
     panel = null;
   }
 
-  function showIcon(rect: DOMRect, text: string): void {
+  function showIcon(anchor: DOMRect, text: string, rect: DOMRect): void {
     removeIcon();
     // A button, not a div: keyboard users select with the keyboard too, and a
     // div with a mousedown handler is unreachable for them.
@@ -253,7 +284,7 @@ export function mountSelectionTranslator(
     el.type = 'button';
     el.textContent = '文';
     el.setAttribute('aria-label', 'Translate selection');
-    const place = iconPosition(rect, {
+    const place = iconPosition(anchor, {
       width: window.innerWidth,
       height: window.innerHeight,
     });
@@ -758,8 +789,19 @@ export function mountSelectionTranslator(
     }
   }
 
-  /** The current selection, if it is something worth offering to translate. */
-  function usableSelection(): { text: string; rect: DOMRect } | null {
+  /**
+   * The current selection, if it is something worth offering to translate.
+   *
+   * Two rectangles, because they answer different questions. `rect` is the
+   * whole selection, which is what the panel is placed against and what the
+   * palette is sampled from. `anchor` is the line it ends on, which is where
+   * the icon goes — see `selectionAnchor`.
+   */
+  function usableSelection(): {
+    text: string;
+    rect: DOMRect;
+    anchor: DOMRect;
+  } | null {
     const selection = window.getSelection();
     const text = selection?.toString().trim() ?? '';
     if (
@@ -768,7 +810,12 @@ export function mountSelectionTranslator(
       selection &&
       selection.rangeCount > 0
     ) {
-      return { text, rect: selection.getRangeAt(0).getBoundingClientRect() };
+      const range = selection.getRangeAt(0);
+      return {
+        text,
+        rect: range.getBoundingClientRect(),
+        anchor: selectionAnchor(range),
+      };
     }
     return null;
   }
@@ -780,7 +827,7 @@ export function mountSelectionTranslator(
       const found = usableSelection();
       if (found) {
         lastRect = found.rect;
-        showIcon(found.rect, found.text);
+        showIcon(found.anchor, found.text, found.rect);
       } else {
         removeIcon();
       }

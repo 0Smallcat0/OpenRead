@@ -5,6 +5,35 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.4] - 2026-08-06
+
+### Fixed
+
+- **The 文 icon landed on top of the text when the selection spanned several
+  lines.** It was placed against the selection's bounding box, and the bounding
+  box of a multi-line selection is the union of its lines — its right edge is
+  the *widest* line and its bottom is the *last* one, a corner that need not be
+  near either. Measured on a six-line paragraph in a PDF:
+
+  ```
+  union      left 218  right 942  bottom 302
+  last line  left 770  right 798  bottom 298
+  icon       x 948  y 274   sitting over "A purely peer-to-pee"
+  ```
+
+  The icon now goes against the line the selection *ends* on, which is where
+  the drag finished and where a hand expects to find it. Same paragraph after
+  the change: `x 804`, immediately after the last selected word.
+
+  `getClientRects()` gives one rectangle per line fragment in document order,
+  so the last of them is the end of the selection. Guarded, because not every
+  host gives a Range the full interface and an icon slightly out of place beats
+  a selection handler that throws.
+
+- When there is no room after the text, the icon now goes *before* the start of
+  that line rather than under it. Under it is the next line, which is the thing
+  2.8.3 set out to stop it doing.
+
 ## [2.10.3] - 2026-08-06
 
 ### Fixed
