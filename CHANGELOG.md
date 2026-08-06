@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.4] - 2026-08-06
+
+### Fixed
+
+- **The popup only saved when you pressed Save, and "Translate this page" sits
+  above the language selector.** So the obvious sequence — open the popup, pick
+  a different target language, press the big button next to it — translated
+  into the language you had just moved away from. Verified in the real popup
+  before the change: firing  on the selector left
+   empty.
+
+  Every control now writes through as it changes, and "Translate this page"
+  persists before it hands off, so the page is translated with what the popup
+  is showing rather than with what was last saved. Text fields write on
+   rather than , so a half-typed server URL is not probed and
+  stored on every keystroke.
+
+  The Save button stays, and is still the only thing that says "Saved ✓": a
+  status line flashing on every dropdown movement is noise, and the dropdown
+  showing the new value is already the confirmation.
+
+  Same popup after the change: picking Japanese stores it immediately, and
+  switching the engine stores that too, with the status line left blank.
+
 ## [2.8.3] - 2026-08-06
 
 ### Fixed
