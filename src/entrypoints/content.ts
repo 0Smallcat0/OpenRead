@@ -1,8 +1,9 @@
 import { mountSelectionTranslator } from '../ui/selection';
-import { togglePageTranslation } from '../ui/fullpage';
+import { togglePageTranslation, translatePage } from '../ui/fullpage';
 import { translateViaPort } from '../ui/port-translate';
 import { shouldBypassAI } from '../core/language';
-import { loadSettings } from '../settings';
+import { shouldAutoTranslate } from '../core/auto-translate';
+import { loadSettings, type Settings } from '../settings';
 
 /**
  * Web-page content script: mounts the shared selection translator on every
@@ -36,28 +37,63 @@ export default defineContentScript({
     // the same corner.
     if (window.top !== window) return;
 
+    const pageDeps = (settings: Settings, unprompted = false) => ({
+      targetLang: settings.targetLang,
+      unprompted,
+      translate: (
+        text: string,
+        signal: AbortSignal,
+        attempt: number,
+        onDownloadProgress?: (loaded: number) => void,
+      ) =>
+        translateViaPort({
+          text,
+          targetLang: settings.targetLang,
+          model: settings.modelId,
+          signal,
+          retryCount: attempt,
+          onDownloadProgress,
+        }),
+      // The same short-circuit selection uses: a block already in the
+      // target language costs a full round trip to say nothing.
+      shouldSkipText: (text: string) =>
+        shouldBypassAI(text, settings.targetLang),
+    });
+
     chrome.runtime.onMessage.addListener((message: unknown) => {
       if ((message as { type?: string } | null)?.type !== 'TRANSLATE_PAGE') {
         return;
       }
       void (async () => {
         const settings = await loadSettings();
-        await togglePageTranslation(document, {
-          targetLang: settings.targetLang,
-          translate: (text, signal, attempt, onDownloadProgress) =>
-            translateViaPort({
-              text,
-              targetLang: settings.targetLang,
-              model: settings.modelId,
-              signal,
-              retryCount: attempt,
-              onDownloadProgress,
-            }),
-          // The same short-circuit selection uses: a block already in the
-          // target language costs a full round trip to say nothing.
-          shouldSkipText: (text) => shouldBypassAI(text, settings.targetLang),
-        });
+        await togglePageTranslation(document, pageDeps(settings));
       })();
     });
+
+    // Translate without being asked, when the user has asked for that in
+    // general. `translatePage` rather than the toggle: a page that arrives
+    // already carrying a translation — a back-navigation restoring the bfcache
+    // — must not have it wiped by the automatic pass, which is what the toggle
+    // would do.
+    void (async () => {
+      const settings = await loadSettings();
+      if (settings.autoTranslate === 'off') return;
+      // Read from the page rather than from `navigator.language`: what matters
+      // is what this document says it is, not what the browser is set to.
+      const sample = Array.from(document.querySelectorAll('p, h1, h2, h3, li'))
+        .slice(0, 20)
+        .map((element) => element.textContent ?? '')
+        .join(' ')
+        .slice(0, 1000);
+      const decided = shouldAutoTranslate({
+        mode: settings.autoTranslate,
+        host: location.hostname,
+        except: settings.autoTranslateExcept,
+        pageLang: document.documentElement.getAttribute('lang'),
+        sample,
+        targetLang: settings.targetLang,
+      });
+      if (decided) await translatePage(document, pageDeps(settings, true));
+    })();
   },
 });

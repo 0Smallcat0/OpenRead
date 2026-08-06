@@ -5,6 +5,45 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.0] - 2026-08-06
+
+### Added
+
+- **Translate automatically, off by default.** Three modes in the popup: off,
+  pages in another language, or every page. Plus a checkbox that excludes the
+  site you are on, permanently, and covers its subdomains — because the honest
+  form of "translate everything" is one that can be told to stop here.
+
+  The whole design is shaped by one asymmetry: a missed automatic translation
+  costs the reader a keypress, and an unwanted one damages a page they could
+  already read, on every load, until they find the setting. So the answer is no
+  whenever the page does not say what language it is in. `<html lang>` decides
+  it; a page that declares nothing is left alone rather than guessed at, since
+  reading the text would mean telling English from Spanish from French and that
+  guess ends with an English page translated into English forever. Bare `zh` is
+  the one ambiguous tag worth resolving — both scripts are common under it — and
+  that one is settled by the script detector this project already has. `zh-TW`
+  and `zh-HK` count as Traditional without saying so, which is how the web
+  actually writes it.
+
+  Off by default. An extension that starts rewriting pages the moment it is
+  installed has not been consented to yet, whatever the setting would have been
+  worth afterwards.
+
+  An automatic pass that finds nothing says nothing. A press that appears to do
+  nothing looks broken, so it still answers "Nothing to translate on this page"
+  — but the content script runs at `document_end`, and on an app that renders
+  afterwards that badge would appear unbidden on every single navigation. The
+  observers are attached either way, so "nothing yet" still becomes translated
+  on its own.
+
+  Verified in a real browser, four reloads with nothing pressed: a foreign page
+  translated, an English page with English as the target neither translated nor
+  even started, the same page on `always` started and correctly found nothing
+  to do, and an excluded host untouched. The badge is what separates "decided
+  not to" from "decided to and found nothing" — without it the last two look
+  identical and the two modes are one mode with different labels.
+
 ## [2.13.0] - 2026-08-06
 
 ### Changed

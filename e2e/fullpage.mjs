@@ -330,6 +330,87 @@ try {
   console.log(`  appended paragraph translated: ${appended ? 'yes' : 'no'}`);
   check(appended, 'content added after the run was never translated');
 
+  // ---- translating without being asked ----
+  //
+  // Nothing below sends a message. The only thing that can produce a
+  // translation here is the content script deciding for itself on load, which
+  // is a path no unit test reaches: it starts at `chrome.storage`, runs in a
+  // content script, and is triggered by a navigation.
+  console.log('\n--- without being asked ---');
+
+  const configure = (values) =>
+    worker.evaluate(
+      async (settings) => chrome.storage.sync.set(settings),
+      values,
+    );
+
+  /**
+   * Reload, then watch for up to `waitMs`.
+   *
+   * The badge is watched as well as the translations, because it is the only
+   * evidence that separates "decided not to translate" from "decided to, and
+   * found nothing worth translating" — which is exactly the difference between
+   * the two modes. It removes itself a couple of seconds after finishing, so
+   * it has to be caught rather than read at the end.
+   */
+  const afterReload = async (label, waitMs = 20000) => {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    let count = 0;
+    let badged = false;
+    for (let waited = 0; waited < waitMs; waited += 400) {
+      await sleep(400);
+      const seen = await page.evaluate(() => ({
+        count: document.querySelectorAll('.oit-bilingual').length,
+        badge: Boolean(document.getElementById('oit-page-progress')),
+      }));
+      count = seen.count;
+      badged ||= seen.badge;
+      if (count > 0) break;
+    }
+    console.log(
+      `  ${label}: ${count} translated, badge ${badged ? 'shown' : 'never'}`,
+    );
+    return { count, badged };
+  };
+
+  await configure({
+    autoTranslate: 'foreign',
+    targetLang: 'Traditional Chinese',
+    autoTranslateExcept: [],
+  });
+  const auto = await afterReload('a foreign page, auto on');
+  check(auto.count > 0, 'auto-translate was on and the page was left in English');
+
+  // The failure that matters most: rewriting a page the reader can already
+  // read. example.com declares `lang="en"`, so asking for English must be a
+  // no-op — and not a quiet one either, since nothing should have started.
+  await configure({ targetLang: 'English' });
+  const same = await afterReload('a page already in the target', 6000);
+  check(same.count === 0, 'an English page was auto-translated into English');
+  check(!same.badged, 'auto-translate started a run it should have skipped');
+
+  // `always` is the same page, the same target, one setting apart. It has to
+  // reach the engine and find nothing to do, or the two modes are the same
+  // mode with different labels.
+  await configure({ autoTranslate: 'always' });
+  const always = await afterReload('the same page on `always`', 10000);
+  check(
+    always.badged,
+    '`always` behaved like `foreign` and never started a run',
+  );
+
+  await configure({
+    autoTranslate: 'foreign',
+    targetLang: 'Traditional Chinese',
+    autoTranslateExcept: ['example.com'],
+  });
+  const excluded = await afterReload('an excluded host', 6000);
+  check(
+    excluded.count === 0,
+    'the per-site exception did not stop auto-translation',
+  );
+  check(!excluded.badged, 'the excluded host still started a run');
+
 } catch (error) {
   failures.push(error?.message ?? String(error));
 } finally {
