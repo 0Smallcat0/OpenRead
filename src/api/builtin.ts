@@ -24,6 +24,8 @@
  */
 import { toBcp47 } from '../core/bcp47';
 import { toTaiwanVocabulary, wantsTaiwanVocabulary } from '../core/tw-vocab';
+import { detectChineseScript } from '../core/language';
+import { toTraditionalTW } from '../core/zh-convert';
 
 /**
  * Minimal ambient shapes for the Translator and LanguageDetector APIs.
@@ -172,13 +174,17 @@ const MIN_DETECTION_CONFIDENCE = 0.2;
  */
 const translatorCache = new Map<string, Promise<TranslatorInstance>>();
 
+function pairKey(sourceLanguage: string, targetLanguage: string): string {
+  return `${sourceLanguage}->${targetLanguage}`;
+}
+
 function sharedTranslator(
   translators: TranslatorFactory,
   sourceLanguage: string,
   targetLanguage: string,
   monitor: ((monitor: DownloadMonitor) => void) | undefined,
 ): Promise<TranslatorInstance> {
-  const key = `${sourceLanguage}->${targetLanguage}`;
+  const key = pairKey(sourceLanguage, targetLanguage);
   const existing = translatorCache.get(key);
   if (existing) return existing;
 
@@ -304,8 +310,19 @@ export async function translateBuiltin({
   // it. The selection UI already short-circuits the Chinese case; this covers
   // an English page being asked for English.
   if (baseLanguage(sourceLanguage) === baseLanguage(targetLanguage)) {
+    if (!wantsTaiwanVocabulary(targetLang)) {
+      onChunk(text);
+      return;
+    }
+    // Except that `zh` is two scripts wearing one code. A Simplified page
+    // declares `lang="zh-CN"`, the target is `zh-Hant`, both reduce to `zh`,
+    // and the branch above would hand a Taiwanese reader Simplified characters
+    // back and call it done. Chrome has no zh-Hans → zh-Hant pack, but OpenCC
+    // does this exact conversion for the Ollama path already.
     onChunk(
-      wantsTaiwanVocabulary(targetLang) ? toTaiwanVocabulary(text) : text,
+      toTaiwanVocabulary(
+        detectChineseScript(text) === 'sc' ? toTraditionalTW(text) : text,
+      ),
     );
     return;
   }
@@ -320,21 +337,21 @@ export async function translateBuiltin({
     );
   }
 
-  const translator = await untilAborted(
-    sharedTranslator(
-      translators,
-      sourceLanguage,
-      targetLanguage,
-      onDownloadProgress
-        ? (monitor) => {
-            monitor.addEventListener('downloadprogress', (event) => {
-              onDownloadProgress(event.loaded);
-            });
-          }
-        : undefined,
-    ),
-    signal,
-  );
+  const monitor = onDownloadProgress
+    ? (m: DownloadMonitor) => {
+        m.addEventListener('downloadprogress', (event) => {
+          onDownloadProgress(event.loaded);
+        });
+      }
+    : undefined;
+
+  const instance = (): Promise<TranslatorInstance> =>
+    untilAborted(
+      sharedTranslator(translators, sourceLanguage, targetLanguage, monitor),
+      signal,
+    );
+
+  const translator = await instance();
   if (signal?.aborted) return;
 
   // Buffered rather than streamed, on purpose.
@@ -345,9 +362,54 @@ export async function translateBuiltin({
   // The same problem OpenCC has on the Ollama path, where it is solved by
   // holding the ambiguous tail back. Here it is solved by not streaming: a
   // sentence comes back in 9-20 ms, so there is no first paint to protect.
-  const raw = await translator.translate(text);
+  //
+  // Deliberately not destroyed afterwards: the instance is shared with every
+  // other request for this pair, and the next block is normally microseconds
+  // away.
+  let raw: string;
+  try {
+    raw = await translator.translate(text);
+  } catch (error) {
+    if (signal?.aborted || (error as Error).name === 'AbortError') throw error;
+    // A dead instance, thrown away and replaced.
+    //
+    // `Translator.create()` can resolve with an instance whose language pack
+    // is not installed yet — measured by creating nine pairs at once against a
+    // cold profile: all nine creates resolved, then seven of the nine threw
+    // `UnknownError: Other generic failures occurred.` on the first
+    // `translate()`, and never worked again. `availability` said `available`
+    // immediately afterwards and a freshly created translator for the same
+    // pair worked on the spot, so the pack was fine and only the handle was
+    // not.
+    //
+    // Before this, the dead handle stayed in the cache for the life of the
+    // worker: every later request for that pair — every block of a whole-page
+    // run, every selection — got Chrome's generic message and no way back
+    // short of restarting the browser. That is what reached the user.
+    //
+    // Only a failed `translate()` is retried. A failed `create()` is a
+    // download that did not finish, and trying it again would spend a second
+    // wait as long as the first with nothing on screen to say why.
+    translatorCache.delete(pairKey(sourceLanguage, targetLanguage));
+    const fresh = await instance();
+    if (signal?.aborted) return;
+    try {
+      raw = await fresh.translate(text);
+    } catch (retryError) {
+      if (signal?.aborted || (retryError as Error).name === 'AbortError')
+        throw retryError;
+      // Not a `BuiltinUnavailableError`: falling through to Ollama would
+      // answer a built-in-engine user with "Can't reach Ollama", which is
+      // true and about the wrong thing. Not Chrome's own wording either —
+      // "Other generic failures occurred." went straight into the panel and
+      // told the reader nothing to do.
+      throw new Error(
+        "Chrome's built-in translator failed on this text, and again on a " +
+          'fresh translator. Try again in a moment.',
+      );
+    }
+  }
+
   if (signal?.aborted || !raw) return;
   onChunk(wantsTaiwanVocabulary(targetLang) ? toTaiwanVocabulary(raw) : raw);
-  // Deliberately not destroyed: the instance is shared with every other
-  // request for this pair, and the next block is normally microseconds away.
 }

@@ -351,3 +351,159 @@ describe('reusing the translator for a language pair', () => {
     expect(settled).toBe(false);
   });
 });
+
+describe('a translator instance that is dead on arrival', () => {
+  /**
+   * `Translator.create()` can resolve with an instance whose language pack is
+   * not installed yet. Measured in a real Chrome against a cold profile: nine
+   * pairs created at once, all nine creates resolved, seven of the nine then
+   * threw `UnknownError: Other generic failures occurred.` on their first
+   * `translate()` and never worked again. `availability` said `available`
+   * straight afterwards and a freshly created translator for the same pair
+   * worked on the spot — so the pack was fine and only the handle was not.
+   *
+   * Since 2.8.1 that handle is cached for the life of the worker, so one bad
+   * create used to mean every later request for the pair got Chrome's generic
+   * message with no way back short of restarting the browser. That is what
+   * reached a user mid-session.
+   */
+  function stubWithDeadFirstInstance(deadCount: number): () => number {
+    const global = globalThis as unknown as Record<string, unknown>;
+    let creates = 0;
+    global.Translator = {
+      availability: () => Promise.resolve('available'),
+      create: () => {
+        const mine = ++creates;
+        return Promise.resolve({
+          translate: (input: string) =>
+            mine <= deadCount
+              ? Promise.reject(
+                  Object.assign(new Error('Other generic failures occurred.'), {
+                    name: 'UnknownError',
+                  }),
+                )
+              : Promise.resolve(`[zh] ${input}`),
+        });
+      },
+    };
+    return () => creates;
+  }
+
+  it('throws it away and succeeds on a fresh one', async () => {
+    const creates = stubWithDeadFirstInstance(1);
+    expect(
+      await collect({
+        text: 'Hello',
+        targetLang: 'Traditional Chinese',
+        sourceLang: 'en',
+      }),
+    ).toBe('[zh] Hello');
+    expect(creates()).toBe(2);
+  });
+
+  it('does not leave the dead one in the cache for the next request', async () => {
+    // The bug was not the first failure, it was every failure after it.
+    const creates = stubWithDeadFirstInstance(1);
+    const params = {
+      text: 'Hello',
+      targetLang: 'Traditional Chinese',
+      sourceLang: 'en',
+    };
+    await collect(params);
+    expect(await collect(params)).toBe('[zh] Hello');
+    // Two creates for the first call, and the second call reuses the survivor.
+    expect(creates()).toBe(2);
+  });
+
+  it('says something a reader can act on when the retry fails too', async () => {
+    // Chrome's own wording — "Other generic failures occurred." — was going
+    // straight into the panel, which tells the reader nothing to do.
+    stubWithDeadFirstInstance(2);
+    await expect(
+      collect({
+        text: 'Hello',
+        targetLang: 'Traditional Chinese',
+        sourceLang: 'en',
+      }),
+    ).rejects.toThrow(/Try again in a moment/);
+  });
+
+  it('does not fall back to Ollama on it', async () => {
+    // A `BuiltinUnavailableError` means "this engine cannot do it, try the
+    // other one", and answering a built-in-engine user with "Can't reach
+    // Ollama" would be true and about the wrong thing.
+    stubWithDeadFirstInstance(2);
+    await expect(
+      collect({
+        text: 'Hello',
+        targetLang: 'Traditional Chinese',
+        sourceLang: 'en',
+      }),
+    ).rejects.not.toBeInstanceOf(BuiltinUnavailableError);
+  });
+
+  it('leaves an abort alone rather than retrying it', async () => {
+    const global = globalThis as unknown as Record<string, unknown>;
+    let creates = 0;
+    global.Translator = {
+      availability: () => Promise.resolve('available'),
+      create: () => {
+        creates++;
+        return Promise.resolve({
+          translate: () =>
+            Promise.reject(new DOMException('Aborted', 'AbortError')),
+        });
+      },
+    };
+    await expect(
+      collect({
+        text: 'Hello',
+        targetLang: 'Traditional Chinese',
+        sourceLang: 'en',
+      }),
+    ).rejects.toThrow(/abort/i);
+    expect(creates).toBe(1);
+  });
+});
+
+describe('zh is two scripts wearing one code', () => {
+  it('converts a Simplified page asked for Traditional Chinese', async () => {
+    // `zh-CN` and `zh-Hant` both reduce to `zh`, so the same-language
+    // short-circuit used to hand a Taiwanese reader the Simplified text back
+    // and report the page as needing no translation. Chrome has no
+    // zh-Hans -> zh-Hant pack; OpenCC does this conversion for the Ollama path
+    // already.
+    stub();
+    const out = await collect({
+      text: '这个软件开发工具的用户界面',
+      targetLang: 'Traditional Chinese',
+      sourceLang: 'zh-CN',
+    });
+    expect(out).toContain('軟體');
+    expect(out).not.toContain('软件');
+    // Nothing was asked of Chrome — the conversion is local.
+    expect(created).toHaveLength(0);
+  });
+
+  it('leaves a Traditional page alone apart from the vocabulary pass', async () => {
+    stub();
+    const out = await collect({
+      text: '這個軟體開發工具',
+      targetLang: 'Traditional Chinese',
+      sourceLang: 'zh-TW',
+    });
+    expect(out).toBe('這個軟體開發工具');
+    expect(created).toHaveLength(0);
+  });
+
+  it('still hands an English page back verbatim when asked for English', async () => {
+    stub();
+    const out = await collect({
+      text: 'A purely peer-to-peer version of electronic cash.',
+      targetLang: 'English',
+      sourceLang: 'en',
+    });
+    expect(out).toBe('A purely peer-to-peer version of electronic cash.');
+    expect(created).toHaveLength(0);
+  });
+});
