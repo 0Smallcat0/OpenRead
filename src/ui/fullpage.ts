@@ -46,6 +46,17 @@ const STYLE_ID = 'oit-page-style';
  */
 export const CONCURRENCY = 2;
 
+/**
+ * Consecutive failures that end the run.
+ *
+ * Three, because one block failing on its own is bad luck and three in a row is
+ * a setup that is not going to start working on block four. The old behaviour
+ * marked every block: with Ollama not running, twenty-eight ⚠️ lines for one
+ * problem that was obvious by the third, all of which the reader then had to
+ * clear.
+ */
+export const GIVE_UP_AFTER = 3;
+
 export interface PageTranslateDeps {
   /**
    * Translate one block's text. Rejects on failure; aborts on the signal.
@@ -314,6 +325,10 @@ export async function translatePage(
   let failed = 0;
   /** Blocks the engine handed back exactly as they went in. */
   let unchanged = 0;
+  /** Failures since the last block that worked. */
+  let consecutiveFailures = 0;
+  /** Set when the run abandoned itself rather than being stopped by the user. */
+  let gaveUp = false;
   let next = 0;
   /**
    * The first real reason a block failed.
@@ -371,14 +386,17 @@ export async function translatePage(
           // from under it. Two meanings for one attribute is how that bug
           // comes back.
           unchanged++;
+          consecutiveFailures = 0;
         } else if (result.trim()) {
           attach(block, result.trim(), deps.targetLang, false);
           translated++;
+          consecutiveFailures = 0;
         } else {
           // An empty generation is a failure with a friendly face: silently
           // skipping it leaves a gap the reader reads as "already translated".
           attach(block, '⚠️ no translation returned', deps.targetLang, true);
           failed++;
+          consecutiveFailures++;
         }
       } catch (error) {
         if (controller.signal.aborted) return;
@@ -387,6 +405,20 @@ export async function translatePage(
         if (!firstError && reason) firstError = reason;
         attach(block, '⚠️ translation failed', deps.targetLang, true);
         failed++;
+        consecutiveFailures++;
+      }
+
+      // Stop rather than march the same failure down the page.
+      //
+      // With Ollama not running, every block fails the same way and the old
+      // behaviour was to mark all of them: twenty-eight ⚠️ lines the reader
+      // then has to clear, for one problem that was already obvious by the
+      // third. Three in a row is a broken setup, not bad luck — one block
+      // failing on its own is, which is why the counter resets on any success.
+      if (consecutiveFailures >= GIVE_UP_AFTER) {
+        gaveUp = true;
+        controller.abort();
+        return;
       }
       done++;
       handled++;
@@ -415,8 +447,29 @@ export async function translatePage(
     );
   }
 
-  const stopped = controller.signal.aborted;
+  const stopped = controller.signal.aborted && !gaveUp;
   if (active === controller) active = null;
+
+  if (gaveUp) {
+    // Take the debris with it. The three ⚠️ markers proved the point and are
+    // now just something to clear before the page reads normally again; the
+    // reason is worth keeping, and it goes in the badge.
+    for (const marker of Array.from(
+      root.querySelectorAll(`.${BILINGUAL_CLASS}[data-oit-failed]`),
+    )) {
+      const block = marker.parentElement;
+      marker.remove();
+      if (block && !block.querySelector(`.${BILINGUAL_CLASS}`)) {
+        block.removeAttribute(TRANSLATED_ATTR);
+      }
+    }
+    progress.finish(
+      firstError
+        ? `Gave up after ${String(GIVE_UP_AFTER)} failures — ${firstError}`
+        : `Gave up after ${String(GIVE_UP_AFTER)} failures`,
+    );
+    return { translated, failed, unchanged, stopped: false };
+  }
 
   const summary = stopped
     ? `Stopped — ${String(translated)} translated`

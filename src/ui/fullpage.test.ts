@@ -18,6 +18,7 @@ import {
   BILINGUAL_CLASS,
   PROGRESS_ID,
   CONCURRENCY,
+  GIVE_UP_AFTER,
   type PageTranslateDeps,
 } from './fullpage';
 import { TRANSLATED_ATTR } from './blocks';
@@ -592,5 +593,108 @@ describe('a page already in the target language', () => {
     );
     expect(result.translated).toBe(3);
     expect(result.unchanged).toBe(0);
+  });
+});
+
+describe('a run that is going nowhere', () => {
+  const PAGE_OF_TEN = Array.from(
+    { length: 10 },
+    (_, i) => `<p>Paragraph number ${String(i)} of the article body here.</p>`,
+  ).join('');
+
+  it('gives up after three consecutive failures instead of marking the page', async () => {
+    // With Ollama not running every block fails the same way. The old
+    // behaviour marked all of them — on a real article, twenty-eight ⚠️ lines
+    // for one problem that was obvious by the third, all of which the reader
+    // then had to clear.
+    document.body.innerHTML = PAGE_OF_TEN;
+    let calls = 0;
+    const result = await translatePage(
+      document,
+      deps({
+        translate: () => {
+          calls++;
+          return Promise.reject(
+            new Error("Can't reach Ollama at http://localhost:11434."),
+          );
+        },
+      }),
+    );
+
+    // Not exactly GIVE_UP_AFTER: two requests are in flight at a time, so the
+    // one that was already sent when the third failure landed still comes
+    // back. What matters is that it stopped near the top instead of marking
+    // all ten.
+    expect(calls).toBeGreaterThanOrEqual(GIVE_UP_AFTER);
+    expect(calls).toBeLessThanOrEqual(GIVE_UP_AFTER + CONCURRENCY);
+    expect(result.translated).toBe(0);
+    // Nothing left behind to clean up.
+    expect(document.querySelectorAll(`.${BILINGUAL_CLASS}`)).toHaveLength(0);
+    expect(document.querySelectorAll(`[${TRANSLATED_ATTR}]`)).toHaveLength(0);
+  });
+
+  it('says why it gave up, once', async () => {
+    document.body.innerHTML = PAGE_OF_TEN;
+    await translatePage(
+      document,
+      deps({
+        translate: () =>
+          Promise.reject(
+            new Error("Can't reach Ollama at http://localhost:11434."),
+          ),
+      }),
+    );
+    const badge = document.getElementById(PROGRESS_ID)?.textContent ?? '';
+    expect(badge).toContain('Gave up');
+    expect(badge).toContain("Can't reach Ollama");
+  });
+
+  it('is not reported as the user having stopped it', async () => {
+    document.body.innerHTML = PAGE_OF_TEN;
+    const result = await translatePage(
+      document,
+      deps({ translate: () => Promise.reject(new Error('down')) }),
+    );
+    expect(result.stopped).toBe(false);
+  });
+
+  it('keeps going when failures are scattered rather than consecutive', async () => {
+    // One bad block is bad luck, and the counter resets on anything that works.
+    document.body.innerHTML = PAGE_OF_TEN;
+    let n = 0;
+    const result = await translatePage(
+      document,
+      deps({
+        translate: (text) => {
+          n++;
+          return n % 2 === 0
+            ? Promise.reject(new Error('one bad block'))
+            : Promise.resolve(`[zh] ${text}`);
+        },
+      }),
+    );
+
+    expect(result.translated).toBe(5);
+    expect(result.failed).toBe(5);
+    expect(document.getElementById(PROGRESS_ID)?.textContent).toContain('Done');
+  });
+
+  it('leaves the translations it did manage before giving up', async () => {
+    document.body.innerHTML = PAGE_OF_TEN;
+    let n = 0;
+    await translatePage(
+      document,
+      deps({
+        translate: (text) => {
+          n++;
+          return n <= 2
+            ? Promise.resolve(`[zh] ${text}`)
+            : Promise.reject(new Error('the server went away'));
+        },
+      }),
+    );
+
+    expect(translations()).toHaveLength(2);
+    expect(translations().every((t) => t.startsWith('[zh]'))).toBe(true);
   });
 });
