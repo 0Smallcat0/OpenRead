@@ -87,7 +87,39 @@ export async function loadSettings(): Promise<Settings> {
   return { ...DEFAULT_SETTINGS, ...stored };
 }
 
+/**
+ * Largest `autoTranslateExcept` we will try to store, in bytes of JSON.
+ *
+ * `chrome.storage.sync` rejects any single item over 8,192 bytes, and the
+ * rejection is not confined to the offending key: `saveSettings` writes the
+ * whole object in one call, so an over-long exception list means the target
+ * language, the engine and everything else silently fail to save too.
+ * Measured: 200 hosts of ordinary length throws
+ * `Resource::kQuotaBytesPerItem quota exceeded`.
+ *
+ * 6 KB leaves room for the rest of the object and still holds well over a
+ * hundred hostnames — far past what anyone excludes by hand.
+ */
+export const MAX_EXCEPT_BYTES = 6000;
+
+/**
+ * Trim the exception list to something storage will accept, newest kept.
+ *
+ * Dropping the oldest entries is a real loss and it is the lesser one: the
+ * alternative is a write that rejects, taking every other setting with it.
+ */
+export function limitExcept(hosts: readonly string[]): string[] {
+  const kept = [...hosts];
+  while (kept.length > 0 && JSON.stringify(kept).length > MAX_EXCEPT_BYTES) {
+    kept.shift();
+  }
+  return kept;
+}
+
 /** Persist a full settings object. */
 export async function saveSettings(settings: Settings): Promise<void> {
-  await chrome.storage.sync.set(settings);
+  await chrome.storage.sync.set({
+    ...settings,
+    autoTranslateExcept: limitExcept(settings.autoTranslateExcept),
+  });
 }
