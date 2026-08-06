@@ -5,6 +5,54 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.15.1] - 2026-08-06
+
+### Added
+
+- **`pnpm e2e:stress` — hostile pages, in a real browser.** The happy-path
+  harness walks a page that behaves. This one goes after the failure modes a
+  live queue and two long-lived observers can have: an infinite feed appending
+  460 paragraphs while the reader scrolls, an app that replaces `document.body`
+  wholesale, the toolbar button pressed ten times in two seconds, nodes torn
+  out from under the queue mid-run, five thousand blocks, and an exception list
+  large enough to hit a storage quota. It found the three defects below on its
+  first run, so it is kept rather than thrown away, and every check in it now
+  fails loudly.
+
+### Fixed
+
+- **An app that swapped routes by replacing `<body>` stopped being
+  translated.** The `MutationObserver` was attached to `document.body`, so a
+  framework that replaces it left the observer watching a node no longer in the
+  document. Measured: route A translated, route B untouched, and no amount of
+  scrolling brought it back. It now watches `documentElement`, which survives
+  everything short of a navigation — and mutations confined to `<head>`, which
+  that brings into scope, are ignored, because a page loading a stylesheet has
+  not grown anything to translate.
+
+- **Pressing "translate this page" during an automatic pass produced no
+  translation at all.** Automatic translation starts on load, so a press a
+  moment later — out of habit, or because the first blocks had not landed —
+  reached a toggle that read "running" as "stop" and aborted it. Measured on a
+  real page at zero blocks translated: the control did the opposite of its
+  label. A press during a pass nobody started now lets it finish; the badge's
+  own Stop button is where stopping something you did not start belongs.
+  Pressing a page that has finished still undoes it, as before.
+
+- **A long list of excluded sites could stop every setting from saving.**
+  `chrome.storage.sync` rejects any single item over 8,192 bytes, and settings
+  are written as one object — so an over-long `autoTranslateExcept` took the
+  target language and the engine down with it, silently. Measured: 200 hosts of
+  ordinary length throws `Resource::kQuotaBytesPerItem quota exceeded`. The
+  list is now capped at 6 KB on write, oldest dropped first, which still holds
+  well over a hundred hostnames.
+
+- **Blocks the page threw away were held for the life of the tab.** Deferred
+  off-screen blocks live in a plain `Set`, because the `IntersectionObserver`
+  has to be handed the same node to unobserve it — so on a feed that trims what
+  scrolled past, detached nodes accumulated there. They are now swept on each
+  rescan.
+
 ## [2.15.0] - 2026-08-06
 
 ### Added

@@ -1,6 +1,6 @@
 {
   "name": "openread",
-  "version": "2.15.0",
+  "version": "2.15.1",
   "description": "Translate web pages, PDFs and text on your own machine - Chrome's built-in on-device model by default, a local LLM through Ollama when you want one. Browser extension, CLI, and MCP server.",
   "type": "module",
   "license": "MIT",
@@ -28,6 +28,7 @@
     "bench": "tsx eval/bench/run.ts",
     "bench:agreement": "tsx eval/bench/agreement.ts",
     "e2e:page": "node e2e/fullpage.mjs",
+    "e2e:stress": "node e2e/stress.mjs",
     "e2e:egress": "node e2e/no-egress.mjs",
     "cli": "pnpm build:cli && node bin/openread.mjs",
     "prepare": "wxt prepare && node scripts/build-cli.mjs",
