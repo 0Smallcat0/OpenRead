@@ -5,6 +5,41 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.2] - 2026-08-06
+
+### Fixed
+
+- **Selecting text in a PDF took more precision than it should.** PDF.js sizes
+  each line's span tightly around its glyphs, so the space between two lines
+  belongs to neither of them: pressing there is pressing on the rendered page,
+  and the drag selects nothing. A web page does not behave that way — a
+  paragraph's box carries its line-height leading, so a press a few pixels high
+  still lands on the nearest text.
+
+  Measured on a five-line page: line boxes 15 px tall, 27 px apart, leaving
+  12 px that nothing owned. Starting a drag 4 px above a line selected nothing
+  at all.
+
+  The bundled viewer now pads each line's hit box by 5 px a side and pulls the
+  glyphs back with a matching negative margin, so the text does not move and
+  the gap is no longer dead space. Pressing anywhere from 6 px above a line to
+  8 px below its top now lands on that line; 8 px above still goes to the line
+  before, which is the right answer.
+
+  Verified that nothing shifted: glyph tops were 144, 171, 199, 226, 253 before
+  the change and are 144, 171, 199, 226, 253 after it.
+
+### Notes
+
+This one was checked against a baseline before anything was changed, because
+"the PDF viewer is fiddly" is as likely to be PDF.js as it is to be us. The
+same viewer, the same document and seven kinds of drag — whole line, a phrase
+mid-line, drifting six pixels while dragging, starting above the line, across
+three lines, right to left, double-click — produced **byte-identical** results
+with the extension loaded and with it unloaded. Nothing OpenRead does was
+making selection harder. What it can do is ship a viewer that is easier to use
+than the stock one, which is what this change is.
+
 ## [2.10.1] - 2026-08-06
 
 ### Fixed
