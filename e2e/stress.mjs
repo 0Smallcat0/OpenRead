@@ -18,6 +18,10 @@
  * and it takes a couple of minutes. Run it after anything that touches the
  * queue, the observers, or what is stored.
  *
+ * One scenario wants a live Ollama and skips itself, loudly, when there is not
+ * one. A harness that goes red because of the machine it runs on is a harness
+ * nobody reads the output of twice.
+ *
  *   pnpm build
  *   pnpm e2e:stress
  *
@@ -481,23 +485,46 @@ try {
 
   // ---------------------------------------------------------------- S12
   console.log('\nS12 — a real local model behind the same live queue');
-  await configure({ engine: 'ollama', baseUrl: 'http://localhost:11434' });
-  await page.goto('https://example.com/', { waitUntil: 'domcontentloaded' });
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await sleep(1200);
-  await seed(6, 'local');
-  await press();
-  let slow = await stats();
-  for (let waited = 0; waited < 120000; waited += 2000) {
-    await sleep(2000);
-    slow = await stats();
-    const badge = await page.evaluate(
-      () => document.getElementById('oit-page-progress')?.textContent ?? '',
+  // Asked first, and skipped rather than failed when the answer is no. A
+  // harness that goes red because the machine running it has no Ollama is one
+  // nobody reads the output of after the second time.
+  const ollamaUp = await page
+    .evaluate(async () => {
+      try {
+        const response = await fetch('http://localhost:11434/api/tags', {
+          signal: AbortSignal.timeout(3000),
+        });
+        return response.ok;
+      } catch {
+        return false;
+      }
+    })
+    .catch(() => false);
+
+  if (!ollamaUp) {
+    observe('S12', 'skipped — no Ollama on http://localhost:11434');
+  } else {
+    await configure({ engine: 'ollama', baseUrl: 'http://localhost:11434' });
+    await page.goto('https://example.com/', { waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await sleep(1200);
+    await seed(6, 'local');
+    await press();
+    let slow = await stats();
+    for (let waited = 0; waited < 120000; waited += 2000) {
+      await sleep(2000);
+      slow = await stats();
+      const badge = await page.evaluate(
+        () => document.getElementById('oit-page-progress')?.textContent ?? '',
+      );
+      if (badge.startsWith('Done') || badge.startsWith('Gave up')) break;
+    }
+    observe('S12 translated by the local model', String(slow.translated));
+    check(
+      slow.translated > 0,
+      'the Ollama engine translated nothing through the live queue',
     );
-    if (badge.startsWith('Done') || badge.startsWith('Gave up')) break;
   }
-  observe('S12 translated by the local model', String(slow.translated));
-  check(slow.translated > 0, 'the Ollama engine translated nothing through the live queue');
   await configure({ engine: 'builtin' });
 
 } catch (error) {
