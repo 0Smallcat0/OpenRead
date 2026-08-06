@@ -5,6 +5,37 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.3] - 2026-08-06
+
+### Fixed
+
+- **A drag that started in a PDF's margin selected nothing.** On a web page you
+  can begin a little to the left of the first word and still get the line,
+  because a paragraph's box runs the width of its container. In the viewer each
+  span stops at the first glyph, so the margin belongs to nothing at all.
+
+  Measured against a web page laid out to the same pitch:
+
+  ```
+                                          PDF          web
+  starting 40px left of the first word    ""           the line
+  wandering +-12px while dragging         the line     the line
+  overshooting 60px past the end          the line     the line
+  ```
+
+  Each line's boxes are now widened to meet each other — half the gap either
+  way — and the outermost ones reach up to 60 px into the margins. Padding
+  grows the box while a matching negative margin leaves the glyphs where PDF.js
+  put them, so nothing moves and character mapping inside a run is unaffected:
+  the text still begins at the same x. Line boxes on the test page went from
+  starting at x 76 to starting at x 22, and the margin drag now behaves exactly
+  as it does on a web page.
+
+  Re-checked afterwards: the vertical mapping from 2.10.2 is unchanged, five
+  consecutive lines still select in sequence without clicking away, and the 文
+  icon still lands against the end of the text rather than out in the widened
+  box, because it is placed from the selection rather than from the span.
+
 ## [2.10.2] - 2026-08-06
 
 ### Fixed
