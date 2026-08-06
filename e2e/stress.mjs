@@ -11,6 +11,8 @@
  *      control labelled "translate this page" produced no translation at all
  *   S7 an over-long exception list is rejected by `chrome.storage.sync` as a
  *      whole item, taking the target language and the engine down with it
+ *   S8 two copies of "our own UI" had drifted, so a selection panel — and every
+ *      token streamed into one — read as the page growing new text
  *
  * Not in CI, for the same reason as the other harnesses: it needs a real Chrome
  * and it takes a couple of minutes. Run it after anything that touches the
@@ -92,6 +94,23 @@ try {
   })();
   const worker = await workerTarget.worker();
   const configure = (v) => worker.evaluate(async (x) => chrome.storage.sync.set(x), v);
+  const selectAndTranslate = async () => {
+    await page.evaluate(() => {
+      const target = document.querySelector('main p');
+      if (!target) return;
+      const range = document.createRange();
+      range.selectNodeContents(target);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    });
+    await worker.evaluate(async () => {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id !== undefined)
+        await chrome.tabs.sendMessage(tab.id, { type: 'TRANSLATE_SELECTION' });
+    });
+  };
+
   const press = () =>
     worker.evaluate(async () => {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -351,6 +370,136 @@ try {
   await worker.evaluate(async () =>
     chrome.storage.sync.set({ autoTranslateExcept: [], targetLang: 'Traditional Chinese' }),
   );
+
+  // ---------------------------------------------------------------- S8
+  console.log('\nS8 — a selection panel on a page that is being watched');
+  await reset();
+  await seed(40, 'sel');
+  await press();
+  await sleep(5000);
+  const beforeSelection = await stats();
+  for (let i = 0; i < 6; i++) {
+    await selectAndTranslate();
+    await sleep(900);
+  }
+  const afterSelection = await settle(3000);
+  const panelText = await page.evaluate(
+    () => document.getElementById('oit-translate-panel')?.textContent ?? '',
+  );
+  observe('S8 panel opened', panelText.length > 0 ? 'yes' : 'NO');
+  observe(
+    'S8 page translations',
+    `${String(beforeSelection.translated)} -> ${String(afterSelection.translated)}`,
+  );
+  observe('S8 progress badges', String(afterSelection.badges));
+  check(panelText.length > 0, 'the selection panel never opened on a watched page');
+  check(
+    afterSelection.badges === 0,
+    'selecting text made whole-page translation start over',
+  );
+
+  // ---------------------------------------------------------------- S9
+  console.log('\nS9 — selecting text while the page queue is still draining');
+  await reset();
+  await seed(60, 'busy');
+  await press();
+  await sleep(200);
+  await selectAndTranslate();
+  const busy = await settle(8000);
+  const busyPanel = await page.evaluate(
+    () => document.getElementById('oit-translate-panel')?.textContent ?? '',
+  );
+  observe('S9 panel while the page ran', busyPanel.length > 0 ? 'opened' : 'NEVER OPENED');
+  observe('S9 page translations', String(busy.translated));
+  check(busyPanel.length > 0, 'a selection made during a page run was starved');
+  check(busy.translated > 0, 'a selection during a page run stopped the page');
+
+  // ---------------------------------------------------------------- S10
+  console.log('\nS10 — the Ollama engine pointed at nothing');
+  await configure({
+    engine: 'ollama',
+    baseUrl: 'http://127.0.0.1:1',
+    autoTranslate: 'off',
+  });
+  await page.goto('https://example.com/', { waitUntil: 'domcontentloaded' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await sleep(1200);
+  await seed(30, 'dead');
+  await press();
+  let deadBadge = '';
+  for (let waited = 0; waited < 60000; waited += 1000) {
+    await sleep(1000);
+    deadBadge = await page.evaluate(
+      () => document.getElementById('oit-page-progress')?.textContent ?? '',
+    );
+    if (deadBadge.startsWith('Gave up')) break;
+  }
+  const debris = await stats();
+  observe('S10 badge', deadBadge || '(none)');
+  observe('S10 markers left behind', String(debris.marked));
+  check(deadBadge.startsWith('Gave up'), 'a dead server did not end the run');
+  check(
+    deadBadge.includes('Ollama') || deadBadge.includes('reach'),
+    'the badge gave up without saying why',
+  );
+  check(debris.marked === 0, 'giving up left translation markers on the page');
+
+  // And it must stop watching, or every new screen asks the dead server again.
+  const callsBefore = await stats();
+  await page.evaluate(() => {
+    const main = document.querySelector('main');
+    for (let i = 0; i < 5; i++) {
+      const el = document.createElement('p');
+      el.textContent = `Content that arrived after the server was found dead, number ${String(i)}.`;
+      main?.appendChild(el);
+    }
+  });
+  await sleep(5000);
+  const afterGiveUp = await stats();
+  observe('S10 badges after new content', String(afterGiveUp.badges));
+  check(
+    afterGiveUp.badges === 0 && afterGiveUp.translated === callsBefore.translated,
+    'the page kept asking a server it had already given up on',
+  );
+
+  // ---------------------------------------------------------------- S11
+  console.log('\nS11 — the bundled PDF viewer still boots');
+  const viewer = await browser.newPage();
+  const viewerErrors = [];
+  viewer.on('pageerror', (e) => viewerErrors.push(e.message));
+  await viewer.goto(`chrome-extension://${id}/pdfjs/web/viewer.html`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await sleep(2500);
+  const viewerReady = await viewer.evaluate(
+    () => Boolean(document.getElementById('viewerContainer')),
+  );
+  observe('S11 viewer container', viewerReady ? 'present' : 'MISSING');
+  observe('S11 page errors', viewerErrors.length === 0 ? 'none' : viewerErrors[0]);
+  check(viewerReady, 'the bundled PDF viewer no longer renders its container');
+  await viewer.close();
+
+  // ---------------------------------------------------------------- S12
+  console.log('\nS12 — a real local model behind the same live queue');
+  await configure({ engine: 'ollama', baseUrl: 'http://localhost:11434' });
+  await page.goto('https://example.com/', { waitUntil: 'domcontentloaded' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await sleep(1200);
+  await seed(6, 'local');
+  await press();
+  let slow = await stats();
+  for (let waited = 0; waited < 120000; waited += 2000) {
+    await sleep(2000);
+    slow = await stats();
+    const badge = await page.evaluate(
+      () => document.getElementById('oit-page-progress')?.textContent ?? '',
+    );
+    if (badge.startsWith('Done') || badge.startsWith('Gave up')) break;
+  }
+  observe('S12 translated by the local model', String(slow.translated));
+  check(slow.translated > 0, 'the Ollama engine translated nothing through the live queue');
+  await configure({ engine: 'builtin' });
+
 } catch (error) {
   console.error(`\nharness failed: ${error?.stack ?? String(error)}`);
 } finally {

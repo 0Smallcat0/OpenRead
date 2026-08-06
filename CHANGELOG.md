@@ -15,9 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   460 paragraphs while the reader scrolls, an app that replaces `document.body`
   wholesale, the toolbar button pressed ten times in two seconds, nodes torn
   out from under the queue mid-run, five thousand blocks, and an exception list
-  large enough to hit a storage quota. It found the three defects below on its
-  first run, so it is kept rather than thrown away, and every check in it now
-  fails loudly.
+  large enough to hit a storage quota. It found three defects on its first run,
+  so it is kept rather than thrown away, and every check in it fails loudly.
+
+  A second round covers the surfaces whole-page translation never touched: a
+  selection panel opened on a page that is being watched, a selection made
+  while the page queue is still draining, the Ollama engine pointed at a dead
+  port, the bundled PDF viewer, and a real local model behind the same live
+  queue. Twelve scenarios in all.
 
 ### Fixed
 
@@ -46,6 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ordinary length throws `Resource::kQuotaBytesPerItem quota exceeded`. The
   list is now capped at 6 KB on write, oldest dropped first, which still holds
   well over a hundred hostnames.
+
+- **A selection panel made the page re-collect itself, repeatedly.** "Our own
+  UI" was written out twice — once in `blocks.ts`, which knows about the
+  selection panel and the floating icon, and once in `fullpage.ts`, which did
+  not. So opening a panel, and every token streamed into one, read as the page
+  growing new text and scheduled a full re-collection. There is one list now,
+  exported from where the collector already needed it.
 
 - **Blocks the page threw away were held for the life of the tab.** Deferred
   off-screen blocks live in a plain `Set`, because the `IntersectionObserver`

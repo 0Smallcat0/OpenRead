@@ -1100,6 +1100,46 @@ describe('keeping a page translated', () => {
     );
   });
 
+  it('does not re-collect the page for its own selection panel', async () => {
+    // `collectBlocks` asks `isVisible` about every candidate, so counting those
+    // counts collections. Two copies of "our own UI" had drifted apart — the
+    // one here was missing the selection panel and the floating icon — so
+    // opening a panel, or every token of a streamed translation inside one,
+    // read as the page growing new text.
+    // The engine hands every block back unchanged, so none of them ends up
+    // carrying a translation — which matters, because `collectBlocks` returns
+    // early on a block that does, before it ever asks about visibility.
+    let visibilityChecks = 0;
+    await translatePage(
+      document,
+      deps({
+        translate: (text) => Promise.resolve(text),
+        isVisible: () => {
+          visibilityChecks++;
+          return true;
+        },
+      }),
+    );
+    const afterRun = visibilityChecks;
+
+    const panel = document.createElement('div');
+    panel.id = 'oit-translate-panel';
+    document.body.appendChild(panel);
+    for (let i = 0; i < 5; i++) {
+      panel.textContent = `streaming a translation, token ${String(i)}`;
+    }
+    await settle();
+    expect(visibilityChecks).toBe(afterRun);
+
+    // The control: ordinary new content still re-collects, so the count above
+    // is measuring something.
+    const fresh = document.createElement('p');
+    fresh.textContent = 'A paragraph that genuinely arrived after the run.';
+    document.body.appendChild(fresh);
+    await settle();
+    expect(visibilityChecks).toBeGreaterThan(afterRun);
+  });
+
   it('ignores a page loading a stylesheet, which is not new text', async () => {
     // The observer sits on documentElement so a body swap cannot orphan it,
     // which puts <head> in its subtree. Busy sites rewrite head constantly and
