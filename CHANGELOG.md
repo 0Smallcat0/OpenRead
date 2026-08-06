@@ -5,6 +5,55 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.0] - 2026-08-06
+
+### Changed
+
+- **A page now translates what you are reading, and keeps up — instead of
+  translating all of it, once.** Pressing translate on the English Wikipedia
+  article for artificial intelligence used to send all 308 blocks to the
+  engine. A reader can see about five. The other 303 were their battery spent
+  on text most of them will never scroll to, and the moment the page loaded
+  anything new — a feed appending posts, a comment thread expanding, an SPA
+  swapping a route — none of it was translated and the only remedy was to press
+  the button again, once per screen.
+
+  The queue is live now. It starts with the blocks within one screen of the
+  viewport, an `IntersectionObserver` feeds it the rest as the reader arrives,
+  and a `MutationObserver` feeds it whatever the page grows. Verified in a real
+  browser on a 60-block page: 7 translated on the press, the top one yes and
+  the bottom one no, 14 after scrolling to the bottom with nothing pressed, and
+  a paragraph appended afterwards translated on its own.
+
+  Two bugs found while building it, both of which only a live queue can have.
+  A rescan landing mid-run re-collected every block still waiting its turn —
+  they are untranslated, because they have not been reached yet — and the page
+  got each of them twice. And a block the engine returns unchanged is left
+  unmarked on purpose so a later run can retry it, which means every rescan
+  collects it again, forever: one page of proper nouns, one infinite loop. Both
+  are now closed by a claim set, and both have a test that fails without it.
+
+  Stop and undo take the observers with them. A reader who presses Stop and
+  goes on scrolling has said no, and a page that has just been put back must
+  not translate itself again; three consecutive failures do the same, so a
+  broken engine is not asked once per screen for the rest of the session.
+
+- **`e2e/fullpage.mjs` covers the two properties jsdom cannot hold an opinion
+  about.** jsdom lays nothing out, so every block sits at 0,0 and "near the
+  viewport" is true of all of them, and it has no `IntersectionObserver` at
+  all. The harness now builds a page longer than a screen and asserts what was
+  translated, what was left alone, and what arrived on scrolling — and it waits
+  for a named change rather than for the count to stop moving, because the
+  waiting-for-quiet version passed and failed on identical code depending on
+  whether a batch landed inside its window.
+
+  It also takes `OPENREAD_PROFILE`. A throwaway profile is still the default,
+  but it reports Chrome's language pack as `downloadable` and pays 30-130 s to
+  register it on every run — which is how a once-per-profile setup cost was
+  measured as a per-use one and sent a performance investigation down the wrong
+  road for an afternoon. `Translator.create()` costs 82 ms on a cold browser
+  and 1-3 ms warm, in the service worker and in a content script alike.
+
 ## [2.12.0] - 2026-08-06
 
 ### Added
