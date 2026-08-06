@@ -188,6 +188,13 @@ function palette(at: DOMRect | null = null): {
 }
 
 export interface SelectionSettings {
+  /**
+   * Which engine will answer. The panel needs it only to say true things while
+   * waiting: the built-in translator has no model to name, and telling someone
+   * running on Chrome's own translator that we are "waiting on qwen3:latest"
+   * names a thing they never installed.
+   */
+  engine?: 'builtin' | 'ollama';
   modelId: string;
   targetLang: string;
   /** Obsidian vault to capture into; empty = the user's current/last vault. */
@@ -515,7 +522,13 @@ export function mountSelectionTranslator(
         if (firstChunk && panel) {
           setPanelText(
             content,
-            `Translating… still waiting on ${settings.modelId} — the first request after a restart loads the model into memory.`,
+            settings.engine === 'ollama'
+              ? `Translating… still waiting on ${settings.modelId} — the first request after a restart loads the model into memory.`
+              : // The built-in engine's long wait is a language pack, not a
+                // model load, and it is measured in minutes rather than
+                // seconds: 145 s for Japanese, 219 s for Traditional Chinese
+                // on a profile that had neither.
+                'Translating… Chrome is fetching the language pack for this pair. That happens once, and takes a couple of minutes.',
           );
         }
       }, SLOW_HINT_MS);
@@ -524,10 +537,38 @@ export function mountSelectionTranslator(
       const port = chrome.runtime.connect({ name: STREAM_PORT_NAME });
       activePort = port;
 
+      let settled = false;
       const close = (): void => {
+        settled = true;
         port.disconnect();
         if (activePort === port) activePort = null;
       };
+
+      /**
+       * The worker going away has to end the wait, or nothing does.
+       *
+       * A Manifest V3 worker is terminated when it goes idle, and a
+       * language-pack download is minutes of exactly that: no port traffic
+       * while Chrome fetches, so the worker is reclaimed mid-request and the
+       * port closes without a `done`. Whole-page translation has always
+       * handled this; the panel did not, and sat on "Translating…" for ever.
+       * Found on a real PDF, where the pack for the target had never been
+       * fetched: the panel was still waiting long after the worker had gone.
+       */
+      port.onDisconnect.addListener(() => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(slowHintTimer);
+        if (activePort === port) activePort = null;
+        if (!panel) return;
+        setPanelText(
+          content,
+          full.trim()
+            ? `${full.trim()}\n\n⚠️ The background worker stopped before this finished.`
+            : '⚠️ The background worker stopped before the translation finished. Try again — a language pack it had already fetched is kept.',
+        );
+        if (full.trim()) markLanguage();
+      });
 
       port.onMessage.addListener((res: StreamResponse) => {
         window.clearTimeout(slowHintTimer);
