@@ -508,6 +508,39 @@ describe('togglePageTranslation', () => {
     expect(isPageTranslated(document)).toBe(false);
   });
 
+  it('leaves an automatic pass alone rather than aborting it', async () => {
+    // Measured in a real browser: automatic translation on, page loads,
+    // the button pressed a moment later — and the page ended with zero blocks
+    // translated. The control labelled "translate this page" produced no
+    // translation at all, because the toggle read "running" as "stop".
+    const release: (() => void)[] = [];
+    const run = translatePage(
+      document,
+      deps({
+        unprompted: true,
+        translate: (text) =>
+          new Promise<string>((resolve) => {
+            release.push(() => {
+              resolve(`[zh] ${text}`);
+            });
+          }),
+      } as Partial<PageTranslateDeps>),
+    );
+    await Promise.resolve();
+
+    expect(await togglePageTranslation(document, deps())).toBeNull();
+    for (let i = 0; i < 20 && release.length > 0; i++) {
+      release.shift()?.();
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+    await run;
+
+    // Still running, and still going to finish. Stopping something you did not
+    // start belongs on the badge's own Stop button.
+    expect(translations().length).toBeGreaterThan(0);
+  });
+
   it('stops a run in progress rather than starting a second one', async () => {
     let calls = 0;
     const run = translatePage(
@@ -1043,6 +1076,65 @@ describe('keeping a page translated', () => {
     // The new paragraph, and only the new paragraph.
     expect(seen).toHaveLength(4);
     expect(seen.at(-1)).toBe('A paragraph that arrived after the first pass.');
+  });
+
+  it('keeps watching when a route change replaces the whole body', async () => {
+    // How React and Vue swap a route at the top level. An observer attached to
+    // the old body is left watching a node that is no longer in the document:
+    // measured in a real browser before this fix, route A translated and route
+    // B stayed English no matter how far it was scrolled.
+    const seen: string[] = [];
+    await translatePage(document, deps({ translate: spy(seen) }));
+    expect(seen).toHaveLength(3);
+
+    const next = document.createElement('body');
+    const fresh = document.createElement('p');
+    fresh.id = 'route-b';
+    fresh.textContent = 'The next route says something else here.';
+    next.appendChild(fresh);
+    document.documentElement.replaceChild(next, document.body);
+    await settle();
+
+    expect(fresh.querySelector(`.${BILINGUAL_CLASS}`)?.textContent).toBe(
+      '[zh] The next route says something else here.',
+    );
+  });
+
+  it('ignores a page loading a stylesheet, which is not new text', async () => {
+    // The observer sits on documentElement so a body swap cannot orphan it,
+    // which puts <head> in its subtree. Busy sites rewrite head constantly and
+    // none of it is worth re-collecting the page for.
+    const seen: string[] = [];
+    await translatePage(document, deps({ translate: spy(seen) }));
+    expect(seen).toHaveLength(3);
+
+    document.head.appendChild(document.createElement('link'));
+    document.head.appendChild(document.createElement('script'));
+    await settle();
+
+    expect(seen).toHaveLength(3);
+  });
+
+  it('lets go of blocks the page threw away', async () => {
+    // Held in a plain Set, because the IntersectionObserver has to be handed
+    // the same node to unobserve it. On a feed that trims what scrolled past,
+    // this is the one place detached nodes would pile up for the life of the
+    // tab.
+    document.body.innerHTML = `
+      <p id="near">A paragraph the reader can see right now.</p>
+      <p id="far">A paragraph a long way down the page.</p>
+    `;
+    const far = document.getElementById('far');
+    if (far) place(far, 5000);
+    await translatePage(document, deps());
+    expect(far && observer().observed.has(far)).toBe(true);
+
+    far?.remove();
+    // Any mutation at all schedules the rescan that does the sweeping.
+    document.body.appendChild(document.createElement('hr'));
+    await settle();
+
+    expect(far && observer().observed.has(far)).toBe(false);
   });
 
   it('skips a block that left the page before its turn came', async () => {

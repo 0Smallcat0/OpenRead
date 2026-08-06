@@ -154,6 +154,8 @@ interface Run {
   queue: HTMLElement[];
   inFlight: number;
   done: number;
+  /** Nobody pressed anything to start this one. See `togglePageTranslation`. */
+  unprompted: boolean;
 }
 
 /**
@@ -529,6 +531,10 @@ function isOurs(record: MutationRecord): boolean {
   const target = record.target;
   const scope =
     target.nodeType === 1 ? (target as Element) : target.parentElement;
+  // `<head>` is watched only because the observer sits on `documentElement` —
+  // see `startWatching`. A page loading a stylesheet or a script has not grown
+  // anything to translate, and busy sites rewrite head constantly.
+  if (scope?.closest('head')) return true;
   if (scope?.closest(OWN_UI_SELECTOR)) return true;
   const touched = [
     ...Array.from(record.addedNodes),
@@ -607,10 +613,27 @@ function startWatching(root: Document, deps: PageTranslateDeps): void {
       state.rescan = setTimeout(() => {
         if (watch !== state) return;
         state.rescan = null;
+        // Blocks the page has thrown away since we deferred them. Held in a
+        // plain Set, because the IntersectionObserver has to be handed the same
+        // node to unobserve it — so on a feed that trims what scrolled past,
+        // this is the one place detached nodes would accumulate for the life of
+        // the tab.
+        for (const block of state.deferred) {
+          if (!block.isConnected) {
+            state.intersection?.unobserve(block);
+            state.deferred.delete(block);
+          }
+        }
         offer(triage(collect(root, deps)));
       }, RESCAN_DEBOUNCE_MS);
     });
-    state.mutation.observe(root.body ?? root.documentElement, {
+    // `documentElement`, not `body`. A single-page app that swaps routes by
+    // replacing the whole `<body>` leaves an observer on the old one, watching
+    // a node no longer in the document — measured: route A translated, route B
+    // untouched, and no amount of scrolling brought it back. `documentElement`
+    // survives everything short of a navigation, which ends the content script
+    // anyway.
+    state.mutation.observe(root.documentElement ?? root.body, {
       childList: true,
       subtree: true,
       characterData: true,
@@ -672,6 +695,7 @@ async function drainQueue(
     queue: [...initial],
     inFlight: 0,
     done: 0,
+    unprompted: deps.unprompted ?? false,
   };
   run = current;
 
@@ -884,6 +908,16 @@ export async function togglePageTranslation(
   deps: PageTranslateDeps,
 ): Promise<PageResult | null> {
   if (isPageTranslationRunning()) {
+    // A press during a pass the user did not start is not "stop". Automatic
+    // translation begins on load, so a press a moment later — out of habit, or
+    // because the first blocks had not landed yet — used to abort it and leave
+    // the page in English: the button labelled "translate this page" produced
+    // no translation at all. Measured, on a real page, at zero blocks.
+    //
+    // Letting it run is the least surprising answer, and it is not a dead end:
+    // the badge is on screen with its own Stop button, which is where stopping
+    // something you did not start belongs.
+    if (run?.unprompted) return null;
     stopPageTranslation();
     return null;
   }
