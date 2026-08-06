@@ -33,6 +33,9 @@ export type TranslationStyle = 'line' | 'plain' | 'dashed' | 'highlight';
 /** Size of the translation relative to the text it sits under. */
 export type TranslationScale = 'small' | 'same' | 'large';
 
+export type { HoverKey } from './ui/hover';
+import type { HoverKey } from './ui/hover';
+
 export type { AutoTranslate } from './core/auto-translate';
 import type { AutoTranslate } from './core/auto-translate';
 
@@ -51,6 +54,8 @@ export interface Settings {
   /** How the translation is marked out. See `ui/fullpage.ts` for the CSS. */
   translationStyle: TranslationStyle;
   translationScale: TranslationScale;
+  /** Hold this key and point at a paragraph to translate that one. */
+  hoverTranslate: HoverKey;
   /** Obsidian vault to capture into; empty = the user's current/last vault. */
   obsidianVault: string;
   /** Vault-relative folder for captures; empty = the vault root. */
@@ -80,6 +85,10 @@ export const DEFAULT_SETTINGS: Settings = {
   displayMode: 'bilingual',
   translationStyle: 'line',
   translationScale: 'same',
+  // On, because it costs nothing until a key is held and it is the cheapest
+  // thing here to discover by accident in the right way: a reader who holds Alt
+  // over a paragraph gets exactly what they were about to select.
+  hoverTranslate: 'alt',
   obsidianVault: '',
   obsidianFolder: 'OpenRead',
   enrichOnCapture: false,
@@ -146,6 +155,7 @@ export async function loadSettings(): Promise<Settings> {
     'displayMode',
     'translationStyle',
     'translationScale',
+    'hoverTranslate',
     'obsidianVault',
     'obsidianFolder',
     'enrichOnCapture',

@@ -75,6 +75,7 @@ interface Elements {
   modelOptions: HTMLDataListElement;
   lang: HTMLSelectElement;
   displayMode: HTMLSelectElement | null;
+  hoverTranslate: HTMLSelectElement | null;
   translationStyle: HTMLSelectElement | null;
   translationScale: HTMLSelectElement | null;
   pack: HTMLElement | null;
@@ -107,6 +108,8 @@ function collect(root: ParentNode): Elements | null {
   const modelOptions = root.querySelector<HTMLDataListElement>('#modelOptions');
   const lang = root.querySelector<HTMLSelectElement>('#targetLang');
   const displayMode = root.querySelector<HTMLSelectElement>('#displayMode');
+  const hoverTranslate =
+    root.querySelector<HTMLSelectElement>('#hoverTranslate');
   const translationStyle =
     root.querySelector<HTMLSelectElement>('#translationStyle');
   const translationScale =
@@ -162,6 +165,7 @@ function collect(root: ParentNode): Elements | null {
     modelOptions,
     lang,
     displayMode,
+    hoverTranslate,
     translationStyle,
     translationScale,
     pack,
@@ -450,6 +454,7 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
         el.translationScale,
         DEFAULT_SETTINGS.translationScale,
       ),
+      hoverTranslate: pick(el.hoverTranslate, DEFAULT_SETTINGS.hoverTranslate),
       obsidianVault: el.vault.value.trim(),
       obsidianFolder: el.folder.value.trim() || DEFAULT_SETTINGS.obsidianFolder,
       enrichOnCapture: el.enrich.checked,
@@ -485,6 +490,7 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
       el.translationStyle.value = settings.translationStyle;
     if (el.translationScale)
       el.translationScale.value = settings.translationScale;
+    if (el.hoverTranslate) el.hoverTranslate.value = settings.hoverTranslate;
     except = [...settings.autoTranslateExcept];
     renderAuto();
     el.vault.value = settings.obsidianVault;
@@ -590,6 +596,7 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     el.displayMode,
     el.translationStyle,
     el.translationScale,
+    el.hoverTranslate,
   ]) {
     field?.addEventListener('change', () => {
       void persist();
