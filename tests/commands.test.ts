@@ -49,8 +49,9 @@ const manifest = config.manifest as {
 const commands = manifest.commands ?? {};
 
 describe('keyboard commands', () => {
-  it('declares both translate commands', () => {
+  it('declares every translate command', () => {
     expect(Object.keys(commands).sort()).toEqual([
+      'translate-input',
       'translate-page',
       'translate-selection',
     ]);

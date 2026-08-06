@@ -96,14 +96,26 @@ export interface PageLanguageResponse {
   lang: string | null;
 }
 
+/**
+ * background -> content one-shot: translate whatever text box has focus.
+ *
+ * Broadcast like the selection message; only the frame holding the focused
+ * field has anything to do.
+ */
+export interface TranslateInputMessage {
+  type: 'TRANSLATE_INPUT';
+}
+
 /** The command ids declared in the manifest, and the messages they produce. */
 export const TRANSLATE_SELECTION_COMMAND = 'translate-selection';
 export const TRANSLATE_PAGE_COMMAND = 'translate-page';
+export const TRANSLATE_INPUT_COMMAND = 'translate-input';
 
 export type RuntimeRequest =
   | EnrichCaptureMessage
   | TranslateSelectionMessage
   | TranslatePageMessage
+  | TranslateInputMessage
   | PageLanguageMessage;
 
 /** background -> content: the parsed enrichment, or null on any failure. */

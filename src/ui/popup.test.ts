@@ -36,6 +36,7 @@ const MARKUP = `
       <option value="dashed">dashed</option>
       <option value="highlight">highlight</option>
     </select>
+    <select id="inputTargetLang"></select>
     <select id="hoverTranslate">
       <option value="alt">alt</option>
       <option value="ctrl">ctrl</option>

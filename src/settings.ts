@@ -56,6 +56,14 @@ export interface Settings {
   translationScale: TranslationScale;
   /** Hold this key and point at a paragraph to translate that one. */
   hoverTranslate: HoverKey;
+  /**
+   * What a text box is translated *into*.
+   *
+   * Its own setting, because it is the other direction: `targetLang` is the
+   * language you read in, and nobody writes a reply to an English forum in the
+   * language they read English into.
+   */
+  inputTargetLang: string;
   /** Obsidian vault to capture into; empty = the user's current/last vault. */
   obsidianVault: string;
   /** Vault-relative folder for captures; empty = the vault root. */
@@ -89,6 +97,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // thing here to discover by accident in the right way: a reader who holds Alt
   // over a paragraph gets exactly what they were about to select.
   hoverTranslate: 'alt',
+  inputTargetLang: 'English',
   obsidianVault: '',
   obsidianFolder: 'OpenRead',
   enrichOnCapture: false,
@@ -156,6 +165,7 @@ export async function loadSettings(): Promise<Settings> {
     'translationStyle',
     'translationScale',
     'hoverTranslate',
+    'inputTargetLang',
     'obsidianVault',
     'obsidianFolder',
     'enrichOnCapture',
