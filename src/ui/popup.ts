@@ -221,6 +221,43 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     });
   };
 
+  /**
+   * Write the form to storage.
+   *
+   * `announce` is for the Save button, which is the one place a user asked for
+   * confirmation. The write-through calls stay quiet: a status line flashing
+   * "Saved ✓" every time a dropdown moves is noise, and the dropdown showing
+   * the new value is already the confirmation.
+   */
+  const persist = (announce = false): Promise<void> => {
+    const settings: Settings = {
+      engine: currentEngine(),
+      baseUrl: el.baseUrl.value.trim() || DEFAULT_SETTINGS.baseUrl,
+      modelId: el.model.value.trim() || DEFAULT_SETTINGS.modelId,
+      targetLang: el.lang.value,
+      obsidianVault: el.vault.value.trim(),
+      obsidianFolder: el.folder.value.trim() || DEFAULT_SETTINGS.obsidianFolder,
+      enrichOnCapture: el.enrich.checked,
+    };
+    return saveSettings(settings)
+      .then(() => {
+        if (!announce) return;
+        el.status.classList.remove('error');
+        el.status.textContent = 'Saved ✓';
+        window.setTimeout(() => {
+          el.status.textContent = '';
+        }, 1500);
+      })
+      .catch(() => {
+        // Without this the failure is silent: the status line simply stays
+        // blank, which reads exactly like "nothing happened yet". Shown even
+        // for a write-through, because a setting that did not stick is worth
+        // interrupting for.
+        el.status.classList.add('error');
+        el.status.textContent = 'Save failed';
+      });
+  };
+
   void loadSettings().then((settings) => {
     el.engine.value = settings.engine;
     renderEngine();
@@ -236,18 +273,47 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
   el.engine.addEventListener('change', () => {
     renderEngine();
     check();
+    void persist();
   });
-  el.baseUrl.addEventListener('change', check);
+  el.baseUrl.addEventListener('change', () => {
+    check();
+    void persist();
+  });
   // Re-judged locally: whether a model is installed is answered by the probe
   // already in hand, so retyping the field costs nothing.
   el.model.addEventListener('input', render);
+
+  // Every control writes through as it changes.
+  //
+  // The Save button used to be the only thing that wrote anything, and
+  // "Translate this page" sits above the language selector — so changing the
+  // target language and pressing the obvious button next to it translated into
+  // the language you had just moved away from. Verified in the popup itself:
+  // firing `change` on the selector left `chrome.storage.sync` empty.
+  //
+  // `change` rather than `input` for the text fields, so a half-typed server
+  // URL is not probed and stored on every keystroke; clicking anywhere else
+  // blurs the field and fires it.
+  for (const field of [el.lang, el.vault, el.folder, el.enrich]) {
+    field.addEventListener('change', () => {
+      void persist();
+    });
+  }
+  el.model.addEventListener('change', () => {
+    void persist();
+  });
 
   el.translatePage.addEventListener('click', () => {
     // Closing immediately is the honest signal that the work moved to the
     // page: the progress badge lives there, and a popup left open would
     // cover the corner it appears in.
-    void deps.translateActivePage().finally(() => {
-      window.close();
+    //
+    // Persisted first, so the page is translated with what the popup is
+    // showing rather than with what was last saved.
+    void persist().finally(() => {
+      void deps.translateActivePage().finally(() => {
+        window.close();
+      });
     });
   });
 
@@ -269,29 +335,7 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
 
   el.form.addEventListener('submit', (event) => {
     event.preventDefault();
-    const settings: Settings = {
-      engine: currentEngine(),
-      baseUrl: el.baseUrl.value.trim() || DEFAULT_SETTINGS.baseUrl,
-      modelId: el.model.value.trim() || DEFAULT_SETTINGS.modelId,
-      targetLang: el.lang.value,
-      obsidianVault: el.vault.value.trim(),
-      obsidianFolder: el.folder.value.trim() || DEFAULT_SETTINGS.obsidianFolder,
-      enrichOnCapture: el.enrich.checked,
-    };
-    void saveSettings(settings)
-      .then(() => {
-        el.status.classList.remove('error');
-        el.status.textContent = 'Saved ✓';
-        window.setTimeout(() => {
-          el.status.textContent = '';
-        }, 1500);
-      })
-      .catch(() => {
-        // Without this the failure is silent: the status line simply stays
-        // blank, which reads exactly like "nothing happened yet".
-        el.status.classList.add('error');
-        el.status.textContent = 'Save failed';
-      });
+    void persist(true);
   });
 
   return true;
