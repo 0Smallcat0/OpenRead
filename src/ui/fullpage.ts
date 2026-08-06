@@ -26,6 +26,7 @@ import {
   collectBlocks,
   isElementVisible,
   visibleText,
+  queryDeep,
   TRANSLATED_ATTR,
   BILINGUAL_CLASS,
   type CollectOptions,
@@ -109,17 +110,17 @@ export function stopPageTranslation(): void {
 
 /** Remove every inserted translation. Returns how many were removed. */
 export function clearPageTranslation(root: ParentNode): number {
-  const inserted = root.querySelectorAll(`.${BILINGUAL_CLASS}`);
-  for (const node of Array.from(inserted)) node.remove();
-  for (const marked of Array.from(
-    root.querySelectorAll(`[${TRANSLATED_ATTR}]`),
-  ))
+  // Deep, because blocks can come from inside a web component and a
+  // translation left behind there is one the toggle can never remove.
+  const inserted = queryDeep(root, `.${BILINGUAL_CLASS}`);
+  for (const node of inserted) node.remove();
+  for (const marked of queryDeep(root, `[${TRANSLATED_ATTR}]`))
     marked.removeAttribute(TRANSLATED_ATTR);
   return inserted.length;
 }
 
 export function isPageTranslated(root: ParentNode): boolean {
-  return root.querySelector(`.${BILINGUAL_CLASS}`) !== null;
+  return queryDeep(root, `.${BILINGUAL_CLASS}`).length > 0;
 }
 
 /**
@@ -139,9 +140,7 @@ export function isTranslatedInto(
 ): boolean {
   const tag = toBcp47(targetLang);
   if (!tag) return true;
-  const inserted = Array.from(
-    root.querySelectorAll<HTMLElement>(`.${BILINGUAL_CLASS}`),
-  );
+  const inserted = queryDeep<HTMLElement>(root, `.${BILINGUAL_CLASS}`);
   return inserted.every((node) => {
     const lang = node.getAttribute('lang');
     return !lang || lang === tag;
@@ -454,8 +453,9 @@ export async function translatePage(
     // Take the debris with it. The three ⚠️ markers proved the point and are
     // now just something to clear before the page reads normally again; the
     // reason is worth keeping, and it goes in the badge.
-    for (const marker of Array.from(
-      root.querySelectorAll(`.${BILINGUAL_CLASS}[data-oit-failed]`),
+    for (const marker of queryDeep(
+      root,
+      `.${BILINGUAL_CLASS}[data-oit-failed]`,
     )) {
       const block = marker.parentElement;
       marker.remove();

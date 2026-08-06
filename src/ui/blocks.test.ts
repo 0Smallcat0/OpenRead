@@ -16,6 +16,7 @@ import {
   MIN_BLOCK_CHARS,
   TRANSLATED_ATTR,
   BILINGUAL_CLASS,
+  queryDeep,
 } from './blocks';
 
 const visible = { isVisible: () => true };
@@ -412,5 +413,99 @@ describe('isElementVisible', () => {
     expect(isElementVisible(element(null, { width: 300, height: 40 }))).toBe(
       true,
     );
+  });
+});
+
+describe('web components', () => {
+  function withShadow(host: HTMLElement, html: string): ShadowRoot {
+    const shadow = host.attachShadow({ mode: 'open' });
+    shadow.innerHTML = html;
+    return shadow;
+  }
+
+  it('collects blocks from an open shadow root', () => {
+    // Measured before this: a page with two paragraphs inside a component
+    // reported "Done — 1 translated" and left the component untouched.
+    render(`
+      <p>A paragraph in the light DOM, long enough to be worth translating.</p>
+      <div id="host"></div>
+    `);
+    withShadow(
+      document.getElementById('host') as HTMLElement,
+      '<p>The first shadow paragraph, long enough to be translated.</p>' +
+        '<p>The second shadow paragraph, also long enough to count.</p>',
+    );
+
+    expect(textsOf(collectBlocks(document.body, visible))).toEqual([
+      'A paragraph in the light DOM, long enough to be worth translating.',
+      'The first shadow paragraph, long enough to be translated.',
+      'The second shadow paragraph, also long enough to count.',
+    ]);
+  });
+
+  it('reaches a shadow root nested inside another', () => {
+    render(`<div id="outer"></div>`);
+    const outer = withShadow(
+      document.getElementById('outer') as HTMLElement,
+      '<p>The outer component says something worth translating.</p><div id="inner"></div>',
+    );
+    withShadow(
+      outer.getElementById('inner') as HTMLElement,
+      '<p>The inner component says something worth translating too.</p>',
+    );
+
+    expect(textsOf(collectBlocks(document.body, visible))).toEqual([
+      'The outer component says something worth translating.',
+      'The inner component says something worth translating too.',
+    ]);
+  });
+
+  it('judges each root on its own navigation and content landmarks', () => {
+    // `closest()` stops at the boundary, which is the right answer: a
+    // component's own <nav> is its navigation, not the page's.
+    render(`<div id="host"></div>`);
+    withShadow(
+      document.getElementById('host') as HTMLElement,
+      '<nav><p>Skip to content, and other links nobody reads.</p></nav>' +
+        '<main><p>The component article body, which is the part worth having.</p></main>',
+    );
+
+    expect(textsOf(collectBlocks(document.body, visible))).toEqual([
+      'The component article body, which is the part worth having.',
+    ]);
+  });
+
+  it('cannot see into a closed root, and says so by finding nothing', () => {
+    render(`<div id="host"></div>`);
+    const host = document.getElementById('host') as HTMLElement;
+    const shadow = host.attachShadow({ mode: 'closed' });
+    shadow.innerHTML = '<p>Text sealed inside a closed shadow root here.</p>';
+
+    expect(collectBlocks(document.body, visible)).toHaveLength(0);
+  });
+
+  it('still skips a shadow block that already carries its translation', () => {
+    render(`<div id="host"></div>`);
+    withShadow(
+      document.getElementById('host') as HTMLElement,
+      `<p ${TRANSLATED_ATTR}>A shadow paragraph already translated once.` +
+        `<span class="${BILINGUAL_CLASS}">已經翻譯過了。</span></p>`,
+    );
+
+    expect(collectBlocks(document.body, visible)).toHaveLength(0);
+  });
+});
+
+describe('queryDeep', () => {
+  it('finds matches on both sides of a shadow boundary', () => {
+    render(`<span class="${BILINGUAL_CLASS}">light</span><div id="host"></div>`);
+    const shadow = (
+      document.getElementById('host') as HTMLElement
+    ).attachShadow({ mode: 'open' });
+    shadow.innerHTML = `<span class="${BILINGUAL_CLASS}">shadow</span>`;
+
+    expect(
+      queryDeep(document.body, `.${BILINGUAL_CLASS}`).map((n) => n.textContent),
+    ).toEqual(['light', 'shadow']);
   });
 });

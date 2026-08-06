@@ -186,8 +186,9 @@ export function collectBlocks(
   root: ParentNode,
   { isVisible, shouldSkipText }: CollectOptions,
 ): HTMLElement[] {
+  const scope = contentRoot(root);
   const candidates = Array.from(
-    contentRoot(root).querySelectorAll<HTMLElement>(BLOCK_SELECTOR),
+    scope.querySelectorAll<HTMLElement>(BLOCK_SELECTOR),
   );
 
   const kept = candidates.filter((element) => {
@@ -203,7 +204,15 @@ export function collectBlocks(
       //
       // The appended node is the evidence. Without it the marker is stale, so
       // drop it and let the block back into the queue.
-      if (element.querySelector(`:scope > .${BILINGUAL_CLASS}`)) return false;
+      // A direct-child scan rather than `:scope > …`: the rule is "does this
+      // block carry its own translation", a parent must not be excused by a
+      // child's, and `:scope` inside a shadow root is not something to depend
+      // on — jsdom answers it wrong, and a selector that quietly means
+      // something else in one tree is a bad foundation for a skip rule.
+      const own = Array.from(element.children).some((child) =>
+        child.classList.contains(BILINGUAL_CLASS),
+      );
+      if (own) return false;
       element.removeAttribute(TRANSLATED_ATTR);
     }
     if (element.closest(SKIP_WITHIN)) return false;
@@ -221,8 +230,56 @@ export function collectBlocks(
     return true;
   });
 
-  if (!shouldSkipText) return kept;
-  return kept.filter((element) => !shouldSkipText(visibleText(element)));
+  const here = shouldSkipText
+    ? kept.filter((element) => !shouldSkipText(visibleText(element)))
+    : kept;
+
+  // A web component keeps its text in a shadow root, and `querySelectorAll`
+  // does not go in. Measured on a page with two paragraphs inside an open
+  // shadow root: `Done — 1 translated` — the one paragraph in the light DOM,
+  // with the component's own content silently untouched.
+  //
+  // Each root is collected on its own terms: `contentRoot`, the navigation and
+  // citation skips, leaf-most-wins. `closest()` does not cross a shadow
+  // boundary either, so a component's internals are their own document as far
+  // as those rules go — which is also the right answer, since a component's
+  // `<nav>` is its own navigation and not the page's.
+  //
+  // Open roots only. A closed one is closed to us as much as to the page.
+  for (const shadow of openShadowRoots(scope)) {
+    here.push(...collectBlocks(shadow, { isVisible, shouldSkipText }));
+  }
+  return here;
+}
+
+/**
+ * Open shadow roots under `root`, hosts in document order, nested ones
+ * included via the recursion in `collectBlocks`.
+ */
+export function openShadowRoots(root: ParentNode): ShadowRoot[] {
+  const found: ShadowRoot[] = [];
+  for (const element of Array.from(root.querySelectorAll<HTMLElement>('*'))) {
+    if (element.shadowRoot) found.push(element.shadowRoot);
+  }
+  return found;
+}
+
+/**
+ * `querySelectorAll` over a root and every open shadow root beneath it.
+ *
+ * Needed wherever the extension asks a question about its own inserted nodes —
+ * is this page translated, clear it, what language is it in — because the
+ * answer stopped being complete the moment blocks could come from a component.
+ */
+export function queryDeep<T extends Element>(
+  root: ParentNode,
+  selector: string,
+): T[] {
+  const found = Array.from(root.querySelectorAll<T>(selector));
+  for (const shadow of openShadowRoots(root)) {
+    found.push(...queryDeep<T>(shadow, selector));
+  }
+  return found;
 }
 
 /**

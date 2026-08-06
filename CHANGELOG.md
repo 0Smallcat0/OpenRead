@@ -5,6 +5,43 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0] - 2026-08-06
+
+### Added
+
+- **Whole-page translation reaches inside web components.** A component keeps
+  its text in a shadow root and `querySelectorAll` does not go in, so a page
+  built out of them was reported translated while most of it was untouched.
+  Measured before: two paragraphs inside an open shadow root, and the badge
+  read `Done — 1 translated` — the one paragraph in the light DOM.
+
+  Each root is now collected on its own terms: its own `main`, its own
+  navigation and citation skips, its own leaf-most-wins. That is not a
+  shortcut, it is the right answer — `closest()` does not cross a shadow
+  boundary either, and a component's `<nav>` is its navigation rather than the
+  page's.
+
+  The toggle had to learn the same trick, or a translation inserted inside a
+  component would be one it could never find to remove.
+
+  Verified on a page with a light-DOM paragraph, a component containing a
+  `<nav>` and two paragraphs, and a second component nested inside the first:
+
+  ```
+  after translating   light 1   shadow 2   nested 1   nav 0   Done — 4 translated
+  after toggling off  light 0   shadow 0   nested 0   nav 0
+  ```
+
+  Closed shadow roots stay out of reach, which is what closed means.
+
+### Changed
+
+- The "does this block already carry its translation" check is a direct-child
+  scan rather than a `:scope >` selector. Same rule, but `:scope` inside a
+  shadow root is not something to depend on — jsdom answers it wrong, and a
+  selector that quietly means something else in one tree is a bad foundation
+  for a skip rule.
+
 ## [2.9.0] - 2026-08-06
 
 ### Added
