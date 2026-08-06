@@ -1,6 +1,6 @@
 # Privacy Policy — OpenRead
 
-_Last updated: 2026-07-10_
+_Last updated: 2026-08-06_
 
 OpenRead is a local-first browser extension. It is designed so that your data
 never leaves your machine.
@@ -13,21 +13,26 @@ receives no data of any kind from your use of the extension.
 
 ## What happens to the text you select
 
-When you trigger a translation (or an optional capture enrichment), the
-selected text is sent to **your own Ollama server** at the URL you configure in
-the popup — by default `http://localhost:11434`, i.e. your own computer.
-Inference runs entirely on that machine. The text is not sent to the developer
-or to any third party.
+It depends on which engine you have chosen in the popup.
 
-If you point the server URL at a remote machine, the text goes to that machine
-— which you chose and control.
+- **Chrome's built-in translator (the default).** The text is handed to
+  Chrome's own on-device translation model. It does not leave the browser, and
+  the extension makes no network request at all. Chrome downloads a language
+  pack from Google the first time you use a language pair; that download
+  carries the language pair, not your text.
+- **Ollama.** The text is sent to the server at the URL you configure — by
+  default `http://localhost:11434`, i.e. your own computer — and inference runs
+  on that machine. If you point the URL at a remote machine, the text goes to
+  that machine, which you chose and control.
+
+In neither case is the text sent to the developer or to any third party.
 
 ## What is stored, and where
 
-- **Settings** (Ollama server URL, model name, target language, Obsidian vault
-  and folder, enrichment toggle) are stored with `chrome.storage.sync`. They
-  stay inside your browser profile; Chrome may sync them across your own
-  signed-in browsers as with any extension setting.
+- **Settings** (engine, Ollama server URL, model name, target language,
+  Obsidian vault and folder, enrichment toggle) are stored with
+  `chrome.storage.sync`. They stay inside your browser profile; Chrome may sync
+  them across your own signed-in browsers as with any extension setting.
 - **Captured notes** ("Save to Obsidian") are written to your local Obsidian
   vault via the `obsidian://` URL scheme, or copied to your clipboard as a
   fallback. They are not transmitted anywhere else.
@@ -35,15 +40,26 @@ If you point the server URL at a remote machine, the text goes to that machine
 ## Permissions
 
 - `storage` — persist the settings above.
-- `activeTab` / host access on all sites — inject the selection-translate UI
-  on pages you read and route `.pdf` navigations into the bundled PDF.js
-  viewer. Page content is only read when you explicitly select text and click
-  the translate icon.
+- `activeTab` and host access on all sites — inject the selection-translate UI
+  on pages you read, translate a page when you ask for it, and route `.pdf`
+  navigations into the bundled PDF.js viewer. Page content is read only when
+  you select text and invoke a translation, or explicitly ask for the whole
+  page.
+- `contextMenus` — add the two right-click entries ("Translate selection with
+  OpenRead", "Translate this page with OpenRead"). It reads nothing.
+- `declarativeNetRequest` — strip the `Origin` header from **this extension's
+  own** requests to the Ollama server you configured, which is what removes the
+  `OLLAMA_ORIGINS` setup step. The rule is scoped to requests with no owning
+  tab and to that server's URL, so a web page's requests never match it and it
+  cannot be used to reach a local model on a page's behalf. It observes no
+  traffic: `declarativeNetRequest` acts on rules declared in advance and gives
+  the extension no visibility into your browsing.
 
 ## Remote code
 
-None. All code ships inside the extension package. The extension makes network
-requests only to the Ollama server URL you configure.
+None. All code ships inside the extension package. On the default engine the
+extension makes no network requests; on the Ollama engine it makes them only to
+the server URL you configure.
 
 ## Changes
 
