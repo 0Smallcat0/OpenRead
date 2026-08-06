@@ -10,6 +10,7 @@ import {
   mountSelectionTranslator,
   clampPanelTop,
   iconPosition,
+  selectionAnchor,
 } from './selection';
 import { STREAM_PORT_NAME, type StreamResponse } from '../messaging';
 
@@ -79,7 +80,11 @@ async function select(text: string): Promise<HTMLElement> {
   vi.spyOn(window, 'getSelection').mockReturnValue({
     toString: () => text,
     rangeCount: 1,
-    getRangeAt: () => ({ getBoundingClientRect: () => RECT }),
+    getRangeAt: () => ({
+      getBoundingClientRect: () => RECT,
+      // One rectangle per line fragment; a one-line selection has one.
+      getClientRects: () => [RECT],
+    }),
   } as unknown as Selection);
 
   document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
@@ -95,7 +100,11 @@ async function selectWithRealTimers(text: string): Promise<HTMLElement> {
   vi.spyOn(window, 'getSelection').mockReturnValue({
     toString: () => text,
     rangeCount: 1,
-    getRangeAt: () => ({ getBoundingClientRect: () => RECT }),
+    getRangeAt: () => ({
+      getBoundingClientRect: () => RECT,
+      // One rectangle per line fragment; a one-line selection has one.
+      getClientRects: () => [RECT],
+    }),
   } as unknown as Selection);
   document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   vi.advanceTimersByTime(70);
@@ -372,7 +381,11 @@ describe('selecting without a mouse', () => {
     vi.spyOn(window, 'getSelection').mockReturnValue({
       toString: () => text,
       rangeCount: 1,
-      getRangeAt: () => ({ getBoundingClientRect: () => RECT }),
+      getRangeAt: () => ({
+      getBoundingClientRect: () => RECT,
+      // One rectangle per line fragment; a one-line selection has one.
+      getClientRects: () => [RECT],
+    }),
     } as unknown as Selection);
     document.dispatchEvent(
       new KeyboardEvent('keyup', {
@@ -396,7 +409,11 @@ describe('selecting without a mouse', () => {
     vi.spyOn(window, 'getSelection').mockReturnValue({
       toString: () => 'Hello, world!',
       rangeCount: 1,
-      getRangeAt: () => ({ getBoundingClientRect: () => RECT }),
+      getRangeAt: () => ({
+      getBoundingClientRect: () => RECT,
+      // One rectangle per line fragment; a one-line selection has one.
+      getClientRects: () => [RECT],
+    }),
     } as unknown as Selection);
     document.dispatchEvent(
       new KeyboardEvent('keyup', { key: 'a', ctrlKey: true, bubbles: true }),
@@ -410,7 +427,11 @@ describe('selecting without a mouse', () => {
     vi.spyOn(window, 'getSelection').mockReturnValue({
       toString: () => 'Hello, world!',
       rangeCount: 1,
-      getRangeAt: () => ({ getBoundingClientRect: () => RECT }),
+      getRangeAt: () => ({
+      getBoundingClientRect: () => RECT,
+      // One rectangle per line fragment; a one-line selection has one.
+      getClientRects: () => [RECT],
+    }),
     } as unknown as Selection);
     document.dispatchEvent(
       new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }),
@@ -719,5 +740,67 @@ describe('what the panel says while it waits', () => {
     expect(panelText()).toContain('language pack');
     expect(panelText()).not.toContain('qwen3');
     vi.useRealTimers();
+  });
+});
+
+describe('where the icon goes for a selection spanning several lines', () => {
+  // The bounding box of a multi-line selection is the union of its lines, so
+  // its right edge is the widest line and its bottom is the last one — a
+  // corner that need not be near either. Measured on a six-line paragraph in a
+  // PDF: union 218..942, last line ending at 798, icon at x 948 sitting on top
+  // of a different line of text.
+  function rectOf(left: number, right: number, top: number, bottom: number) {
+    return {
+      left,
+      right,
+      top,
+      bottom,
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top,
+      toJSON: () => undefined,
+    } as DOMRect;
+  }
+
+  it('takes the last line, not the corner of the bounding box', () => {
+    const range = {
+      getBoundingClientRect: () => rectOf(218, 942, 164, 302),
+      getClientRects: () => [
+        rectOf(218, 942, 164, 185),
+        rectOf(218, 900, 190, 211),
+        rectOf(770, 798, 277, 298),
+      ],
+    } as unknown as Range;
+
+    const anchor = selectionAnchor(range);
+    expect(anchor.right).toBe(798);
+    expect(anchor.bottom).toBe(298);
+    expect(iconPosition(anchor, { width: 1400, height: 900 }).left).toBe(804);
+  });
+
+  it('falls back to the bounding box when there are no line rectangles', () => {
+    const range = {
+      getBoundingClientRect: () => rectOf(10, 200, 50, 70),
+      getClientRects: () => [],
+    } as unknown as Range;
+    expect(selectionAnchor(range).right).toBe(200);
+  });
+
+  it('survives a Range with no getClientRects at all', () => {
+    const range = {
+      getBoundingClientRect: () => rectOf(10, 200, 50, 70),
+    } as unknown as Range;
+    expect(selectionAnchor(range).right).toBe(200);
+  });
+
+  it('goes before the line when there is no room after it', () => {
+    // Under the line is the next line, which is the thing this must never do.
+    const at = iconPosition(
+      { left: 200, right: 990, top: 100, bottom: 120 },
+      { width: 1000, height: 800 },
+    );
+    expect(at.left).toBe(166);
+    expect(at.top).toBe(92);
   });
 });
