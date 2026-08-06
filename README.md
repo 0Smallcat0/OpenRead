@@ -75,6 +75,9 @@ seconds.
 - **One paragraph** — hold **Alt** and point at it. The paragraph that stopped
   you, without a drag and without rewriting the page. Remappable to Ctrl or
   Shift, or off, in the popup.
+- **What you are writing** — press **`Ctrl+Shift+K`** in any text box and it is
+  replaced with its translation. Its own output language in the popup, English
+  by default. `Ctrl+Z` takes it back.
 - **One selection** — select text, click the floating **文**, or press
   **`Ctrl+Shift+Y`**. Escape closes the panel.
 - **PDFs** — open any `.pdf` and it lands in the bundled viewer. For a PDF
@@ -175,7 +178,7 @@ all, since that is the easy way to send nothing and prove nothing.
 ```bash
 pnpm install
 pnpm build        # -> .output/chrome-mv3, load it unpacked
-pnpm test         # 564 unit tests
+pnpm test         # 583 unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)
 pnpm shoot        # re-shoot every screenshot and the clip on this page

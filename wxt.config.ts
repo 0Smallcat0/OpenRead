@@ -58,6 +58,16 @@ export default defineConfig({
         },
         description: 'Translate the whole page (again to undo)',
       },
+      // The other direction: what you are writing, in the box you are writing
+      // it in. K rather than I, which is devtools, or G, which Chrome keeps for
+      // "find previous" and answers by leaving the command unassigned.
+      'translate-input': {
+        suggested_key: {
+          default: 'Ctrl+Shift+K',
+          mac: 'Command+Shift+K',
+        },
+        description: 'Translate what you are typing',
+      },
     },
     host_permissions: ['<all_urls>'],
     web_accessible_resources: [

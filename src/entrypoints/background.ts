@@ -16,6 +16,7 @@ import {
   STREAM_PORT_NAME,
   TRANSLATE_SELECTION_COMMAND,
   TRANSLATE_PAGE_COMMAND,
+  TRANSLATE_INPUT_COMMAND,
   type TranslateSelectionMessage,
   type TranslatePageMessage,
   type PortRequest,
@@ -127,12 +128,14 @@ export default defineBackground(() => {
   // so the floating 文 icon is not a route a keyboard user can take. Broadcast
   // to every frame in the active tab; only the one holding a selection acts.
   chrome.commands?.onCommand.addListener((command) => {
-    const message: TranslateSelectionMessage | TranslatePageMessage | null =
+    const message: RuntimeRequest | null =
       command === TRANSLATE_SELECTION_COMMAND
         ? { type: 'TRANSLATE_SELECTION' }
         : command === TRANSLATE_PAGE_COMMAND
           ? { type: 'TRANSLATE_PAGE' }
-          : null;
+          : command === TRANSLATE_INPUT_COMMAND
+            ? { type: 'TRANSLATE_INPUT' }
+            : null;
     if (!message) return;
     void (async () => {
       const [tab] = await chrome.tabs.query({

@@ -82,6 +82,36 @@ describe('translateViaPort', () => {
     });
   });
 
+  it('tells the broker what the page is written in', async () => {
+    document.documentElement.lang = 'en';
+    const promise = start();
+    emit({ status: 'done' });
+    await promise;
+    expect(port.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceLang: 'en' }),
+    );
+  });
+
+  it('says nothing about the source for text the page did not write', async () => {
+    // A box the reader is typing in. They are writing in the language they
+    // think in, which is precisely not the one the page is written in — and
+    // handing the engine `en` for Chinese input made it answer with the
+    // Chinese, unchanged, which the UI reported as "already in that language".
+    document.documentElement.lang = 'en';
+    const promise = translateViaPort({
+      text: '這是一段用中文寫的留言',
+      targetLang: 'English',
+      model: 'qwen3:latest',
+      signal: new AbortController().signal,
+      fromPageLanguage: false,
+    });
+    emit({ status: 'done' });
+    await promise;
+    expect(port.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceLang: undefined }),
+    );
+  });
+
   it('reports a language-pack download without settling', async () => {
     // The first use of a language pair is roughly two minutes. Without this
     // the promise just sits there and the UI says nothing, which is how
