@@ -20,6 +20,7 @@ export default defineContentScript({
       getSettings: async () => {
         const s = await loadSettings();
         return {
+          engine: s.engine,
           modelId: s.modelId,
           targetLang: s.targetLang,
           obsidianVault: s.obsidianVault,

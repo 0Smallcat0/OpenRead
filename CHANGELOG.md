@@ -5,6 +5,47 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.1] - 2026-08-06
+
+### Fixed
+
+- **The selection panel could wait for ever.** A Manifest V3 worker is
+  terminated when it goes idle, and a language-pack download is minutes of
+  exactly that: no port traffic while Chrome fetches, so the worker is
+  reclaimed mid-request and the port closes without a `done`. Whole-page
+  translation has always handled that disconnect; the panel did not, and sat on
+  _Translating…_ with nothing to end it. Found on a real PDF whose target pack
+  had never been fetched — the panel was still waiting long after the worker
+  had gone.
+
+  The panel now says the worker stopped, and keeps whatever had already
+  streamed in rather than throwing it away.
+
+- **The waiting message named an Ollama model to people not using Ollama.**
+  With the default engine — Chrome's built-in translator, nothing installed —
+  a slow first request said _"still waiting on qwen3:latest"_, a model the
+  reader had never heard of and could not have installed. It now describes the
+  language pack, which is what the built-in engine is actually waiting for, and
+  names a model only when Ollama is the engine.
+
+  Same PDF, same cold pack, after the change:
+
+  ```
+     0s  Translating…
+     4s  Downloading the language pack — 22%. This happens once per language.
+     6s  Downloading the language pack — 100%. This happens once per language.
+     7s  第一行：本機伺服器只回應它被告知要信任的請求。
+  ```
+
+### Notes
+
+Two things checked along the way and found healthy, against an earlier guess of
+mine that they were the problem: language detection works fine in the service
+worker — on a fresh profile `LanguageDetector.create()` took 7 s to fetch its
+model and then reported `en` at 0.9988 confidence — and whole-page translation
+on a page with no `<html lang>` at all completes normally. The PDF viewer's
+empty `lang` is not what was breaking this.
+
 ## [2.10.0] - 2026-08-06
 
 ### Added
