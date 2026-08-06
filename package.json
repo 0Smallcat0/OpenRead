@@ -28,6 +28,7 @@
     "bench": "tsx eval/bench/run.ts",
     "bench:agreement": "tsx eval/bench/agreement.ts",
     "e2e:page": "node e2e/fullpage.mjs",
+    "e2e:egress": "node e2e/no-egress.mjs",
     "cli": "pnpm build:cli && node bin/openread.mjs",
     "prepare": "wxt prepare && node scripts/build-cli.mjs",
     "prepack": "node scripts/build-cli.mjs",

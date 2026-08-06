@@ -141,6 +141,19 @@ Permissions are `storage`, `activeTab`, `contextMenus` and
 extension's own requests to your Ollama server, scoped so a web page's requests
 can never match it. [Full policy](PRIVACY.md).
 
+That is the author of the extension telling you the extension is safe, which is
+worth very little. So it is also a test you can run:
+
+```bash
+pnpm build && pnpm e2e:egress
+```
+
+It loads the built extension into a real Chrome, translates a page served from
+`127.0.0.1`, and records every request every part of the extension makes. It
+fails if one left the machine, if one went to Ollama — which would mean the
+default engine was not what served the run — or if nothing was translated at
+all, since that is the easy way to send nothing and prove nothing.
+
 ## Development
 
 ```bash
@@ -150,6 +163,7 @@ pnpm test         # 491 unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)
 pnpm shoot        # re-shoot every screenshot and the clip on this page
+pnpm e2e:egress   # prove the default engine sends nothing, in a real Chrome
 ```
 
 **[How it is built →](docs/ENGINEERING.md)** — the reliability layer, the
