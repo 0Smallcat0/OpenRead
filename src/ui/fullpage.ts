@@ -117,6 +117,16 @@ export interface PageTranslateDeps {
   targetLang: string;
   isVisible?: CollectOptions['isVisible'];
   shouldSkipText?: CollectOptions['shouldSkipText'];
+  /**
+   * True when nobody pressed anything — an automatic pass on page load.
+   *
+   * Only changes what is said about an empty page. A press that appears to do
+   * nothing looks broken, so it is answered; an automatic pass that finds
+   * nothing has nothing to report, and on an app that renders after load it
+   * would find nothing on every single navigation. The observers are attached
+   * either way, so "nothing yet" still becomes "translated" on its own.
+   */
+  unprompted?: boolean;
 }
 
 export interface PageResult {
@@ -621,8 +631,10 @@ export async function translatePage(
   const blocks = collect(root, deps);
 
   if (blocks.length === 0) {
-    const progress = mountProgress(root, stopPageTranslation);
-    progress.finish('Nothing to translate on this page');
+    if (!deps.unprompted) {
+      const progress = mountProgress(root, stopPageTranslation);
+      progress.finish('Nothing to translate on this page');
+    }
     // Still worth watching: on an app that renders after load, "nothing to
     // translate" means "nothing yet", and that is the case where pressing the
     // button felt most broken.

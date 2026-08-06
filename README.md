@@ -61,6 +61,9 @@ seconds.
   up on its own as you scroll and as it loads more, so an article or a feed
   needs one press rather than one per screen. A badge counts progress and
   offers Stop. Do it again to put the page back.
+- **Without asking** — in the popup, set **Translate automatically** to _Pages
+  in another language_ and they translate themselves as they load. Off by
+  default, and any site can be excluded with one checkbox.
 - **One selection** — select text, click the floating **文**, or press
   **`Ctrl+Shift+Y`**. Escape closes the panel.
 - **PDFs** — open any `.pdf` and it lands in the bundled viewer. For a PDF
