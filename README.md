@@ -3,7 +3,7 @@
 > **Read the web and your PDFs in your own language, without sending a word of
 > it to anyone.** No account, no API key, no cloud.
 
-![OpenRead translating the Wikipedia article for Ollama into Traditional Chinese, each paragraph's translation appearing under the original](docs/screenshots/demo.gif)
+![Selecting a paragraph on Wikipedia and translating it into Traditional Chinese in place, with buttons to save it to Obsidian or copy it](docs/screenshots/demo.gif)
 
 <sub>Real time, unedited, on the default engine — nothing installed.</sub>
 
@@ -53,9 +53,9 @@ seconds.
   `chrome://extensions` → **Details** first; Chrome withholds `file://` from
   every extension until you do.
 
-| A paper, in the bundled PDF viewer                                                                   | One selection, on any web page                                                                                       |
-| ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| ![Three lines of a PDF selected, translated into Traditional Chinese](docs/screenshots/demo-pdf.png) | ![A Wikipedia paragraph selected and translated, with Save to Obsidian and Copy](docs/screenshots/capture-saved.png) |
+| The whole page, bilingual                                                                                                                                                     | A paper, in the bundled PDF viewer                                                                      |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| ![Every paragraph of a Wikipedia article with its Traditional-Chinese translation underneath, navigation and table of contents untouched](docs/screenshots/demo-fullpage.png) | ![Three lines of a PDF selected and translated into Traditional Chinese](docs/screenshots/demo-pdf.png) |
 
 ## Save to Obsidian
 
