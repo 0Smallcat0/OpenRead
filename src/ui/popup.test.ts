@@ -357,3 +357,110 @@ describe('the engine selector', () => {
     expect(stored.engine).toBe('ollama');
   });
 });
+
+describe('settings are written through as they change', () => {
+  // The trap this closes: "Translate this page" sits above the language
+  // selector, and only the Save button wrote anything. Verified in the real
+  // popup before the fix — firing `change` on the selector left
+  // `chrome.storage.sync` empty, so the obvious next click translated into the
+  // language the user had just moved away from.
+  async function open(): Promise<HTMLSelectElement> {
+    document.body.innerHTML = MARKUP;
+    const select = document.getElementById('targetLang') as HTMLSelectElement;
+    for (const name of ['Traditional Chinese', 'Japanese', 'Korean']) {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      select.appendChild(option);
+    }
+    mountPopup(document, deps());
+    await settle();
+    return select;
+  }
+
+  it('stores a target language the moment it is picked', async () => {
+    const select = await open();
+    expect(stored.targetLang).toBe('Traditional Chinese');
+
+    select.value = 'Japanese';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+
+    expect(stored.targetLang).toBe('Japanese');
+  });
+
+  it('stores the engine the moment it is switched', async () => {
+    await open();
+    const engine = document.getElementById('engine') as HTMLSelectElement;
+    engine.value = 'ollama';
+    engine.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+
+    expect(stored.engine).toBe('ollama');
+  });
+
+  it('stores the capture fields as they are left', async () => {
+    await open();
+    const vault = document.getElementById('obsidianVault') as HTMLInputElement;
+    vault.value = 'My Vault';
+    vault.dispatchEvent(new Event('change', { bubbles: true }));
+    const enrich = document.getElementById(
+      'enrichOnCapture',
+    ) as HTMLInputElement;
+    enrich.checked = true;
+    enrich.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+
+    expect(stored.obsidianVault).toBe('My Vault');
+    expect(stored.enrichOnCapture).toBe(true);
+  });
+
+  it('writes before translating, so the page gets what the popup shows', async () => {
+    const select = await open();
+    select.value = 'Korean';
+    // No `change` event: the user picked with the keyboard and clicked
+    // straight through, which is exactly the sequence that used to lose it.
+    const order: string[] = [];
+    const originalSet = (
+      globalThis as unknown as {
+        chrome: { storage: { sync: { set: (v: unknown) => Promise<void> } } };
+      }
+    ).chrome.storage.sync.set;
+    (
+      globalThis as unknown as {
+        chrome: { storage: { sync: { set: (v: unknown) => Promise<void> } } };
+      }
+    ).chrome.storage.sync.set = (values: unknown) => {
+      order.push('saved');
+      return originalSet(values);
+    };
+
+    document.getElementById('translatePage')?.dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+    await settle();
+    order.push('translated');
+
+    expect(stored.targetLang).toBe('Korean');
+    expect(order[0]).toBe('saved');
+  });
+
+  it('still says "Saved ✓" when the button is used', async () => {
+    await open();
+    document
+      .getElementById('settingsForm')
+      ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await settle();
+
+    expect(document.getElementById('status')?.textContent).toBe('Saved ✓');
+  });
+
+  it('does not announce a write-through', async () => {
+    const select = await open();
+    select.value = 'Japanese';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+
+    expect(document.getElementById('status')?.textContent).toBe('');
+  });
+});
