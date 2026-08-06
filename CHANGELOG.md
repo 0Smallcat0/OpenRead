@@ -5,6 +5,63 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] - 2026-08-06
+
+### Fixed
+
+- **"Other generic failures occurred." — Chrome's own words, reaching the
+  panel, with a dead translator behind them.** A user selecting a paragraph
+  mid-session got that message and nothing to do about it.
+
+  Root cause, measured in a real Chrome against a cold profile:
+  `Translator.create()` can resolve with an instance whose language pack is not
+  installed yet. Nine pairs created at once — all nine creates resolved, then
+  seven of the nine threw `UnknownError: Other generic failures occurred.` on
+  their first `translate()` and never worked again. `availability` reported
+  `available` immediately afterwards and a freshly created translator for the
+  same pair worked on the spot, so the pack was fine; only the handle was not.
+
+  Since 2.8.1 every request for a pair shares one cached instance, and the cache
+  was only cleared when `create()` itself rejected. A create that resolved with
+  a dead handle stayed cached for the life of the worker, so every later request
+  for that pair — every block of a whole-page run, every selection — got the
+  same message, with no way back short of restarting Chrome.
+
+  A failed `translate()` now evicts the pair and retries once on a fresh
+  instance. A failed `create()` is deliberately not retried: that is a download
+  that did not finish, and a second attempt would spend another wait as long as
+  the first with nothing on screen to explain it. If the retry fails too, the
+  message says what to do instead of quoting the engine.
+
+  Verified by fault injection against the shipped bundle in a real browser —
+  `Translator.create` wrapped in the service worker to hand back one dead
+  instance. On 2.10.6 the panel read `⚠️ Other generic failures occurred.`; on
+  2.11.0 the same run produced the Japanese translation.
+
+  Two earlier hypotheses were measured and discarded rather than shipped:
+  concurrent `translate()` on one shared instance (four at once, all fine) and
+  an instance going stale while idle (still fine after 180 s).
+
+- **A Simplified Chinese page asked for Traditional Chinese came back
+  Simplified.** `zh-CN` and `zh-Hant` both reduce to `zh`, so the
+  same-language short-circuit treated the pair as "nothing to do" and returned
+  the text with only the Taiwan vocabulary pass applied — which rewrites word
+  choices, not characters. Measured on 2.10.6: `这个软件开发工具的用户介面` came
+  back with 软件 and 用户 intact.
+
+  Chrome has no zh-Hans → zh-Hant pack, but OpenCC does this conversion for the
+  Ollama path already, so the built-in path now uses it: the same page returns
+  `這個軟體開發工具的使用者介面`. Traditional in, Traditional out is unchanged,
+  and no request is made of Chrome either way.
+
+### Verified, not changed
+
+- **An English page asked for English.** Already correct in 2.10.6 and
+  re-measured here: nothing is inserted under any paragraph and the badge reads
+  "Nothing to translate — this page is already in English". The same holds for
+  every other language, because the check is on the engine handing the text back
+  unchanged rather than on English specifically.
+
 ## [2.10.6] - 2026-08-06
 
 ### Fixed
