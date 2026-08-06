@@ -70,6 +70,31 @@ jobs:
             --notes-file release-notes.md \
             ".output/openread-${GITHUB_REF_NAME#v}-chrome.zip"
 
+      # One release on the page, and it is always the newest.
+      #
+      # Thirty-three releases accumulated in three days, and every one before
+      # the latest has a bug the latest fixes — that is what the patches were.
+      # An old zip left on the releases page is a working download of a build
+      # already known to be broken, which is worse than no download at all.
+      #
+      # The tags stay. They are what the CHANGELOG sections point at and what
+      # `git describe` reads, and they cost nothing on the releases page —
+      # `--cleanup-tag` is deliberately not passed.
+      #
+      # Ordered after the create above, and gated on that release actually
+      # existing, so the page can never end up empty.
+      - name: Retire the previous releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" > /dev/null
+          gh release list --limit 200 --json tagName --jq '.[].tagName' \
+            | grep -vxF "${GITHUB_REF_NAME}" \
+            | while read -r old; do
+                echo "Deleting release ${old} (tag kept)"
+                gh release delete "${old}" --yes
+              done
+
       # Publishing needs an NPM_TOKEN repository secret. Without one this is a
       # no-op and the GitHub release above still stands: the extension zip does
       # not depend on npm. With one, `npx openread` starts working within a
