@@ -50,12 +50,6 @@ export type StreamResponse =
   | { status: 'done' }
   | { status: 'error'; message: string };
 
-/** content -> background one-shot: ask to open a file:// PDF in the viewer. */
-export interface OpenPdfViewerMessage {
-  type: 'OPEN_PDF_VIEWER';
-  url: string;
-}
-
 /**
  * content -> background one-shot: run an optional local-model enrichment pass
  * for a capture. The broker reads the Ollama base URL from storage itself, so
@@ -91,13 +85,9 @@ export const TRANSLATE_SELECTION_COMMAND = 'translate-selection';
 export const TRANSLATE_PAGE_COMMAND = 'translate-page';
 
 export type RuntimeRequest =
-  | OpenPdfViewerMessage
   | EnrichCaptureMessage
   | TranslateSelectionMessage
   | TranslatePageMessage;
-
-export type OpenPdfViewerResponse =
-  { success: true } | { error: 'PERMISSION_DENIED' };
 
 /** background -> content: the parsed enrichment, or null on any failure. */
 export interface EnrichCaptureResponse {

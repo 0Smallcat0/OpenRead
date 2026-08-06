@@ -5,6 +5,51 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.5] - 2026-08-06
+
+### Removed
+
+- **The `OPEN_PDF_VIEWER` message, which nothing had ever sent.** It was
+  declared in `messaging.ts`, handled in the background worker, and covered by
+  two tests — so it read as a working feature, and its `PERMISSION_DENIED`
+  reply looked like the answer to "what happens when file access is off".
+  Nothing anywhere sent it, and nothing could: it was meant to come from a
+  content script on a local PDF, and Chrome's own PDF viewer is a plugin
+  document that content scripts do not run in. Tests that keep an unreachable
+  path looking alive are worse than no tests, so the path and its tests are
+  gone. The behaviour it was meant to explain is documented in the README
+  instead, as of 2.7.9.
+
+### Fixed
+
+- **A disconnect could write into a panel it did not belong to.** Starting a
+  second translation tears the first port down, and the first attempt's
+  disconnect handler then reported "the background worker stopped" into
+  whatever panel was on screen — which by then was the second translation's.
+  It now checks the panel still contains the content div it was writing to.
+
+- **`package.json` pointed `main` at `eslint.config.js`.** A resolver old
+  enough to ignore `exports` — which is what `main` is for — would have loaded
+  the lint configuration as the package entry point. It points at the CLI build
+  now, the same file `exports` already resolved to.
+
+### Notes
+
+The service-worker disconnect from 2.10.1 was chased and **not** reproduced. A
+fresh profile with no `en → zh-Hant` pack downloaded it in six seconds and
+translated at seven, with a marker planted in worker memory still present
+afterwards — so the worker never restarted. Two keepalive mechanisms were
+measured before any of this: a marker survives 75 s with a port open and no
+heartbeat at all, and adding a `getPlatformInfo` heartbeat changes nothing,
+because an open port already extends the worker's life. A keepalive written on
+that theory was reverted rather than shipped: code carrying a comment about a
+problem it does not solve is worse than no code.
+
+An earlier reading in this investigation was wrong and worth recording: a
+service worker that is alive but not being inspected does not always appear in
+CDP's target list, so "no service_worker target" is not evidence of
+termination. Ground truth is a marker in worker memory.
+
 ## [2.10.4] - 2026-08-06
 
 ### Fixed

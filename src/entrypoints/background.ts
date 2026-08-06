@@ -19,7 +19,6 @@ import {
   type TranslatePageMessage,
   type PortRequest,
   type RuntimeRequest,
-  type OpenPdfViewerResponse,
   type EnrichCaptureResponse,
   type StreamResponse,
 } from '../messaging';
@@ -285,22 +284,6 @@ export default defineBackground(() => {
   // response (`return true`).
   chrome.runtime.onMessage.addListener(
     (request: RuntimeRequest, sender, sendResponse) => {
-      if (request.type === 'OPEN_PDF_VIEWER') {
-        void (async () => {
-          const allowed = await chrome.extension.isAllowedFileSchemeAccess();
-          const response: OpenPdfViewerResponse = allowed
-            ? { success: true }
-            : { error: 'PERMISSION_DENIED' };
-          if (allowed && sender.tab?.id !== undefined) {
-            await chrome.tabs.update(sender.tab.id, {
-              url: `${viewerUrl}?file=${encodeURIComponent(request.url)}`,
-            });
-          }
-          sendResponse(response);
-        })();
-        return true;
-      }
-
       if (request.type === 'ENRICH_CAPTURE') {
         void (async () => {
           await originRuleReady;

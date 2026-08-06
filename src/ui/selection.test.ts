@@ -804,3 +804,27 @@ describe('where the icon goes for a selection spanning several lines', () => {
     expect(at.top).toBe(92);
   });
 });
+
+describe('a disconnect that arrives after a second translation started', () => {
+  it('does not write into the panel that replaced it', async () => {
+    // Starting another translation tears the first port down. Without a guard
+    // the first attempt's disconnect handler writes "the worker stopped" into
+    // whatever panel is on screen — which is the new translation's.
+    await selectAndTranslate('Hello, world!');
+    const firstPort = ports[0];
+    // The release of the press that opened the panel; without it the
+    // controller swallows the next mouseup by design.
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 70));
+
+    await selectAndTranslate('Another sentence.');
+    ports[1]?.emit({ status: 'streaming', chunk: '另一句話。' });
+    ports[1]?.emit({ status: 'done' });
+    expect(panelText()).toBe('另一句話。');
+
+    firstPort?.dropped();
+
+    expect(panelText()).toBe('另一句話。');
+    expect(panelText()).not.toContain('worker stopped');
+  });
+});
