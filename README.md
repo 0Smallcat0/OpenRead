@@ -46,9 +46,13 @@ seconds.
 - **Chrome 138 or later, on desktop.** The built-in translator is Chrome's, not
   this extension's. Firefox has no equivalent API, so the Firefox build runs on
   the Ollama engine only.
-- **Eight target languages**: Traditional Chinese, Simplified Chinese, English,
-  Japanese, Korean, Spanish, French, German. The source language is whatever
-  the page is in — that side is not a list.
+- **Thirty-nine target languages**, every one probed against a real Chrome
+  rather than taken from documentation. The source language is whatever the
+  page is in — that side is not a list.
+- **Three settings for how it looks**: the original beside the translation or
+  the translation alone; a line, nothing, a dashed underline or a tinted
+  background; smaller, the same, or larger. They apply to a page you are
+  already looking at, without re-translating it.
 - **The first translation of a language pair waits for a download.** Chrome
   fetches the model itself, once per pair per browser profile — 30 seconds to
   two minutes. The popup says whether yours is ready and offers to fetch it
@@ -168,7 +172,7 @@ all, since that is the easy way to send nothing and prove nothing.
 ```bash
 pnpm install
 pnpm build        # -> .output/chrome-mv3, load it unpacked
-pnpm test         # 546 unit tests
+pnpm test         # 552 unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)
 pnpm shoot        # re-shoot every screenshot and the clip on this page

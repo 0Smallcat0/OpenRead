@@ -5,6 +5,46 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.0] - 2026-08-06
+
+### Added
+
+- **Three settings for how a translation looks.** Show the original beside it
+  or only the translation; mark it with a line down the side, nothing, a dashed
+  underline, or a tinted background; and set it smaller, the same, or larger
+  than the text it sits under. The line that reads as a quiet aside on one site
+  reads as a blockquote on another, and a reader who trusts the output on a long
+  article would rather not have the page doubled in length.
+
+  All three follow the popup without a reload. Style and size are attributes on
+  the document and pure CSS, so one write restyles a page of five hundred
+  translations. Translation-only cannot be — a block's own text nodes cannot be
+  hidden without hiding its children too — so the original moves into an
+  `.oit-original` wrapper that CSS can act on, and switching back takes it away
+  again. Nothing is re-translated either way, which is the whole point of
+  changing a setting while looking at the page it applies to.
+
+  The wrapper only exists in translation-only mode. Moving nodes on a live page
+  is a thing to do as little of as possible: a script holding a reference to a
+  paragraph's first child is not wrong to expect it to still be a child of that
+  paragraph. Undo removes it, so a page that was translated once does not keep a
+  span nobody asked for.
+
+- **Thirty-nine target languages, up from eight.** Arabic, Bengali, Bulgarian,
+  Croatian, Czech, Danish, Dutch, Finnish, Greek, Hebrew, Hindi, Hungarian,
+  Indonesian, Italian, Kannada, Lithuanian, Marathi, Norwegian, Polish,
+  Portuguese, Romanian, Russian, Slovak, Slovenian, Swedish, Tamil, Telugu,
+  Thai, Turkish, Ukrainian and Vietnamese join the eight this shipped with.
+
+  Every one was measured against a real Chrome rather than taken from
+  documentation: `Translator.availability()` answered `available` or
+  `downloadable` for all of them, in both directions. Twelve plausible
+  candidates answered `unavailable` and are deliberately absent — Malay,
+  Persian, Latvian, Estonian, Serbian, Catalan, Urdu, Swahili, Filipino,
+  Gujarati and Malayalam among them — because offering a language the engine
+  will refuse is worse than not offering it. A test now fails if the popup's
+  list and the code table ever drift apart again.
+
 ## [2.15.1] - 2026-08-06
 
 ### Added

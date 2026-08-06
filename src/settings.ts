@@ -17,6 +17,22 @@
  */
 export type Engine = 'builtin' | 'ollama';
 
+/**
+ * Whether the original stays visible beside the translation.
+ *
+ * Bilingual is the default and the reason this project exists: a local model is
+ * good, not perfect, and a reader has to be able to check a sentence that looks
+ * wrong. But it doubles the length of the page, and a reader who trusts the
+ * output on a long article would rather just read it.
+ */
+export type DisplayMode = 'bilingual' | 'translationOnly';
+
+/** How an inserted translation is marked out from the text around it. */
+export type TranslationStyle = 'line' | 'plain' | 'dashed' | 'highlight';
+
+/** Size of the translation relative to the text it sits under. */
+export type TranslationScale = 'small' | 'same' | 'large';
+
 export type { AutoTranslate } from './core/auto-translate';
 import type { AutoTranslate } from './core/auto-translate';
 
@@ -30,6 +46,11 @@ export interface Settings {
   autoTranslate: AutoTranslate;
   /** Hosts never translated automatically. An entry covers its subdomains. */
   autoTranslateExcept: string[];
+  /** Keep the original beside the translation, or show only the translation. */
+  displayMode: DisplayMode;
+  /** How the translation is marked out. See `ui/fullpage.ts` for the CSS. */
+  translationStyle: TranslationStyle;
+  translationScale: TranslationScale;
   /** Obsidian vault to capture into; empty = the user's current/last vault. */
   obsidianVault: string;
   /** Vault-relative folder for captures; empty = the vault root. */
@@ -54,12 +75,23 @@ export const DEFAULT_SETTINGS: Settings = {
   // would have been worth to them afterwards.
   autoTranslate: 'off',
   autoTranslateExcept: [],
+  // Bilingual, and the current look, so an upgrade changes nothing until it is
+  // asked to.
+  displayMode: 'bilingual',
+  translationStyle: 'line',
+  translationScale: 'same',
   obsidianVault: '',
   obsidianFolder: 'OpenRead',
   enrichOnCapture: false,
 };
 
-/** Languages offered in the popup, in display order (first = default). */
+/**
+ * Languages offered in the popup, in display order (first = default).
+ *
+ * The four this shipped with, then the rest alphabetically. Every one of them
+ * was probed against a real Chrome — see `core/bcp47.ts` for what was left out
+ * and why.
+ */
 export const TARGET_LANGUAGES = [
   'Traditional Chinese',
   'Simplified Chinese',
@@ -69,6 +101,37 @@ export const TARGET_LANGUAGES = [
   'Spanish',
   'French',
   'German',
+  'Arabic',
+  'Bengali',
+  'Bulgarian',
+  'Croatian',
+  'Czech',
+  'Danish',
+  'Dutch',
+  'Finnish',
+  'Greek',
+  'Hebrew',
+  'Hindi',
+  'Hungarian',
+  'Indonesian',
+  'Italian',
+  'Kannada',
+  'Lithuanian',
+  'Marathi',
+  'Norwegian',
+  'Polish',
+  'Portuguese',
+  'Romanian',
+  'Russian',
+  'Slovak',
+  'Slovenian',
+  'Swedish',
+  'Tamil',
+  'Telugu',
+  'Thai',
+  'Turkish',
+  'Ukrainian',
+  'Vietnamese',
 ] as const;
 
 /** Load settings, falling back to defaults for any unset key. */
@@ -80,6 +143,9 @@ export async function loadSettings(): Promise<Settings> {
     'targetLang',
     'autoTranslate',
     'autoTranslateExcept',
+    'displayMode',
+    'translationStyle',
+    'translationScale',
     'obsidianVault',
     'obsidianFolder',
     'enrichOnCapture',
