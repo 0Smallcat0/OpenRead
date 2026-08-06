@@ -5,6 +5,44 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.18.0] - 2026-08-07
+
+### Added
+
+- **Whole-document translation in the bundled PDF viewer.** The refusal this
+  replaces was right about the constraint and wrong about the conclusion. A PDF
+  text layer really is absolutely-positioned spans laid over a rendered page,
+  and a translation appended under a line really would land on the next one —
+  but the pages themselves are ordinary block elements stacked in `#viewer`, so
+  a translation placed *after a page* costs nothing. It reads in order: the
+  page as the author laid it out, then that page in your language, then the
+  next page.
+
+  Which is also how a paper is read. Nobody wants a two-column PDF reflowed
+  into one; they want to see the figure and read the argument.
+
+  The same control as everywhere else — right-click, the popup button, or
+  `Ctrl+Shift+L` — and pressing it again puts the document back.
+
+  Pages render lazily, measured at 2 of 14 with a text layer at any moment, so
+  this follows the viewer rather than making one pass: the page nearest the
+  reader is translated first, and pages the viewer draws later are picked up as
+  they arrive.
+
+  Paragraphs are recovered from geometry, but less of it than expected. PDF.js
+  already emits `<br>` between lines, so the line breaks are given and only the
+  paragraph breaks have to be inferred — and those are inferred from line
+  *pitch*, top to top, compared against the median pitch of that page. Not the
+  gap between line boxes: this extension pads every span by 5px a side to make
+  lines easier to grab, so on a real page the measured gaps run negative — -8,
+  -9, -2 down a column of ordinary prose. Pitch is untouched by symmetric
+  padding, and a per-page median calibrates itself to the font size and the
+  zoom instead of being right at one of them.
+
+  Verified on the viewer's own sample paper, a two-column PLDI submission: 41
+  paragraphs off the first two pages, every translation placed after its page,
+  and pressing again leaving the document as it was.
+
 ## [2.17.0] - 2026-08-06
 
 ### Changed

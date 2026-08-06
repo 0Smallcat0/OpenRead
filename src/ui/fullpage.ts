@@ -466,10 +466,22 @@ export function showPageNotice(doc: Document, message: string): void {
   progress.finish(message);
 }
 
-interface Progress {
+export interface Progress {
   update: (done: number, total: number) => void;
   downloading: (loaded: number) => void;
   finish: (message: string) => void;
+}
+
+/**
+ * The corner badge, for a caller that is not this file.
+ *
+ * Exported for the PDF viewer, which runs a different kind of pass over a
+ * different kind of document and should still count progress and offer Stop in
+ * the same place, looking the same, with the same screen-reader announcement.
+ */
+export function mountPageProgress(doc: Document, onStop: () => void): Progress {
+  ensureStyle(doc);
+  return mountProgress(doc, onStop);
 }
 
 function mountProgress(doc: Document, onStop: () => void): Progress {

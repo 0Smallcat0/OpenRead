@@ -20,7 +20,8 @@
   a sentence that looks wrong can be checked against the original instead of
   taken on faith.
 - **PDFs too.** Papers and specs open in a bundled viewer where selecting text
-  works the same as on a web page.
+  works the same as on a web page — and a whole paper translates page by page,
+  with the layout left alone.
 - **Traditional Chinese that reads like Taiwan.** Most tools translate into
   Simplified and convert character by character, which produces `界面`, `公裡`,
   `數據庫` where a Taiwanese reader expects `介面`, `公里`, `資料庫`. OpenRead
@@ -80,6 +81,9 @@ seconds.
   by default. `Ctrl+Z` takes it back.
 - **One selection** — select text, click the floating **文**, or press
   **`Ctrl+Shift+Y`**. Escape closes the panel.
+- **A whole PDF** — open any `.pdf` and press translate. Each page's
+  translation is placed under the page itself, so the layout, the figures and
+  the equations stay exactly as the author set them.
 - **PDFs** — open any `.pdf` and it lands in the bundled viewer. For a PDF
   already on your disk, turn on **Allow access to file URLs** in
   `chrome://extensions` → **Details** first; Chrome withholds `file://` from
@@ -178,7 +182,7 @@ all, since that is the easy way to send nothing and prove nothing.
 ```bash
 pnpm install
 pnpm build        # -> .output/chrome-mv3, load it unpacked
-pnpm test         # 583 unit tests
+pnpm test         # 592 unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)
 pnpm shoot        # re-shoot every screenshot and the clip on this page
