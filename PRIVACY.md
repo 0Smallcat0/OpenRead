@@ -27,6 +27,28 @@ It depends on which engine you have chosen in the popup.
 
 In neither case is the text sent to the developer or to any third party.
 
+## Checking this yourself
+
+Everything above is a claim by the person who wrote the extension, which is the
+weakest kind of evidence there is. It can be checked without reading the source
+and without taking anyone's word for it:
+
+```bash
+pnpm build
+pnpm e2e:egress
+```
+
+That loads the built extension into a real Chrome, serves a page from
+`127.0.0.1`, translates the whole thing on the default engine, and records
+every network request every part of the extension makes while it happens. It
+fails if any of them left the machine, if any of them went to Ollama — which
+would mean the built-in engine was not what served the run — or if nothing was
+actually translated, since a run that translates nothing sends nothing and
+would prove nothing.
+
+`e2e/no-egress.mjs` is the whole thing, and it is short enough to read before
+you run it.
+
 ## What is stored, and where
 
 - **Settings** (engine, Ollama server URL, model name, target language,

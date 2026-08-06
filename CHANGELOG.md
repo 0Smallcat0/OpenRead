@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.12.0] - 2026-08-06
 
+### Added
+
+- **`pnpm e2e:egress` — the privacy claim as a test a stranger can run.**
+  "The default engine makes no network request at all" was, until now,
+  something the author asserted and a reader could only verify by reading the
+  source. For a tool whose entire pitch is that an unpublished draft stays on
+  the laptop, and a repository with no stars to lend anyone else's judgement,
+  that is the weakest possible form of the most important claim.
+
+  The harness loads the built extension into a real Chrome, serves a fixture
+  page from `127.0.0.1` so the page itself fetches nothing, attaches a CDP
+  network listener to every target that will take one, and translates the whole
+  page on the built-in engine. It fails if any request left the machine, if any
+  went to Ollama — which would mean the built-in engine bowed out and the run
+  says nothing about the default path — or if nothing was translated, since a
+  run that translates nothing trivially sends nothing.
+
+  Verified in both directions before shipping: on the built-in engine, four
+  requests observed and every one of them the fixture; flipped to the Ollama
+  engine, the same harness catches four `service_worker` requests to
+  `/api/chat` and fails. A test that has never been seen to fail is not
+  evidence of anything.
+
 ### Fixed
 
 - **"Can't reach Ollama" — told to a user who does not have Ollama, has never
