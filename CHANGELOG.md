@@ -5,6 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.5] - 2026-08-06
+
+### Fixed
+
+- **A whole-page run against a server that is not there marked every block.**
+  With Ollama stopped, all twenty-eight blocks failed the same way and all
+  twenty-eight got a `⚠️ translation failed` line — one problem, stated
+  twenty-eight times, and a page the reader then had to clear before it read
+  normally again.
+
+  Three consecutive failures now end the run, and the markers those three left
+  are taken away with it. One block failing on its own is bad luck, which is
+  why the counter resets on anything that works; three in a row is a setup that
+  is not going to start working on block four.
+
+  Same page, Ollama pointed at a port nothing is listening on:
+
+  ```
+  badge      Gave up after 3 failures — Can't reach Ollama at http://localhost:18999. Is the server running?
+  seconds    4
+  inserted 0   warnings 0   markers 0
+  ```
+
+  Whatever was translated before the failures started stays on the page, and a
+  run that ends this way is not reported as the user having stopped it.
+
 ## [2.8.4] - 2026-08-06
 
 ### Fixed
