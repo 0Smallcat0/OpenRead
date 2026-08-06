@@ -34,6 +34,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   component reports the host as focused and would otherwise never be seen. And a
   field the writer has clicked out of during the round trip is left alone.
 
+- **The language-pack note says to keep the popup open.** A Chrome extension
+  popup closes the moment it loses focus, and the download is driven from that
+  document. Measured across runs on the same machine, one pack took 16 s, 12 s
+  and 390 s — so "a minute or two" is a hope, not a promise, and a reader who
+  clicks away has no way to know they interrupted it. The harness reports the
+  elapsed time now for the same reason: it is the only thing that tells a slow
+  download from a stuck one.
+
 ### Fixed
 
 - **The page's `<html lang>` was sent as the source language for text the page

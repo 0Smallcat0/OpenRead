@@ -655,6 +655,7 @@ describe('the language pack, before it is needed', () => {
     $('downloadPack').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await settle();
     expect($('packNote').textContent).toContain('a minute or two');
+    expect($('packNote').textContent).toContain('keep this popup open');
 
     (report as unknown as (loaded: number) => void)(0);
     expect($('packNote').textContent).not.toContain('0%');
