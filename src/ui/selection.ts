@@ -12,7 +12,11 @@
 import { shouldBypassAI } from '../core/language';
 import { toBcp47 } from '../core/bcp47';
 import { resolveSourceUrl } from '../core/capture';
-import { captureNote, type CaptureConfig } from './capture';
+import {
+  captureNote,
+  copyToClipboard,
+  type CaptureConfig,
+} from './capture';
 import type { CaptureNote } from '../core/types';
 import {
   STREAM_PORT_NAME,
@@ -337,7 +341,16 @@ export function mountSelectionTranslator(
       `min-width:min(${PANEL_MIN_WIDTH}px,90vw)`,
       'max-width:min(600px,90vw)',
       'max-height:80vh',
-      'overflow:auto',
+      // The panel itself does not scroll; its text does.
+      //
+      // It used to, and the close button is positioned against the panel, so
+      // reading to the bottom of a long translation carried the × off the top
+      // — measured at `top: -51` after scrolling to the end. Making the text
+      // the scrolling part keeps the × and the buttons where the user left
+      // them, which is what a dialog is supposed to do.
+      'overflow:hidden',
+      'display:flex',
+      'flex-direction:column',
       `background:${skin.bg}`,
       `color:${skin.fg}`,
       'padding:14px 16px',
@@ -373,7 +386,12 @@ export function mountSelectionTranslator(
     // The translation streams in chunk by chunk; without a live region a screen
     // reader never hears any of it.
     content.setAttribute('aria-live', 'polite');
-    content.style.cssText = 'white-space:pre-wrap;word-break:break-word';
+    content.style.cssText =
+      'white-space:pre-wrap;word-break:break-word;' +
+      // The one part that scrolls, so the × above it and the buttons below it
+      // stay put. `min-height:0` because a flex child will not shrink past its
+      // content without it, which puts the overflow back on the panel.
+      'overflow:auto;flex:1 1 auto;min-height:0;padding-right:14px';
 
     el.append(close, content);
     document.body.appendChild(el);
@@ -411,7 +429,8 @@ export function mountSelectionTranslator(
 
   function appendChunk(content: HTMLDivElement, chunk: string): void {
     content.appendChild(document.createTextNode(chunk));
-    if (panel) panel.scrollTop = panel.scrollHeight;
+    // The text is what scrolls now, not the panel around it.
+    content.scrollTop = content.scrollHeight;
   }
 
   /** A line above the translation explaining something about the request. */
@@ -595,16 +614,66 @@ export function mountSelectionTranslator(
         'font-family:inherit',
       ].join(';');
 
+      /**
+       * Copy, beside Save.
+       *
+       * The most common thing to do with a translation is put it somewhere,
+       * and until now the only somewhere was an Obsidian vault. It also gives
+       * the capture path an honest fallback: handing a URL to the OS protocol
+       * handler produces no completion signal, so if Obsidian is not installed
+       * the panel says "Sent" and nothing happens — and now there is a second
+       * button right there that does work.
+       */
+      const copy = document.createElement('button');
+      copy.type = 'button';
+      copy.textContent = '⧉ Copy';
+      copy.style.cssText = [
+        'appearance:none',
+        'cursor:pointer',
+        'font-size:13px',
+        'padding:6px 10px',
+        'border-radius:6px',
+        'background:none',
+        `color:${skin.fg}`,
+        `border:1px solid ${skin.rule}`,
+        'font-family:inherit',
+      ].join(';');
+
       const hint = document.createElement('span');
       hint.style.cssText = `font-size:12px;color:${skin.dim}`;
 
-      bar.append(btn, hint);
+      bar.append(btn, copy, hint);
       host.appendChild(bar);
 
       // Guard our own presses from the document-level mousedown teardown.
-      btn.addEventListener('mousedown', (e) => {
+      for (const control of [btn, copy]) {
+        control.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+      }
+
+      copy.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
+        const restore = (): void => {
+          window.setTimeout(() => {
+            copy.textContent = '⧉ Copy';
+          }, 1500);
+        };
+        // Not `navigator.clipboard.writeText` directly: it is refused often
+        // enough that the capture path already carries a fallback, and this
+        // button was measured failing without one on a plain http page.
+        void copyToClipboard(finalText).then(
+          (ok) => {
+            copy.textContent = ok ? '✓ Copied' : 'Copy failed';
+            restore();
+          },
+          () => {
+            copy.textContent = 'Copy failed';
+            restore();
+          },
+        );
       });
       btn.addEventListener('click', (e) => {
         e.preventDefault();

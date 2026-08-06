@@ -516,3 +516,101 @@ describe('where the 文 icon goes', () => {
     expect(at.top).toBe(0);
   });
 });
+
+describe('copying a translation', () => {
+  it('offers Copy beside Save to Obsidian', async () => {
+    await selectAndTranslate('Hello, world!');
+    ports[0]?.emit({ status: 'streaming', chunk: '你好，世界！' });
+    ports[0]?.emit({ status: 'done' });
+
+    const buttons = Array.from(
+      document.querySelectorAll('#oit-translate-panel button'),
+    ).map((b) => b.textContent);
+    expect(buttons).toContain('⧉ Copy');
+    expect(buttons).toContain('＋ Save to Obsidian');
+  });
+
+  it('copies the translation, not the original', async () => {
+    const written: string[] = [];
+    vi.stubGlobal('navigator', {
+      clipboard: {
+        writeText: (text: string) => {
+          written.push(text);
+          return Promise.resolve();
+        },
+      },
+    });
+    await selectAndTranslate('Hello, world!');
+    ports[0]?.emit({ status: 'streaming', chunk: '你好，世界！' });
+    ports[0]?.emit({ status: 'done' });
+
+    const copy = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        '#oit-translate-panel button',
+      ),
+    ).find((b) => b.textContent?.includes('Copy'));
+    copy?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+
+    expect(written).toEqual(['你好，世界！']);
+    expect(copy?.textContent).toBe('✓ Copied');
+  });
+
+  it('says so when the clipboard refuses', async () => {
+    vi.stubGlobal('navigator', {
+      clipboard: { writeText: () => Promise.reject(new Error('denied')) },
+    });
+    await selectAndTranslate('Hello, world!');
+    ports[0]?.emit({ status: 'streaming', chunk: '你好' });
+    ports[0]?.emit({ status: 'done' });
+
+    const copy = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        '#oit-translate-panel button',
+      ),
+    ).find((b) => b.textContent?.includes('Copy'));
+    copy?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+
+    expect(copy?.textContent).toBe('Copy failed');
+  });
+
+  it('does not tear the panel down when pressed', async () => {
+    // Every control in here has to guard against the document-level mousedown
+    // that dismisses the panel.
+    vi.stubGlobal('navigator', {
+      clipboard: { writeText: () => Promise.resolve() },
+    });
+    await selectAndTranslate('Hello, world!');
+    ports[0]?.emit({ status: 'streaming', chunk: '你好' });
+    ports[0]?.emit({ status: 'done' });
+
+    const copy = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        '#oit-translate-panel button',
+      ),
+    ).find((b) => b.textContent?.includes('Copy'));
+    copy?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await settle();
+
+    expect(document.getElementById('oit-translate-panel')).not.toBeNull();
+  });
+});
+
+describe('the panel keeps its controls in reach', () => {
+  it('scrolls its text rather than itself', async () => {
+    // The × is positioned against the panel, so when the panel was the
+    // scrolling element, reading to the end of a long translation carried the
+    // close button off the top — measured at `top: -51`.
+    await selectAndTranslate('Hello, world!');
+    const panel = document.getElementById('oit-translate-panel');
+    const content = panelContent();
+
+    expect(panel?.style.overflow).toBe('hidden');
+    expect(panel?.style.display).toBe('flex');
+    expect(content?.style.overflow).toBe('auto');
+    // Without this a flex child refuses to shrink past its content and the
+    // overflow lands back on the panel.
+    expect(content?.style.minHeight).toBe('0px');
+  });
+});
