@@ -309,6 +309,29 @@
 
       <hr />
 
+      <label for="displayMode">Show</label>
+      <select id="displayMode">
+        <option value="bilingual">Original and translation</option>
+        <option value="translationOnly">Translation only</option>
+      </select>
+
+      <label for="translationStyle">Translation style</label>
+      <select id="translationStyle">
+        <option value="line">Line down the side</option>
+        <option value="plain">No marking</option>
+        <option value="dashed">Dashed underline</option>
+        <option value="highlight">Tinted background</option>
+      </select>
+
+      <label for="translationScale">Translation size</label>
+      <select id="translationScale">
+        <option value="small">Smaller than the original</option>
+        <option value="same">Same as the original</option>
+        <option value="large">Larger than the original</option>
+      </select>
+
+      <hr />
+
       <label for="obsidianVault">Obsidian Vault (optional)</label>
       <input id="obsidianVault" type="text" placeholder="Default vault" />
 

@@ -42,11 +42,26 @@ import {
   type CollectOptions,
 } from './blocks';
 import { toBcp47 } from '../core/bcp47';
+import type {
+  DisplayMode,
+  TranslationStyle,
+  TranslationScale,
+} from '../settings';
 
 // Defined next to the collector, which needs it to tell a live marker from a
 // stale one; re-exported here because this is where callers import it from.
 export { BILINGUAL_CLASS };
 export const PROGRESS_ID = 'oit-page-progress';
+
+/**
+ * Wraps a block's own text once a translation sits beside it.
+ *
+ * Only inserted in translation-only mode, where something has to be hidden and
+ * a block's text nodes cannot be hidden without hiding its children too.
+ * Removing it puts the nodes back exactly where they were, so undo is still
+ * byte for byte.
+ */
+export const ORIGINAL_CLASS = 'oit-original';
 const STYLE_ID = 'oit-page-style';
 
 /**
@@ -118,6 +133,8 @@ export interface PageTranslateDeps {
   targetLang: string;
   isVisible?: CollectOptions['isVisible'];
   shouldSkipText?: CollectOptions['shouldSkipText'];
+  /** How the result should look. Defaults to bilingual in the current style. */
+  appearance?: Appearance;
   /**
    * True when nobody pressed anything — an automatic pass on page load.
    *
@@ -128,6 +145,77 @@ export interface PageTranslateDeps {
    * either way, so "nothing yet" still becomes "translated" on its own.
    */
   unprompted?: boolean;
+}
+
+/** The three things a reader can change about how a translation looks. */
+export interface Appearance {
+  displayMode: DisplayMode;
+  translationStyle: TranslationStyle;
+  translationScale: TranslationScale;
+}
+
+const DEFAULT_APPEARANCE: Appearance = {
+  displayMode: 'bilingual',
+  translationStyle: 'line',
+  translationScale: 'same',
+};
+
+/**
+ * Put the appearance on the document, where CSS can act on it.
+ *
+ * Attributes rather than inline styles on every inserted node: one write
+ * restyles a page of five hundred translations, which is what makes changing
+ * the setting feel immediate instead of requiring a re-run.
+ */
+export function applyAppearance(root: Document, appearance: Appearance): void {
+  const element = root.documentElement;
+  if (!element) return;
+  element.setAttribute('data-oit-display', appearance.displayMode);
+  element.setAttribute('data-oit-style', appearance.translationStyle);
+  element.setAttribute('data-oit-scale', appearance.translationScale);
+}
+
+/**
+ * Move a block's own content into `.oit-original`, or put it back.
+ *
+ * Wrapping is confined to translation-only mode. It moves nodes, and moving
+ * nodes on a live page is a thing to do as little of as possible: a script
+ * holding a reference to a paragraph's first child is not wrong to expect it to
+ * still be a child of that paragraph.
+ */
+function wrapOriginal(block: HTMLElement): void {
+  if (block.querySelector(`:scope > .${ORIGINAL_CLASS}`)) return;
+  const doc = block.ownerDocument;
+  const holder = doc.createElement('span');
+  holder.className = ORIGINAL_CLASS;
+  while (block.firstChild) holder.appendChild(block.firstChild);
+  block.appendChild(holder);
+}
+
+function unwrapOriginal(holder: Element): void {
+  const parent = holder.parentNode;
+  if (!parent) return;
+  while (holder.firstChild) parent.insertBefore(holder.firstChild, holder);
+  holder.remove();
+}
+
+/**
+ * Switch an already-translated page between bilingual and translation-only.
+ *
+ * The style and the size are pure CSS and change with the attribute alone.
+ * This one cannot be: the wrapper only exists where it is needed, so turning
+ * the mode on has to create it and turning it off has to take it away.
+ */
+export function reflowTranslations(root: Document, mode: DisplayMode): void {
+  if (mode === 'translationOnly') {
+    for (const block of queryDeep<HTMLElement>(root, `[${TRANSLATED_ATTR}]`)) {
+      wrapOriginal(block);
+    }
+    return;
+  }
+  for (const holder of queryDeep(root, `.${ORIGINAL_CLASS}`)) {
+    unwrapOriginal(holder);
+  }
 }
 
 export interface PageResult {
@@ -241,6 +329,10 @@ export function clearPageTranslation(root: ParentNode): number {
   // translation left behind there is one the toggle can never remove.
   const inserted = queryDeep(root, `.${BILINGUAL_CLASS}`);
   for (const node of inserted) node.remove();
+  // The wrapper goes back to being the block's own children, in order, so undo
+  // restores the page rather than leaving a span nobody asked for.
+  for (const holder of queryDeep(root, `.${ORIGINAL_CLASS}`))
+    unwrapOriginal(holder);
   for (const marked of queryDeep(root, `[${TRANSLATED_ATTR}]`))
     marked.removeAttribute(TRANSLATED_ATTR);
   return inserted.length;
@@ -291,6 +383,39 @@ function ensureStyle(doc: Document): void {
   font-size: inherit;
   line-height: inherit;
   white-space: pre-wrap;
+}
+/* Translation only. The original is still there, and one attribute brings it
+   back — which is what makes the setting worth having rather than a re-run. */
+:root[data-oit-display='translationOnly'] .${ORIGINAL_CLASS} {
+  display: none;
+}
+:root[data-oit-display='translationOnly'] .${BILINGUAL_CLASS} {
+  margin-top: 0;
+  opacity: 1;
+}
+/* Marked out four ways, because the line that reads as a quiet aside on one
+   site reads as a blockquote on another. */
+:root[data-oit-style='plain'] .${BILINGUAL_CLASS} {
+  padding-left: 0;
+  border-left: 0;
+}
+:root[data-oit-style='dashed'] .${BILINGUAL_CLASS} {
+  padding-left: 0;
+  border-left: 0;
+  border-bottom: 1px dashed currentColor;
+}
+:root[data-oit-style='highlight'] .${BILINGUAL_CLASS} {
+  padding: 0.1em 0.35em;
+  border-left: 0;
+  /* currentColor at low alpha, so it tints whatever the page's own background
+     is instead of asserting a colour of its own. */
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+:root[data-oit-scale='small'] .${BILINGUAL_CLASS} {
+  font-size: 0.88em;
+}
+:root[data-oit-scale='large'] .${BILINGUAL_CLASS} {
+  font-size: 1.12em;
 }
 .${BILINGUAL_CLASS}[data-oit-failed] {
   opacity: 0.55;
@@ -396,8 +521,10 @@ function attach(
   text: string,
   targetLang: string,
   failed: boolean,
+  displayMode: DisplayMode = 'bilingual',
 ): void {
   const doc = block.ownerDocument;
+  if (displayMode === 'translationOnly') wrapOriginal(block);
   const node = doc.createElement('span');
   node.className = BILINGUAL_CLASS;
   // A span rather than a div: a div inside a `p` is invalid HTML, and while
@@ -656,6 +783,7 @@ export async function translatePage(
 ): Promise<PageResult> {
   stopPageTranslation();
   ensureStyle(root);
+  applyAppearance(root, deps.appearance ?? DEFAULT_APPEARANCE);
 
   const blocks = collect(root, deps);
 
@@ -687,6 +815,7 @@ async function drainQueue(
   deps: PageTranslateDeps,
   initial: HTMLElement[],
 ): Promise<PageResult> {
+  const appearance = deps.appearance ?? DEFAULT_APPEARANCE;
   const controller = new AbortController();
   const current: Run = {
     controller,
@@ -773,13 +902,19 @@ async function drainQueue(
           unchanged++;
           consecutiveFailures = 0;
         } else if (result.trim()) {
-          attach(block, result.trim(), deps.targetLang, false);
+          attach(block, result.trim(), deps.targetLang, false, appearance.displayMode);
           translated++;
           consecutiveFailures = 0;
         } else {
           // An empty generation is a failure with a friendly face: silently
           // skipping it leaves a gap the reader reads as "already translated".
-          attach(block, '⚠️ no translation returned', deps.targetLang, true);
+          attach(
+            block,
+            '⚠️ no translation returned',
+            deps.targetLang,
+            true,
+            appearance.displayMode,
+          );
           failed++;
           consecutiveFailures++;
         }
@@ -788,7 +923,13 @@ async function drainQueue(
         const reason =
           error instanceof Error ? error.message.trim() : String(error);
         if (!firstError && reason) firstError = reason;
-        attach(block, '⚠️ translation failed', deps.targetLang, true);
+        attach(
+          block,
+          '⚠️ translation failed',
+          deps.targetLang,
+          true,
+          appearance.displayMode,
+        );
         failed++;
         consecutiveFailures++;
       } finally {

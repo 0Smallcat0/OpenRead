@@ -13,7 +13,17 @@
  * buried in a call site.
  */
 
-/** Popup language name -> BCP-47 code Chrome's Translator accepts. */
+/**
+ * Popup language name -> BCP-47 code Chrome's Translator accepts.
+ *
+ * Every entry here was measured against a real Chrome rather than taken from
+ * documentation: `Translator.availability({ sourceLanguage: 'en',
+ * targetLanguage: code })` answered `available` or `downloadable` for all of
+ * them. Twelve plausible candidates answered `unavailable` and are deliberately
+ * absent — Malay, Persian, Latvian, Estonian, Serbian, Catalan, Urdu, Swahili,
+ * Filipino, Gujarati and Malayalam among them — because offering a language the
+ * engine will refuse is worse than not offering it.
+ */
 const BY_NAME: Record<string, string> = {
   'Traditional Chinese': 'zh-Hant',
   'Simplified Chinese': 'zh',
@@ -23,6 +33,37 @@ const BY_NAME: Record<string, string> = {
   Spanish: 'es',
   French: 'fr',
   German: 'de',
+  Arabic: 'ar',
+  Bengali: 'bn',
+  Bulgarian: 'bg',
+  Croatian: 'hr',
+  Czech: 'cs',
+  Danish: 'da',
+  Dutch: 'nl',
+  Finnish: 'fi',
+  Greek: 'el',
+  Hebrew: 'he',
+  Hindi: 'hi',
+  Hungarian: 'hu',
+  Indonesian: 'id',
+  Italian: 'it',
+  Kannada: 'kn',
+  Lithuanian: 'lt',
+  Marathi: 'mr',
+  Norwegian: 'no',
+  Polish: 'pl',
+  Portuguese: 'pt',
+  Romanian: 'ro',
+  Russian: 'ru',
+  Slovak: 'sk',
+  Slovenian: 'sl',
+  Swedish: 'sv',
+  Tamil: 'ta',
+  Telugu: 'te',
+  Thai: 'th',
+  Turkish: 'tr',
+  Ukrainian: 'uk',
+  Vietnamese: 'vi',
 };
 
 /**
