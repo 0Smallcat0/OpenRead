@@ -422,6 +422,16 @@ try {
   // pause after a first press.
   console.log('\n--- the language pack ---');
   const popup = await browser.newPage();
+  // The popup is the one surface here with no visible failure mode: a throw in
+  // its controller leaves every control inert and says nothing.
+  popup.on('pageerror', (error) => {
+    console.log(`  popup error: ${error.message}`);
+  });
+  popup.on('console', (message) => {
+    if (message.type() === 'error' || message.type() === 'warning') {
+      console.log(`  popup ${message.type()}: ${message.text()}`);
+    }
+  });
   await popup.goto(`chrome-extension://${id}/popup.html`, {
     waitUntil: 'domcontentloaded',
   });
@@ -439,6 +449,37 @@ try {
         document.getElementById('downloadPack')?.hasAttribute('hidden') ?? true
       ),
     }));
+
+  // The popup is one document and one controller, wired by matching ids. A
+  // rename on either side leaves `collect()` returning null and the whole popup
+  // inert — no options in the dropdowns, no listeners, and nothing said about
+  // it. Filling the language list is the cheapest proof the controller ran.
+  const mounted = await popup.evaluate(() => ({
+    languages: document.getElementById('targetLang')?.children.length ?? 0,
+    inputLanguages:
+      document.getElementById('inputTargetLang')?.children.length ?? 0,
+    controls: [
+      'engine',
+      'targetLang',
+      'inputTargetLang',
+      'displayMode',
+      'translationStyle',
+      'translationScale',
+      'hoverTranslate',
+      'autoTranslate',
+      'obsidianVault',
+      'obsidianFolder',
+    ].filter((id) => !document.getElementById(id)),
+  }));
+  console.log(`  popup mounted: ${JSON.stringify(mounted)}`);
+  check(
+    mounted.controls.length === 0,
+    `the popup is missing controls: ${mounted.controls.join(', ')}`,
+  );
+  check(
+    mounted.languages > 30 && mounted.inputLanguages > 30,
+    'the popup did not fill its language lists, so the controller never ran',
+  );
 
   const first = await packState();
   console.log(`  on open: ${JSON.stringify(first)}`);
@@ -466,17 +507,39 @@ try {
   // Whichever state this profile is in, the end state is the same: ready. On a
   // fresh profile that means clicking through a real download.
   if (switched.offered) {
-    await popup.evaluate(() => {
-      document.getElementById('downloadPack')?.click();
+    // A real gesture, not `element.click()`. Chrome gates starting a language
+    // pack download on user activation, and a synthetic click carries none —
+    // measured here, the create promise then simply never settles rather than
+    // rejecting, which reads as a seven-minute download that never finishes.
+    // Fronted first. The page had to be the active tab while the popup asked it
+    // what language it is in, but a real user pressing Download is looking at
+    // the popup — and a background tab is throttled, which is what a download
+    // that sits at nothing for seven minutes looks like.
+    await popup.bringToFront();
+    const popupCdp = await popup.createCDPSession();
+    await popupCdp.send('Runtime.evaluate', {
+      expression: `document.getElementById('downloadPack').click()`,
+      userGesture: true,
     });
+    // Generous, and it says how long it took. A fresh profile fetches two packs
+    // in one run — the target language, then whatever this phase switches to —
+    // and a single one was measured at 81 s on a fast connection. A harness
+    // that goes red on a slow network is one nobody reads the output of twice.
     let note = '';
-    for (let waited = 0; waited < 240000; waited += 2000) {
+    let waited = 0;
+    for (; waited < 420000; waited += 2000) {
       await sleep(2000);
       note = (await packState()).note;
       if (note.startsWith('Ready') || note.startsWith('Could not')) break;
+      if (waited % 30000 === 0) console.log(`    ${String(waited / 1000)}s: ${note}`);
     }
-    console.log(`  after downloading: ${note}`);
+    console.log(`  after downloading (${String(Math.round(waited / 1000))} s): ${note}`);
     check(note.startsWith('Ready'), `the download did not finish (${note})`);
+    // Hand the page back. Everything after this addresses "the active tab", and
+    // leaving the popup in front sends those messages to a document with no
+    // content script — "Receiving end does not exist", from a phase that has
+    // nothing to do with popups.
+    await page.bringToFront();
   } else {
     check(
       switched.note.startsWith('Ready'),
