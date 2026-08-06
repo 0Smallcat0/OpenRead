@@ -1,11 +1,13 @@
 import { mountSelectionTranslator } from '../ui/selection';
 import { mountHoverTranslate } from '../ui/hover';
+import { translateActiveInput } from '../ui/input-translate';
 import {
   togglePageTranslation,
   translatePage,
   translateBlock,
   applyAppearance,
   reflowTranslations,
+  showPageNotice,
 } from '../ui/fullpage';
 import { translateViaPort } from '../ui/port-translate';
 import { shouldBypassAI } from '../core/language';
@@ -96,6 +98,30 @@ export default defineContentScript({
             lang: document.documentElement.getAttribute('lang'),
           };
           sendResponse(response);
+          return;
+        }
+
+        // Every frame gets this; only the one holding the focused field acts,
+        // which `activeField` answers by returning null everywhere else.
+        if (type === 'TRANSLATE_INPUT') {
+          void (async () => {
+            const settings = await loadSettings();
+            await translateActiveInput(document, {
+              translate: (text) =>
+                translateViaPort({
+                  text,
+                  targetLang: settings.inputTargetLang,
+                  model: settings.modelId,
+                  signal: new AbortController().signal,
+                  // The writer is typing in the language they think in, which
+                  // is precisely not the one the page is written in.
+                  fromPageLanguage: false,
+                }),
+              notify: (message) => {
+                showPageNotice(document, message);
+              },
+            });
+          })();
           return;
         }
 

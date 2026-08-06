@@ -5,6 +5,45 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.17.0] - 2026-08-06
+
+### Added
+
+- **Translate the box you are typing in.** `Ctrl+Shift+K`, and whatever is in
+  the focused field is replaced with its translation. The other direction from
+  everything else here: the rest answers "what does this page say", this answers
+  "how do I say this" — a reply, a commit message, a bug report, written in the
+  language the writer thinks in and needed in the language the reader wants.
+
+  Its own target language, set separately in the popup and defaulting to
+  English, because `targetLang` is the language you *read* in and nobody writes
+  a reply to an English forum in the language they read English into.
+
+  The interesting problem is not the translation. It is replacing text in a
+  field without breaking the page around it. Assigning to `value` fires no
+  `input` event, so React and Vue never learn the field changed and revert it on
+  the next render — and it wipes the browser's undo stack, so the writer cannot
+  take back a translation they did not like. `execCommand('insertText')` is
+  deprecated and remains the only call that does neither. Verified in a real
+  browser: Chinese in, English out, and `Ctrl+Z` returns the original exactly.
+
+  Password, email, URL and the other value-shaped input types are refused
+  outright — a password is not to be read, and an email has nothing to translate
+  and comes back mangled. So are read-only and disabled fields. The focused
+  element inside an open shadow root is found, since a comment box inside a web
+  component reports the host as focused and would otherwise never be seen. And a
+  field the writer has clicked out of during the round trip is left alone.
+
+### Fixed
+
+- **The page's `<html lang>` was sent as the source language for text the page
+  did not write.** Correct for everything read off the page, and wrong for the
+  first thing that was not: typing Chinese into a box on an `en` page handed the
+  engine "translate this English into English", so it returned the Chinese
+  verbatim and the UI reported "it is already in that language". Found by the
+  first end-to-end run of the feature above, which is exactly what that harness
+  is for.
+
 ## [2.16.0] - 2026-08-06
 
 ### Added

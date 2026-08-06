@@ -21,6 +21,7 @@
  *   9. the appearance settings reach the page, and switching one restyles a
  *      page that is already translated without translating it again
  *  10. holding a key and pointing at a paragraph translates that paragraph
+ *  11. a text box is translated in place, and Ctrl+Z still takes it back
  *
  * The last two cannot be tested anywhere else. jsdom lays nothing out, so every
  * block sits at 0,0 and "near the viewport" is true of all of them, and it has
@@ -604,6 +605,70 @@ try {
   check(
     pointed?.total === 1,
     `pointing at one paragraph translated ${String(pointed?.total)} of them`,
+  );
+
+
+  // ---- the box you are typing in ----
+  //
+  // jsdom implements neither `execCommand` nor an undo stack, so the reason it
+  // is used rather than assigning `value` — the page learns the field changed,
+  // and Ctrl+Z can take the translation back — is only testable here.
+  console.log('\n--- the box you are typing in ---');
+  await configure({ inputTargetLang: 'English', targetLang: 'Traditional Chinese' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await sleep(1500);
+  const typed = '這是一段用中文寫的留言，需要翻成英文再送出。';
+  await page.evaluate((text) => {
+    const box = document.createElement('textarea');
+    box.id = 'compose';
+    box.style.width = '400px';
+    box.style.height = '80px';
+    document.body.replaceChildren(box);
+    box.focus();
+    // Typed rather than assigned, so the undo stack has something in it to
+    // return to — which is the whole property being measured.
+    document.execCommand('insertText', false, text);
+  }, typed);
+  await sleep(300);
+
+  const beforeInput = await page.evaluate(
+    () => document.getElementById('compose').value,
+  );
+  await worker.evaluate(async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id !== undefined)
+      await chrome.tabs.sendMessage(tab.id, { type: 'TRANSLATE_INPUT' });
+  });
+
+  let boxed = beforeInput;
+  for (let waited = 0; waited < 25000; waited += 500) {
+    await sleep(500);
+    boxed = await page.evaluate(
+      () => document.getElementById('compose').value,
+    );
+    if (boxed !== beforeInput) break;
+  }
+  console.log(`  typed:      ${beforeInput}`);
+  console.log(`  translated: ${boxed}`);
+  check(boxed !== beforeInput, 'the text box was never translated');
+  check(
+    /[A-Za-z]{3,}/.test(boxed),
+    `what came back does not look like English (${boxed})`,
+  );
+
+  // The point of `execCommand` over assigning `value`.
+  await page.focus('#compose');
+  await page.keyboard.down('Control');
+  await page.keyboard.press('KeyZ');
+  await page.keyboard.up('Control');
+  await sleep(600);
+  const undone = await page.evaluate(
+    () => document.getElementById('compose').value,
+  );
+  console.log(`  after Ctrl+Z: ${undone}`);
+  check(
+    undone === beforeInput,
+    'Ctrl+Z did not take the translation back, so the undo stack was wiped',
   );
 
 } catch (error) {

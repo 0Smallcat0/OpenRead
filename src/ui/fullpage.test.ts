@@ -22,7 +22,11 @@ import {
   type PageTranslateDeps,
 } from './fullpage';
 import { TRANSLATED_ATTR } from './blocks';
-import { applyAppearance, reflowTranslations, ORIGINAL_CLASS } from './fullpage';
+import {
+  applyAppearance,
+  reflowTranslations,
+  ORIGINAL_CLASS,
+} from './fullpage';
 
 const PAGE = `
   <h1>An introduction to the topic</h1>

@@ -76,6 +76,7 @@ interface Elements {
   lang: HTMLSelectElement;
   displayMode: HTMLSelectElement | null;
   hoverTranslate: HTMLSelectElement | null;
+  inputLang: HTMLSelectElement | null;
   translationStyle: HTMLSelectElement | null;
   translationScale: HTMLSelectElement | null;
   pack: HTMLElement | null;
@@ -110,6 +111,7 @@ function collect(root: ParentNode): Elements | null {
   const displayMode = root.querySelector<HTMLSelectElement>('#displayMode');
   const hoverTranslate =
     root.querySelector<HTMLSelectElement>('#hoverTranslate');
+  const inputLang = root.querySelector<HTMLSelectElement>('#inputTargetLang');
   const translationStyle =
     root.querySelector<HTMLSelectElement>('#translationStyle');
   const translationScale =
@@ -166,6 +168,7 @@ function collect(root: ParentNode): Elements | null {
     lang,
     displayMode,
     hoverTranslate,
+    inputLang,
     translationStyle,
     translationScale,
     pack,
@@ -209,10 +212,13 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
   if (!el) return false;
 
   for (const language of TARGET_LANGUAGES) {
-    const option = document.createElement('option');
-    option.value = language;
-    option.textContent = language;
-    el.lang.appendChild(option);
+    for (const select of [el.lang, el.inputLang]) {
+      if (!select) continue;
+      const option = document.createElement('option');
+      option.value = language;
+      option.textContent = language;
+      select.appendChild(option);
+    }
   }
 
   let os: PlatformOs = 'other';
@@ -455,6 +461,7 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
         DEFAULT_SETTINGS.translationScale,
       ),
       hoverTranslate: pick(el.hoverTranslate, DEFAULT_SETTINGS.hoverTranslate),
+      inputTargetLang: pick(el.inputLang, DEFAULT_SETTINGS.inputTargetLang),
       obsidianVault: el.vault.value.trim(),
       obsidianFolder: el.folder.value.trim() || DEFAULT_SETTINGS.obsidianFolder,
       enrichOnCapture: el.enrich.checked,
@@ -491,6 +498,7 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     if (el.translationScale)
       el.translationScale.value = settings.translationScale;
     if (el.hoverTranslate) el.hoverTranslate.value = settings.hoverTranslate;
+    if (el.inputLang) el.inputLang.value = settings.inputTargetLang;
     except = [...settings.autoTranslateExcept];
     renderAuto();
     el.vault.value = settings.obsidianVault;
@@ -597,6 +605,7 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     el.translationStyle,
     el.translationScale,
     el.hoverTranslate,
+    el.inputLang,
   ]) {
     field?.addEventListener('change', () => {
       void persist();

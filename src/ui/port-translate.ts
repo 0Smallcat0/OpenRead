@@ -24,6 +24,16 @@ export interface PortTranslateParams {
   retryCount?: number;
   /** Called while Chrome downloads a language pack, 0-1. */
   onDownloadProgress?: (loaded: number) => void;
+  /**
+   * Whether the page's own `<html lang>` describes this text.
+   *
+   * True for anything read off the page, which is nearly everything. False for
+   * a box the reader is typing in: they are writing in the language they think
+   * in, which is precisely not the one the page is written in — and handing the
+   * engine `en` for Chinese input made it answer with the Chinese, unchanged,
+   * which the UI then reported as "it is already in that language".
+   */
+  fromPageLanguage?: boolean;
 }
 
 export function translateViaPort({
@@ -33,6 +43,7 @@ export function translateViaPort({
   signal,
   retryCount,
   onDownloadProgress,
+  fromPageLanguage = true,
 }: PortTranslateParams): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     if (signal.aborted) {
@@ -92,8 +103,10 @@ export function translateViaPort({
       model,
       retryCount,
       // The page knows what it is written in; a detector handed one caption
-      // does not.
-      sourceLang: document.documentElement.lang || undefined,
+      // does not. Omitted where the page cannot know — see `fromPageLanguage`.
+      sourceLang: fromPageLanguage
+        ? document.documentElement.lang || undefined
+        : undefined,
     };
     port.postMessage(message);
   });

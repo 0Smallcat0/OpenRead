@@ -944,7 +944,13 @@ async function drainQueue(
           unchanged++;
           consecutiveFailures = 0;
         } else if (result.trim()) {
-          attach(block, result.trim(), deps.targetLang, false, appearance.displayMode);
+          attach(
+            block,
+            result.trim(),
+            deps.targetLang,
+            false,
+            appearance.displayMode,
+          );
           translated++;
           consecutiveFailures = 0;
         } else {
