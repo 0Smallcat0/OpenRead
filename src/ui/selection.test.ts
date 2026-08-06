@@ -27,11 +27,24 @@ class FakePort {
   disconnected = false;
   private listeners: ((res: StreamResponse) => void)[] = [];
 
+  private disconnectListeners: (() => void)[] = [];
+
   onMessage = {
     addListener: (fn: (res: StreamResponse) => void) => {
       this.listeners.push(fn);
     },
   };
+
+  onDisconnect = {
+    addListener: (fn: () => void) => {
+      this.disconnectListeners.push(fn);
+    },
+  };
+
+  /** The worker going away, which MV3 does whenever it feels idle. */
+  dropped(): void {
+    for (const fn of this.disconnectListeners) fn();
+  }
 
   postMessage(message: unknown): void {
     this.posted.push(message);
@@ -72,6 +85,20 @@ async function select(text: string): Promise<HTMLElement> {
   document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   // onMouseUp defers by 50 ms so a PDF text layer can settle.
   await new Promise((r) => setTimeout(r, 70));
+  const icon = document.getElementById('oit-translate-icon');
+  if (!icon) throw new Error('the 文 icon never appeared');
+  return icon;
+}
+
+/** Like `select`, but usable while fake timers are installed. */
+async function selectWithRealTimers(text: string): Promise<HTMLElement> {
+  vi.spyOn(window, 'getSelection').mockReturnValue({
+    toString: () => text,
+    rangeCount: 1,
+    getRangeAt: () => ({ getBoundingClientRect: () => RECT }),
+  } as unknown as Selection);
+  document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  vi.advanceTimersByTime(70);
   const icon = document.getElementById('oit-translate-icon');
   if (!icon) throw new Error('the 文 icon never appeared');
   return icon;
@@ -612,5 +639,85 @@ describe('the panel keeps its controls in reach', () => {
     // Without this a flex child refuses to shrink past its content and the
     // overflow lands back on the panel.
     expect(content?.style.minHeight).toBe('0px');
+  });
+});
+
+describe('the background worker going away mid-translation', () => {
+  // Manifest V3 terminates an idle worker, and a language-pack download is
+  // minutes of exactly that — no port traffic while Chrome fetches. Found on a
+  // real PDF whose target pack had never been fetched: the panel sat on
+  // "Translating…" long after the worker had gone. Whole-page translation has
+  // always handled the disconnect; the panel did not.
+  it('ends the wait instead of sitting on "Translating…"', async () => {
+    await selectAndTranslate('Hello, world!');
+    expect(panelText()).toBe('Translating…');
+
+    ports[0]?.dropped();
+
+    expect(panelText()).toContain('background worker stopped');
+    expect(panelText()).toContain('Try again');
+  });
+
+  it('keeps whatever had already streamed in', async () => {
+    await selectAndTranslate('Hello, world!');
+    ports[0]?.emit({ status: 'streaming', chunk: '你好，' });
+    ports[0]?.dropped();
+
+    expect(panelText()).toContain('你好，');
+    expect(panelText()).toContain('stopped before this finished');
+    expect(panelContent()?.getAttribute('lang')).toBe('zh-Hant');
+  });
+
+  it('says nothing about a disconnect that follows a finished translation', async () => {
+    await selectAndTranslate('Hello, world!');
+    ports[0]?.emit({ status: 'streaming', chunk: '你好，世界！' });
+    ports[0]?.emit({ status: 'done' });
+    ports[0]?.dropped();
+
+    expect(panelText()).toBe('你好，世界！');
+  });
+
+  it('says nothing about a disconnect that follows an error', async () => {
+    await selectAndTranslate('Hello, world!');
+    ports[0]?.emit({ status: 'error', message: 'Ollama 404: model not found' });
+    ports[0]?.dropped();
+
+    expect(panelText()).toContain('Ollama 404: model not found');
+    expect(panelText()).not.toContain('background worker');
+  });
+});
+
+describe('what the panel says while it waits', () => {
+  it('names the Ollama model only when Ollama is the engine', async () => {
+    vi.useFakeTimers();
+    teardown?.();
+    teardown = mountSelectionTranslator({
+      getSettings: () => Promise.resolve({ ...SETTINGS, engine: 'ollama' }),
+    });
+    const icon = await selectWithRealTimers('Hello, world!');
+    icon.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await settle();
+    vi.advanceTimersByTime(5000);
+
+    expect(panelText()).toContain('qwen3:latest');
+    vi.useRealTimers();
+  });
+
+  it('talks about the language pack when the built-in engine is the one waiting', async () => {
+    // The default engine has no model to name, and naming one sends the reader
+    // looking for something they never installed.
+    vi.useFakeTimers();
+    teardown?.();
+    teardown = mountSelectionTranslator({
+      getSettings: () => Promise.resolve({ ...SETTINGS, engine: 'builtin' }),
+    });
+    const icon = await selectWithRealTimers('Hello, world!');
+    icon.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await settle();
+    vi.advanceTimersByTime(5000);
+
+    expect(panelText()).toContain('language pack');
+    expect(panelText()).not.toContain('qwen3');
+    vi.useRealTimers();
   });
 });
