@@ -35,7 +35,8 @@
     "prepack": "node scripts/build-cli.mjs",
     "shoot": "node scripts/shoot-assets.mjs",
     "eval:builtin": "node eval/builtin/collect.mjs && tsx eval/builtin/report.ts",
-    "eval:builtin:report": "tsx eval/builtin/report.ts"
+    "eval:builtin:report": "tsx eval/builtin/report.ts",
+    "e2e:youtube": "node e2e/youtube.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.2.2",

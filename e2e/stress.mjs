@@ -15,8 +15,9 @@
  *      token streamed into one — read as the page growing new text
  *  S13 whole-page translation ran on the top frame only, so an article inside
  *      an iframe came back untranslated with nothing to say why
- *  S14 a caption is repainted far more often than it changes, and a
- *      translation that arrives after its cue has gone is worse than none
+ *  S14 a caption is repainted far more often than it changes, a translation
+ *      arriving after its cue has gone is worse than none, and a page's
+ *      declared language is not the language its subtitles are in
  *
  * Not in CI, for the same reason as the other harnesses: it needs a real Chrome
  * and it takes a couple of minutes. Run it after anything that touches the
@@ -715,7 +716,13 @@ try {
   const subServer = createServer((_request, response) => {
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     response.end(
-      '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Player</title></head>' +
+      // `lang` is the *interface* language, and deliberately not the caption's.
+      // Real YouTube on a machine set to Taiwan declares `zh-Hant-TW` over
+      // English captions, and taking that as the source language made the
+      // engine translate zh-Hant into zh-Hant, hand the caption back
+      // unchanged, and leave the line blank. Every unit test passed and the
+      // fixture here said `lang="en"`, which is the one value that hides it.
+      '<!doctype html><html lang="zh-Hant-TW"><head><meta charset="utf-8"><title>Player</title></head>' +
         '<body><div class="ytp-caption-window-container">' +
         '<span class="ytp-caption-segment">' +
         CUES[0] +
