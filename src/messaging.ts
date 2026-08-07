@@ -111,8 +111,20 @@ export const TRANSLATE_SELECTION_COMMAND = 'translate-selection';
 export const TRANSLATE_PAGE_COMMAND = 'translate-page';
 export const TRANSLATE_INPUT_COMMAND = 'translate-input';
 
+/**
+ * content -> background: this tab is showing a PDF, put it in our viewer.
+ *
+ * The URL is not sent: the background reads it from `sender.tab`, which the
+ * page cannot forge, and a tab id from a message it did not originate is a
+ * request to navigate somebody else's tab.
+ */
+export interface OpenInViewerMessage {
+  type: 'OPEN_IN_VIEWER';
+}
+
 export type RuntimeRequest =
   | EnrichCaptureMessage
+  | OpenInViewerMessage
   | TranslateSelectionMessage
   | TranslatePageMessage
   | TranslateInputMessage

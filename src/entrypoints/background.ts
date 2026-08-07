@@ -40,9 +40,22 @@ export default defineBackground(() => {
     }
   }
 
-  /** Send one tab into the bundled viewer, if it is a PDF we may open. */
-  async function routeToViewer(tabId: number, url: string): Promise<void> {
-    if (!isPdfUrl(url) || url.startsWith(viewerUrl)) return;
+  /**
+   * Send one tab into the bundled viewer.
+   *
+   * `known` skips the URL test for a caller that has already established this
+   * is a PDF by better means than its address — see `OPEN_IN_VIEWER`. The
+   * extension check is a guess and a poor one: arxiv.org serves papers from
+   * `/pdf/1706.03762`, with no extension anywhere in it, so the guess left the
+   * best-known source of papers on the internet in Chrome's own viewer, where
+   * this extension can do nothing at all.
+   */
+  async function routeToViewer(
+    tabId: number,
+    url: string,
+    known = false,
+  ): Promise<void> {
+    if ((!known && !isPdfUrl(url)) || url.startsWith(viewerUrl)) return;
     if (url.startsWith('file://')) {
       const allowed = await chrome.extension.isAllowedFileSchemeAccess();
       if (!allowed) return;
@@ -375,6 +388,18 @@ export default defineBackground(() => {
   // response (`return true`).
   chrome.runtime.onMessage.addListener(
     (request: RuntimeRequest, sender, sendResponse) => {
+      // The tab said it is rendering a PDF. Only the tab it came from is
+      // touched, and the URL comes from the sender rather than the message:
+      // a page that could name both would be able to navigate another tab.
+      if (request.type === 'OPEN_IN_VIEWER') {
+        const tabId = sender.tab?.id;
+        const url = sender.tab?.url ?? sender.url;
+        if (tabId !== undefined && url) {
+          void routeToViewer(tabId, url, true).catch(() => undefined);
+        }
+        return;
+      }
+
       if (request.type === 'ENRICH_CAPTURE') {
         void (async () => {
           await originRuleReady;

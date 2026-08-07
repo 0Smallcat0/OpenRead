@@ -653,6 +653,51 @@ describe('one-shot handlers', () => {
     expect(sendResponse).toHaveBeenCalledWith({ result: null });
   });
 
+  it('puts a tab that is showing a PDF into the bundled viewer', async () => {
+    // The address said nothing: arxiv.org serves every paper from
+    // `/pdf/1706.03762`, with no extension anywhere in it. The tab itself is
+    // what knows, from `document.contentType`.
+    registered.onMessage(
+      { type: 'OPEN_IN_VIEWER' },
+      { tab: { id: 7, url: 'https://arxiv.org/pdf/1706.03762' } },
+      vi.fn(),
+    );
+    await settle();
+
+    expect(tabsUpdate).toHaveBeenCalledWith(7, {
+      url: expect.stringContaining(
+        encodeURIComponent('https://arxiv.org/pdf/1706.03762'),
+      ),
+    });
+  });
+
+  it('takes the URL from the sender, never from the message', async () => {
+    // A page that could name both a tab and a URL could navigate somebody
+    // else's tab, so neither is read from the message at all.
+    tabsUpdate.mockClear();
+    registered.onMessage({ type: 'OPEN_IN_VIEWER' }, {}, vi.fn());
+    await settle();
+
+    expect(tabsUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not send the viewer into itself', async () => {
+    tabsUpdate.mockClear();
+    registered.onMessage(
+      { type: 'OPEN_IN_VIEWER' },
+      {
+        tab: {
+          id: 7,
+          url: 'chrome-extension://abc/pdfjs/web/viewer.html?file=x',
+        },
+      },
+      vi.fn(),
+    );
+    await settle();
+
+    expect(tabsUpdate).not.toHaveBeenCalled();
+  });
+
   it('does not hold the channel open for a message it does not handle', () => {
     expect(
       registered.onMessage({ type: 'SOMETHING_ELSE' }, {}, vi.fn()),

@@ -594,6 +594,11 @@ try {
   // the frame test, and would go green the day the real behaviour broke.
   console.log('\nS13 — an article in an iframe, and an ad in another');
   const FRAME_PORT = 9338;
+  const SRCDOC = Array.from(
+    { length: 5 },
+    (_, i) =>
+      `<p>Paragraph number ${i} of a document written straight into a srcdoc attribute, long enough to be worth translating.</p>`,
+  ).join('');
   const ARTICLE = Array.from(
     { length: 6 },
     (_, i) =>
@@ -604,6 +609,12 @@ try {
       '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Parent</title></head><body>' +
       '<p>The page the reader actually navigated to, with its own paragraph of prose to translate.</p>' +
       '<iframe id="article" src="/article" width="600" height="400"></iframe>' +
+      // A srcdoc frame, which Chrome injects nothing into unless the manifest
+      // says `match_origin_as_fallback`. MDN's examples are these, and one of
+      // them held seven paragraphs of prose with no content script in it.
+      '<iframe id="srcdoc" width="500" height="400" srcdoc="' +
+      SRCDOC +
+      '"></iframe>' +
       '<iframe id="ad" src="/ad" width="300" height="600"></iframe>' +
       '</body></html>',
     '/article':
@@ -640,7 +651,7 @@ try {
     await press();
 
     const frameStats = async () => {
-      const counts = { top: 0, article: 0, ad: 0, badges: 0 };
+      const counts = { top: 0, article: 0, ad: 0, srcdoc: 0, badges: 0 };
       for (const frame of page.frames()) {
         const url = frame.url();
         const where = url.endsWith('/article')
@@ -649,7 +660,9 @@ try {
             ? 'ad'
             : url.endsWith('/parent')
               ? 'top'
-              : null;
+              : url === 'about:srcdoc'
+                ? 'srcdoc'
+                : null;
         if (!where) continue;
         const seen = await frame
           .evaluate(() => ({
@@ -672,6 +685,7 @@ try {
     observe('S13 top frame translated', String(frames.top));
     observe('S13 article frame translated', String(frames.article));
     observe('S13 ad frame translated', String(frames.ad));
+    observe('S13 srcdoc frame translated', String(frames.srcdoc));
     observe('S13 badges across all frames', String(frames.badges));
     check(frames.top > 0, 'the top frame was not translated');
     check(
@@ -681,6 +695,10 @@ try {
     check(
       frames.ad === 0,
       'an ad-sized frame with one line of copy was translated anyway',
+    );
+    check(
+      frames.srcdoc > 0,
+      'a srcdoc frame full of prose was left untranslated — Chrome injects no content script into one without `match_origin_as_fallback`',
     );
     // The reason the old restriction existed. Every qualifying frame runs its
     // own pass, and a badge is positioned against the viewport it lives in, so

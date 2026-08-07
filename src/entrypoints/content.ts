@@ -29,6 +29,13 @@ import type { PageLanguageResponse } from '../messaging';
 export default defineContentScript({
   matches: ['<all_urls>'],
   allFrames: true,
+  // Without this Chrome injects nothing into `about:srcdoc` and `about:blank`
+  // frames, because they have no URL of their own to match against. Measured
+  // on MDN, whose examples are srcdoc frames: seven paragraphs of prose in one
+  // of them, and no content script in it to translate them with. The script
+  // then runs with the *embedding* page's origin, which is also the honest
+  // answer to whose content it is.
+  matchOriginAsFallback: true,
   runAt: 'document_end',
   main() {
     mountSelectionTranslator({
@@ -46,6 +53,27 @@ export default defineContentScript({
     });
 
     const isTop = window.top === window;
+
+    /**
+     * A tab rendering a PDF, put into the bundled viewer.
+     *
+     * The background used to decide this from the address, and an address is a
+     * guess: arxiv.org serves every paper from `/pdf/1706.03762`, with no
+     * extension in it anywhere, so the best-known source of papers on the
+     * internet stayed in Chrome's own viewer — where this extension can see no
+     * text, translates nothing, and answers a press with "Nothing to translate
+     * on this page". Found by opening one by hand.
+     *
+     * `document.contentType` is not a guess. It is what the response actually
+     * was, and it is readable from here because Chrome does inject content
+     * scripts into the document that hosts its PDF plugin.
+     */
+    if (isTop && document.contentType === 'application/pdf') {
+      void chrome.runtime
+        .sendMessage({ type: 'OPEN_IN_VIEWER' })
+        .catch(() => undefined);
+      return;
+    }
 
     const pageDeps = (settings: Settings, unprompted = false) => ({
       targetLang: settings.targetLang,
