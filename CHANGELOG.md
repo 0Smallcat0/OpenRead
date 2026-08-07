@@ -5,6 +5,54 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.19.0] - 2026-08-07
+
+### Added
+
+- **A glossary: the names a translator keeps getting wrong.** In the popup, one
+  a line. `OpenRead` on its own keeps the name exactly as written wherever it
+  appears; `widget = 小工具` pins how a term is rendered every time. Chrome's
+  built-in translator takes no prompt — it takes a string and returns a string
+  — so there is nothing to instruct, and the term is instead held out of the
+  sentence and put back afterwards.
+
+  Which only works if the placeholder survives the round trip, and that is a
+  fact about a model rather than about this code, so it was measured rather
+  than guessed: eight placeholder shapes, four sentences each, against a real
+  Chrome, into nine target languages.
+
+  The obvious choice was wrong. `⟦0⟧` came back intact 6/6 into Chinese,
+  Japanese, Korean, Spanish and German — and then 0/4 into Arabic, which eats
+  the brackets and leaves a bare digit standing in the sentence; 2/4 into
+  Hindi; 1/4 into Thai. `#0#` is respaced to `# 0 #` in Arabic and `%%0%%` has
+  its percent signs translated to `٪`. `〔0〕` is translated into `「0」` by
+  Chinese. A private-use character is dropped outright. And a letter run is a
+  word, so words get changed: `OITT0Z` came back from Hebrew as `OITTT0Z`.
+  Three shapes survived every language tested; `[[0]]` is the one of those that
+  is neither a format string nor a word.
+
+  A placeholder that does not come back leaves the term missing from the
+  sentence, which is worse than having translated it, so that case translates
+  again without protection rather than shipping a hole.
+
+  Streaming is given up only for the blocks a glossary actually touches, since
+  a chunk boundary can land inside a placeholder. Everything else streams as
+  before.
+
+### Fixed
+
+- The store submission guide, the rebuild plan and the README each described an
+  older repository than this one — a store kit dated to before its copy and
+  screenshots were redone, a re-shoot still listed as outstanding after it had
+  happened, and a test count two behind. The guide also gained the step it was
+  missing: for an item that already exists the upload is on the **Package**
+  tab, and the Store listing tab has no upload control anywhere on it.
+
+- A test that measured nothing. "Does not protect a block that is nothing but
+  the term" recorded only the last text the engine saw, and the unprotected
+  retry is the last text the engine sees — so it passed with the guard it
+  covers removed. It records every call now, and goes red when the guard goes.
+
 ## [2.18.1] - 2026-08-07
 
 ### Fixed
@@ -101,7 +149,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   text layer really is absolutely-positioned spans laid over a rendered page,
   and a translation appended under a line really would land on the next one —
   but the pages themselves are ordinary block elements stacked in `#viewer`, so
-  a translation placed *after a page* costs nothing. It reads in order: the
+  a translation placed _after a page_ costs nothing. It reads in order: the
   page as the author laid it out, then that page in your language, then the
   next page.
 
@@ -119,7 +167,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Paragraphs are recovered from geometry, but less of it than expected. PDF.js
   already emits `<br>` between lines, so the line breaks are given and only the
   paragraph breaks have to be inferred — and those are inferred from line
-  *pitch*, top to top, compared against the median pitch of that page. Not the
+  _pitch_, top to top, compared against the median pitch of that page. Not the
   gap between line boxes: this extension pads every span by 5px a side to make
   lines easier to grab, so on a real page the measured gaps run negative — -8,
   -9, -2 down a column of ordinary prose. Pitch is untouched by symmetric
@@ -167,7 +215,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   language the writer thinks in and needed in the language the reader wants.
 
   Its own target language, set separately in the popup and defaulting to
-  English, because `targetLang` is the language you *read* in and nobody writes
+  English, because `targetLang` is the language you _read_ in and nobody writes
   a reply to an English forum in the language they read English into.
 
   The interesting problem is not the translation. It is replacing text in a
@@ -232,7 +280,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   things this already did. Selecting a sentence is precise and costs a drag;
   translating the page is one press and rewrites everything. A reader working
   through an article in their second language usually wants neither — they want
-  *this* paragraph, the one that stopped them, without losing their place.
+  _this_ paragraph, the one that stopped them, without losing their place.
 
   Alt by default, with Ctrl, Shift and off in the popup. A held key rather than
   hover alone: a paragraph that translates itself because the mouse passed over
