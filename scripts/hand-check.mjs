@@ -48,8 +48,11 @@ const TABS = [
     what: 'whole page, hover-one-paragraph (hold Alt), select-to-translate',
   },
   {
-    url: 'https://www.youtube.com/watch?v=aircAruvnKk',
-    what: 'subtitles — press c for captions, then try fullscreen',
+    // Captions forced on by the URL. Left to the player they are off, our line
+    // has nothing to translate, and the feature reads as doing nothing at all
+    // — which is exactly how it was reported twice.
+    url: 'https://www.youtube.com/watch?v=aircAruvnKk&cc_load_policy=1&cc_lang_pref=en',
+    what: 'subtitles — captions are already on; play it, then try fullscreen',
   },
   {
     url: 'https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe',

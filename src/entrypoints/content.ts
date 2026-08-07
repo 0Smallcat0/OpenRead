@@ -115,6 +115,9 @@ export default defineContentScript({
       stopSubtitles = mountSubtitleTranslate(document, {
         enabled: settings.translateSubtitles,
         targetLang: settings.targetLang,
+        notify: (message) => {
+          showPageNotice(document, message);
+        },
         translate: (text: string, signal: AbortSignal) =>
           translateViaPort({
             text,

@@ -71,7 +71,20 @@ export interface SubtitleDeps {
    * whose whole argument is that it is fast enough to keep up.
    */
   enabled: boolean;
+  /**
+   * Say something in the corner, once, when a video plays with no captions.
+   *
+   * The feature has one prerequisite it cannot satisfy itself: the player's
+   * own captions have to be on. With them off there are no cues, so there is
+   * nothing to translate and nothing appears — which is indistinguishable
+   * from the feature being broken, and was reported as exactly that twice by
+   * the same reader in one sitting.
+   */
+  notify?: (message: string) => void;
 }
+
+/** How long a video plays with no cue before that is worth mentioning. */
+export const NO_CAPTIONS_AFTER_MS = 8000;
 
 function ensureStyle(doc: Document): void {
   if (doc.getElementById(STYLE_ID)) return;
@@ -199,6 +212,7 @@ function attachRendered(
   container: HTMLElement,
   selector: string,
   deps: SubtitleDeps,
+  onCue: () => void,
 ): Attachment {
   const doc = container.ownerDocument;
   ensureStyle(doc);
@@ -212,7 +226,9 @@ function attachRendered(
     const segments = Array.from(
       container.querySelectorAll<HTMLElement>(selector),
     );
-    translator.offer(segments.map((s) => s.textContent ?? '').join(' '));
+    const cue = segments.map((s) => s.textContent ?? '').join(' ');
+    if (cue.trim()) onCue();
+    translator.offer(cue);
   };
 
   // The player rebuilds its segments rather than editing them, so childList
@@ -243,6 +259,7 @@ function attachRendered(
 function attachTextTrack(
   video: HTMLVideoElement,
   deps: SubtitleDeps,
+  onCue: () => void,
 ): Attachment {
   const doc = video.ownerDocument;
   ensureStyle(doc);
@@ -286,6 +303,7 @@ function attachTextTrack(
         if (text) texts.push(text);
       }
     }
+    if (texts.length > 0) onCue();
     translator.offer(texts.join(' '));
   };
 
@@ -301,7 +319,15 @@ function attachTextTrack(
     }
     read();
   };
-  video.textTracks.addEventListener('addtrack', onAddTrack);
+  // Feature-detected, not assumed. `TextTrackList` is an EventTarget in a
+  // browser and is not one everywhere — jsdom has no `addEventListener` on it
+  // — and the throw does not stay local: it takes down the whole mount, so one
+  // odd `<video>` on a page would silently cost that page every other kind of
+  // subtitle translation too.
+  const trackList = video.textTracks as unknown as Partial<EventTarget>;
+  if (typeof trackList.addEventListener === 'function') {
+    video.textTracks.addEventListener('addtrack', onAddTrack);
+  }
   doc.addEventListener('fullscreenchange', place);
   window.addEventListener('resize', place);
   window.addEventListener('scroll', place, { passive: true });
@@ -313,7 +339,9 @@ function attachTextTrack(
       for (const track of Array.from(video.textTracks)) {
         track.removeEventListener('cuechange', read);
       }
-      video.textTracks.removeEventListener('addtrack', onAddTrack);
+      if (typeof trackList.removeEventListener === 'function') {
+        video.textTracks.removeEventListener('addtrack', onAddTrack);
+      }
       doc.removeEventListener('fullscreenchange', place);
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place);
@@ -348,7 +376,7 @@ export function mountSubtitleTranslate(
         doc.querySelectorAll<HTMLElement>(container),
       )) {
         if (attached.has(host)) continue;
-        attached.set(host, attachRendered(host, line, deps));
+        attached.set(host, attachRendered(host, line, deps, seeCue));
       }
     }
     for (const video of Array.from(doc.querySelectorAll('video'))) {
@@ -358,11 +386,32 @@ export function mountSubtitleTranslate(
       if (RENDERED.some(({ container }) => doc.querySelector(container))) {
         continue;
       }
-      attached.set(video, attachTextTrack(video, deps));
+      attached.set(video, attachTextTrack(video, deps, seeCue));
     }
     for (const element of Array.from(attached.keys())) {
       if (!element.isConnected) detach(element);
     }
+  };
+
+  // One video playing for a while with nothing to translate is the shape of
+  // "captions are off". Said once, and only if a cue never arrives — a video
+  // whose captions are on answers this before the timer fires.
+  let sawCue = false;
+  let told = false;
+  const seeCue = (): void => {
+    sawCue = true;
+  };
+  const watchForSilence = (): void => {
+    if (!deps.enabled || !deps.notify || told) return;
+    const video = doc.querySelector('video');
+    if (!video || video.paused) return;
+    doc.defaultView?.setTimeout(() => {
+      if (sawCue || told || !deps.enabled) return;
+      told = true;
+      deps.notify?.(
+        'OpenRead translates subtitles, but this video has none showing. Turn captions on in the player.',
+      );
+    }, NO_CAPTIONS_AFTER_MS);
   };
 
   const root = doc.documentElement ?? doc.body;
@@ -371,9 +420,12 @@ export function mountSubtitleTranslate(
   });
   if (root) observer.observe(root, { childList: true, subtree: true });
   scan();
+  doc.addEventListener('play', watchForSilence, true);
+  watchForSilence();
 
   return () => {
     observer.disconnect();
+    doc.removeEventListener('play', watchForSilence, true);
     for (const element of Array.from(attached.keys())) detach(element);
   };
 }

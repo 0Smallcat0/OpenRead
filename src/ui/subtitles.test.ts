@@ -222,6 +222,53 @@ describe('mountSubtitleTranslate', () => {
     expect(document.querySelector(`.${SUBTITLE_CLASS}`)).toBeNull();
   });
 
+  it('says why nothing happened when a video plays with no captions', async () => {
+    vi.useFakeTimers();
+    const said: string[] = [];
+    document.body.innerHTML = '<video id="v"></video>';
+    const video = document.getElementById('v') as HTMLVideoElement;
+    Object.defineProperty(video, 'paused', { value: false });
+    mount({ notify: (m: string) => said.push(m) });
+    video.dispatchEvent(new Event('play', { bubbles: true }));
+    vi.advanceTimersByTime(9000);
+    vi.useRealTimers();
+
+    expect(said).toHaveLength(1);
+    expect(said[0]).toContain('captions');
+  });
+
+  it('says nothing when the captions are on', async () => {
+    vi.useFakeTimers();
+    const said: string[] = [];
+    document.body.innerHTML =
+      '<video id="v"></video><div class="ytp-caption-window-container">' +
+      '<span class="ytp-caption-segment">A line of speech.</span></div>';
+    const video = document.getElementById('v') as HTMLVideoElement;
+    Object.defineProperty(video, 'paused', { value: false });
+    mount({ notify: (m: string) => said.push(m) });
+    video.dispatchEvent(new Event('play', { bubbles: true }));
+    vi.advanceTimersByTime(9000);
+    vi.useRealTimers();
+
+    expect(said).toEqual([]);
+  });
+
+  it('says it once, not once a play event', async () => {
+    vi.useFakeTimers();
+    const said: string[] = [];
+    document.body.innerHTML = '<video id="v"></video>';
+    const video = document.getElementById('v') as HTMLVideoElement;
+    Object.defineProperty(video, 'paused', { value: false });
+    mount({ notify: (m: string) => said.push(m) });
+    for (let i = 0; i < 5; i++) {
+      video.dispatchEvent(new Event('play', { bubbles: true }));
+    }
+    vi.advanceTimersByTime(20000);
+    vi.useRealTimers();
+
+    expect(said).toHaveLength(1);
+  });
+
   it('takes its line back when unmounted', async () => {
     player('And then it worked.');
     const stop = mount();
