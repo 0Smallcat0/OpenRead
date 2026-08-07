@@ -860,3 +860,49 @@ describe('the extension never offers to translate itself', () => {
     expect(document.getElementById('oit-translate-icon')).toBeNull();
   });
 });
+
+describe('what language the selection is in', () => {
+  /** Remount asking for English, so a Chinese selection is not short-circuited. */
+  async function mountForEnglish(): Promise<void> {
+    teardown?.();
+    teardown = mountSelectionTranslator({
+      getSettings: () => Promise.resolve({ ...SETTINGS, targetLang: 'English' }),
+    });
+    await settle();
+  }
+
+  it('does not claim the page language for text the reader typed', async () => {
+    // Reported from use: Chinese typed into a box on an `en` page, asked for
+    // English, came back as the same Chinese. The engine had been told the
+    // source was `en`, so it answered "already in that language".
+    document.documentElement.lang = 'en';
+    await mountForEnglish();
+    const field = document.createElement('textarea');
+    field.value = '我今天沒吃飯';
+    document.body.appendChild(field);
+    field.focus();
+
+    const icon = await select('我今天沒吃飯');
+    icon.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await settle();
+
+    const sent = ports.at(-1)?.posted.at(-1) as
+      | { sourceLang?: string; text?: string }
+      | undefined;
+    expect(sent?.text).toBe('我今天沒吃飯');
+    expect(sent?.sourceLang).toBeUndefined();
+  });
+
+  it('still tells the broker what an ordinary page is written in', async () => {
+    document.documentElement.lang = 'en';
+    await mountForEnglish();
+    const icon = await select('這是頁面上的一段中文內容。');
+    icon.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await settle();
+
+    const sent = ports.at(-1)?.posted.at(-1) as
+      | { sourceLang?: string }
+      | undefined;
+    expect(sent?.sourceLang).toBe('en');
+  });
+});

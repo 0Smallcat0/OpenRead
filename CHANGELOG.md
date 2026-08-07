@@ -36,6 +36,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   overlap heavily however their edges move, and the second column of a
   two-column page does not overlap the first at all.
 
+- **Selecting text and translating it claimed the page's language for text the
+  page did not write.** The same defect as the one fixed for text boxes in
+  2.17.0, one path over. Typing Chinese into a box on a page that declares
+  `lang="en"` and asking for English handed the engine "translate this English
+  into English", so it returned the Chinese verbatim. A selection inside an
+  input, a textarea or a contenteditable now goes without a source language and
+  lets the engine work it out; a selection of the page's own text still carries
+  `<html lang>`, which is the hint that keeps short captions from being
+  detected wrongly.
+
+- **Selecting a PDF translation highlighted nothing, so it looked unselectable.**
+  It was selected the whole time. The vendored viewer carries an OpenRead patch
+  setting a global transparent `::selection`, re-enabled only inside
+  `.textLayer`, so the text layer and the canvas beneath it do not both render
+  the highlight — and this panel is neither. It has its own selection colour
+  now. Reported as "I cannot select the translation", and a real mouse drag
+  had been pulling 1,891 characters out of it the entire time.
+
+- **The PDF translation panel is the width of its page, and its text is not.**
+  It was a fixed column, which read as a separate document floating beside the
+  paper; making it match the page put 130 characters on a line and produced a
+  wall of text. The block matches the page so it belongs to the document, and
+  the paragraphs inside hold a readable measure. `box-sizing` too — the inline
+  width is the page's, and `content-box` had been laying 20px of padding over
+  each edge of the paper.
+
+- **Translating what you have typed is on the right-click menu.** It was
+  reachable only by `Ctrl+Shift+K`, and a command is reachable exactly as far
+  as Chrome's willingness to bind its key — which is neither documented nor
+  stable, as `translate-page` demonstrated by shipping unbound for several
+  releases. A feature with one route in has none the day that route fails.
+
 - **The PDF translation panel says it is selectable rather than inheriting
   whatever the viewer decided.** It sits inside the viewer's own container, and
   a translation nobody can copy out is half a feature. `pnpm e2e:page` now
