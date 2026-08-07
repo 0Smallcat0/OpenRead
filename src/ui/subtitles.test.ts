@@ -258,6 +258,30 @@ describe('mountSubtitleTranslate', () => {
     expect(said).toEqual([]);
   });
 
+  it('says the captions are already in the target, not to switch them on', async () => {
+    // A channel with its own Chinese subtitle track, read by someone asking
+    // for Chinese: the captions are on, there is a cue, and the engine hands
+    // it straight back. Telling that reader to turn on captions would be
+    // advice about something they had already done.
+    vi.useFakeTimers();
+    const said: string[] = [];
+    translate = vi.fn((text: string) => Promise.resolve(text));
+    document.body.innerHTML =
+      '<video id="v"></video><div class="ytp-caption-window-container">' +
+      '<span class="ytp-caption-segment">這是一句已經是中文的字幕。</span></div>';
+    const video = document.getElementById('v') as HTMLVideoElement;
+    Object.defineProperty(video, 'paused', { value: false });
+    mount({ notify: (m: string) => said.push(m) });
+    video.dispatchEvent(new Event('play', { bubbles: true }));
+    await flush();
+    vi.advanceTimersByTime(9000);
+    vi.useRealTimers();
+
+    expect(said).toHaveLength(1);
+    expect(said[0]).toContain('already in Traditional Chinese');
+    expect(said[0]).not.toContain('CC');
+  });
+
   it('says it once, not once a play event', async () => {
     vi.useFakeTimers();
     const said: string[] = [];
