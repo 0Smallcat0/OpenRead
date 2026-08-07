@@ -93,6 +93,13 @@ export default defineContentScript({
             targetLang: settings.targetLang,
             model: settings.modelId,
             signal,
+            // A subtitle's language is not the page's. YouTube declares the
+            // *interface* language — measured on a machine set to Taiwan,
+            // `<html lang="zh-Hant-TW">` on a video whose captions are
+            // English — so taking it made the engine translate zh-Hant into
+            // zh-Hant, return the caption unchanged, and leave the line blank.
+            // The same mistake the input box made, one surface over.
+            fromPageLanguage: false,
           }),
       });
     };

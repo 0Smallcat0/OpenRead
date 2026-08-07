@@ -207,6 +207,7 @@ pnpm bench        # live model benchmark (needs Ollama)
 pnpm shoot        # re-shoot every screenshot and the clip on this page
 pnpm e2e:page     # whole-page translation in a real Chrome, end to end
 pnpm e2e:stress   # hostile pages: infinite feeds, route swaps, rapid toggling
+pnpm e2e:youtube  # subtitle translation on real YouTube (needs the network)
 pnpm e2e:egress   # prove the default engine sends nothing, in a real Chrome
 ```
 
