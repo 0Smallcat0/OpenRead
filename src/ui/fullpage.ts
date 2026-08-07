@@ -35,6 +35,7 @@ import {
   collectBlocks,
   isElementVisible,
   visibleText,
+  protectedText,
   queryDeep,
   TRANSLATED_ATTR,
   BILINGUAL_CLASS,
@@ -42,6 +43,7 @@ import {
   type CollectOptions,
 } from './blocks';
 import { toBcp47 } from '../core/bcp47';
+import { restoreTerms } from '../core/glossary';
 import type {
   DisplayMode,
   TranslationStyle,
@@ -611,7 +613,15 @@ export async function translateBlock(
 
   const controller = new AbortController();
   try {
-    const result = await deps.translate(source, controller.signal, 0);
+    const hidden = protectedText(block);
+    const sent = hidden.values.length > 0 ? hidden.text.trim() : source;
+    let result = await deps.translate(sent, controller.signal, 0);
+    if (hidden.values.length > 0) {
+      const restored = restoreTerms(result, hidden);
+      result = restored.complete
+        ? restored.text
+        : await deps.translate(source, controller.signal, 0);
+    }
     const trimmed = result.trim();
     // Handed back unchanged means the block is already in the target language,
     // and inserting it would print the paragraph twice.
@@ -947,9 +957,13 @@ async function drainQueue(
       // while the queue drained is translated as it currently reads — and
       // through `visibleText`, so a stylesheet child is never sent to a model.
       const source = visibleText(block).trim();
+      // Code spans go in as placeholders. A translator asked to translate
+      // `allow="fullscreen"` does not decline, it deletes — see `VERBATIM`.
+      const hidden = protectedText(block);
+      const sent = hidden.values.length > 0 ? hidden.text.trim() : source;
       current.inFlight++;
       try {
-        let result = await deps.translate(source, controller.signal, 0, (l) =>
+        let result = await deps.translate(sent, controller.signal, 0, (l) =>
           progress.downloading(l),
         );
         // One retry on an empty generation, which the selection path has
@@ -957,9 +971,22 @@ async function drainQueue(
         // the second attempt, so it is a different sample rather than the same
         // request hopefully going better.
         if (!result.trim() && !controller.signal.aborted) {
-          result = await deps.translate(source, controller.signal, 1);
+          result = await deps.translate(sent, controller.signal, 1);
         }
         if (controller.signal.aborted) return;
+        if (hidden.values.length > 0) {
+          const restored = restoreTerms(result, hidden);
+          if (restored.complete) {
+            result = restored.text;
+          } else {
+            // A placeholder did not survive, so a code span is missing from
+            // the sentence rather than merely mangled. Translating again
+            // without protection gives back whatever the engine does with the
+            // code, which is the lesser loss.
+            result = await deps.translate(source, controller.signal, 0);
+            if (controller.signal.aborted) return;
+          }
+        }
         if (result.trim() === source) {
           // Nothing came back but what went in. The engines do this on
           // purpose: asked for a language the text is already in, they return

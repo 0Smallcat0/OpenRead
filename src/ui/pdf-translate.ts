@@ -217,6 +217,16 @@ async function translatePdfPage(
   deps: PdfTranslateDeps,
   signal: AbortSignal,
   onDownloadProgress?: (loaded: number) => void,
+  /**
+   * Called as each paragraph lands, not each page.
+   *
+   * The badge is shared with the language-pack download, and it only changed
+   * back to a count when a whole page finished. A page of a paper is twenty
+   * paragraphs, so after the pack arrived the badge sat on "Downloading
+   * language pack 100%" for as long as the first page took — reported from use
+   * as stuck at 100%, which is exactly what it looked like.
+   */
+  onParagraph?: () => void,
 ): Promise<number> {
   const layer = page.querySelector('.textLayer');
   if (!layer) return 0;
@@ -242,6 +252,7 @@ async function translatePdfPage(
       // Unchanged means already in the target language; printing it would
       // repeat the page in the panel under it.
       if (result && result !== paragraph.text) out.push(result);
+      onParagraph?.();
     } catch {
       // One paragraph of a page, on a document that may be hundreds. The page
       // is still worth placing; a gap is better than an error per line.
@@ -282,8 +293,12 @@ export async function translatePdf(
       const next = byDistanceFromViewport(doc, queued).shift();
       if (!next) break;
       queued = queued.filter((page) => page !== next);
-      const done = await translatePdfPage(next, deps, controller.signal, (l) =>
-        progress.downloading(l),
+      const done = await translatePdfPage(
+        next,
+        deps,
+        controller.signal,
+        (l) => progress.downloading(l),
+        () => progress.update(pages, pages + queued.length + 1),
       );
       if (controller.signal.aborted) return;
       paragraphs += done;

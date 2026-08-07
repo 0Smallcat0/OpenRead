@@ -11,6 +11,12 @@
  * `core/`. It touches no Chrome API and no network, so jsdom is enough to
  * drive all of it.
  */
+import {
+  MAX_TOKENS,
+  takenIndices,
+  tokenFor,
+  type ProtectedText,
+} from '../core/glossary';
 
 /**
  * Leaf-level containers of prose. Deliberately not `div` or `span`: those
@@ -128,6 +134,83 @@ const ADDRESS_LIKE = [
  * Skipping our own insertions here too means a re-run reads the original text
  * rather than the original plus last run's translation.
  */
+/**
+ * Inline elements whose text is code rather than prose.
+ *
+ * A translator asked to translate `allow="fullscreen"` does not decline — it
+ * removes it. Measured on MDN: `This attribute is considered a legacy attribute
+ * and redefined as allow="fullscreen *".` came back as
+ * `此屬性被視為遺留屬性並重新定義為 。`, with the thing the sentence is *about*
+ * simply gone. On a documentation page that is most of the value of the
+ * sentence, and the reader has no way to tell anything was dropped.
+ */
+export const VERBATIM = 'code, kbd, samp, var, tt';
+
+/**
+ * A block's text with its code spans hidden behind placeholders.
+ *
+ * The same mechanism the glossary uses, and the same placeholder, measured
+ * against nine target languages — see `core/glossary.ts` for why it looks like
+ * that. Returns no values when the block has no code in it, which is the
+ * common case and must cost nothing.
+ */
+export function protectedText(element: Element): ProtectedText {
+  const plain = visibleText(element);
+  const taken = takenIndices(plain);
+  const values: string[] = [];
+  const indices: number[] = [];
+  let next = 0;
+
+  const walk = (node: Element): string => {
+    let out = '';
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === 3) {
+        out += child.nodeValue ?? '';
+        continue;
+      }
+      if (child.nodeType !== 1) continue;
+      const el = child as Element;
+      // Before the skip list, not after: `code`, `kbd` and `samp` are *in*
+      // that list, which is how the code came to be missing from the
+      // translation in the first place. Dropping it from what is sent and
+      // dropping it from what is shown are two different decisions, and only
+      // the first one was ever made.
+      if (el.matches(VERBATIM) && values.length < MAX_TOKENS) {
+        const literal = visibleText(el);
+        // Nothing worth protecting, and a placeholder standing in for nothing
+        // is one more thing that can fail to come back.
+        if (!literal.trim()) continue;
+        while (taken.has(next)) next++;
+        taken.add(next);
+        values.push(literal);
+        indices.push(next);
+        out += tokenFor(next);
+        continue;
+      }
+      if (
+        el.matches(SKIP_WITHIN) ||
+        el.matches(OWN_UI) ||
+        el.matches(CITATIONS)
+      ) {
+        continue;
+      }
+      out += walk(el);
+    }
+    return out;
+  };
+
+  const text = walk(element);
+  // A block that is only code has nothing left to translate, and a lone
+  // placeholder has no language for the engine to detect.
+  if (
+    values.length === 0 ||
+    !/\p{L}/u.test(text.replace(/\[\[\s*\d+\s*\]\]/g, ' '))
+  ) {
+    return { text: plain, values: [], indices: [] };
+  }
+  return { text, values, indices };
+}
+
 export function visibleText(element: Element): string {
   let out = '';
   for (const node of Array.from(element.childNodes)) {
