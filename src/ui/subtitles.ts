@@ -133,6 +133,7 @@ function ensureStyle(doc: Document): void {
 .${SUBTITLE_CLASS} {
   display: block;
   margin-top: 0.15em;
+  text-align: center;
   font-size: 0.92em;
   line-height: 1.25;
   color: #ffe9a8;
@@ -141,6 +142,28 @@ function ensureStyle(doc: Document): void {
     0 1px 2px rgb(0 0 0 / 0.9);
   white-space: pre-wrap;
   pointer-events: none;
+}
+/*
+ * Inside a player's own caption box, the translation is taken out of flow and
+ * drawn directly above the caption.
+ *
+ * Below is where it belongs, and below is where it cannot go. The player puts
+ * that box close to the bottom edge and sizes it for the caption alone;
+ * a line added under it is drawn off the picture — measured at y=687 against a
+ * video ending at 663, over the control bar. Lifting the box back up with a
+ * transform is the other way to fix that, and the player rewrites the box's
+ * position constantly, so it shuddered.
+ *
+ * Out of flow, the box's own height never changes, so the player's layout is
+ * left exactly as it was and there is nothing to fight over.
+ */
+.${SUBTITLE_CLASS}-inline {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 0;
+  margin-bottom: 0.15em;
 }
 .${SUBTITLE_CLASS}-overlay {
   position: absolute;
@@ -333,6 +356,7 @@ function attachRendered(
     if (line.parentElement !== host || line.nextElementSibling) {
       host.appendChild(line);
     }
+    line.classList.add(`${SUBTITLE_CLASS}-inline`);
 
     // The box carries no font size — the segment inside it does — so reading
     // the box gave the player's chrome instead: 12px under a 40px caption in
