@@ -197,8 +197,15 @@ class CueTranslator {
         if (this.showing === cue) this.write(trimmed);
       })
       .catch(() => {
-        // One cue of a film. There is nothing useful to say about it in the
-        // two seconds it would have been on screen for.
+        // One cue of a film, and nothing useful to say about it in the two
+        // seconds it would have been on screen for. But the cue must not stay
+        // claimed: `showing` is what stops a repaint costing another round
+        // trip, and leaving a failed cue in it means every repaint of that
+        // caption is skipped too. Observed on YouTube — the service worker was
+        // still starting when the first caption arrived, that one request
+        // rejected, and the line then stayed blank for as long as the sentence
+        // was on screen, coming right only when the speaker moved on.
+        if (this.showing === cue) this.showing = '';
       });
   }
 }
@@ -430,6 +437,10 @@ export function mountSubtitleTranslate(
   const seeTranslation = (): void => {
     sawCue = true;
     sawTranslation = true;
+    // A translation appearing answers the question the notice asks, for good.
+    // Without this, a video that translated fine for ten minutes and then hit
+    // a stretch of silence would be told its captions are off.
+    told = true;
   };
   const watchForSilence = (): void => {
     if (!deps.enabled || !deps.notify || told) return;
