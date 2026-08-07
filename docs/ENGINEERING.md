@@ -21,13 +21,15 @@ cleanup logic is a pure, dependency-free core, unit-tested in isolation and
 scored by an offline eval harness so improvements are quantified, not vibes.
 
 One honest caveat, since 2.7.0 made Chrome's built-in translator the default:
-**everything in this section is about the Ollama path.** Chrome ships a
-dedicated translation model, and a dedicated translation model does not emit a
-preamble, think out loud, or echo its input — so the reliability layer has
-nothing to clean up on the default path. It is still load-bearing for anyone
-who switches to a local LLM, which is where those artifacts come from and why
-the layer was built. Saying otherwise would be claiming credit for work the
-default engine never needs.
+**this section is about the Ollama path.** Chrome ships a dedicated translation
+model, and a dedicated translation model does not emit a preamble, think out
+loud, or echo its input — so the reliability layer has nothing to clean up on
+the default path. It is still load-bearing for anyone who switches to a local
+LLM, which is where those artifacts come from and why the layer was built.
+Saying otherwise would be claiming credit for work the default engine never
+needs. That claim is now measured rather than assumed —
+[the default engine has its own numbers](#the-engine-most-people-are-served-by),
+and all three artifact detectors read 0.0% on it.
 
 ## Reliability eval
 
@@ -46,11 +48,48 @@ mid-artifact exactly as they do in a live stream.
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](../eval/RESULTS.md)._
 
-**491 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
+**630 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
 pure core at **100% function / 97% line** coverage, the selection and capture UI
 driven through jsdom with a stubbed extension port, and the background worker —
 which owns cancellation, error translation and PDF routing. Overall: 92%
 function, 95% line.
+
+## The engine most people are served by
+
+Every number above and below this section was measured on the Ollama path.
+The **default** engine is Chrome's built-in translator, and nothing in `eval/`
+mentioned it — so the engine almost every user actually gets was the one with
+no score attached, and "good enough to be the default" was an assertion.
+
+It cannot be measured the way the rest of `eval/` is, because there is no
+built-in translator in Node; it exists only inside Chrome. `pnpm eval:builtin`
+runs one: a real browser, the built extension loaded, translations driven
+through the extension's own `stream-translate` port — so the scored text is
+the text a reader is shown — over the same 27 fixtures, references and chrF as
+the model benchmark.
+
+| Engine                    | chrF ↑   | Per segment                     |
+| ------------------------- | -------- | ------------------------------- |
+| Chrome built-in (default) | **36.5** | 20 ms, whole translation        |
+| qwen3 via Ollama          | **46.4** | 451 ms to the _first character_ |
+
+_Full report: [`eval/BUILTIN-RESULTS.md`](../eval/BUILTIN-RESULTS.md)._
+
+Two findings:
+
+- **The default engine's only quality layer fires almost never.**
+  `toTaiwanVocabulary` rewrote **1 of 27** segments, worth +0.1 corpus chrF.
+  The table was built by counting 32 substitutions in one translated article
+  by hand — and that article was software documentation, where 本地, 運行,
+  代碼 and 用戶 are on every screen. This fixture set has 5 technical segments
+  out of 27. Both measurements are true; the finding is about the corpus. The
+  set this project scores translation quality on barely covers the domain its
+  one quality layer exists for.
+- **The worst outputs are idioms, which no table reaches.** "It's not rocket
+  science" comes back as 這不是火箭科學 (chrF 9.3) and "break a leg" as
+  打斷一條腿 (21.7). Extending the vocabulary table in the hope of catching
+  those would raise nothing; having the number is what makes that visible
+  rather than arguable.
 
 ## Which local model?
 

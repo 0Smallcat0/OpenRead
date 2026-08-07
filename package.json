@@ -33,7 +33,9 @@
     "cli": "pnpm build:cli && node bin/openread.mjs",
     "prepare": "wxt prepare && node scripts/build-cli.mjs",
     "prepack": "node scripts/build-cli.mjs",
-    "shoot": "node scripts/shoot-assets.mjs"
+    "shoot": "node scripts/shoot-assets.mjs",
+    "eval:builtin": "node eval/builtin/collect.mjs && tsx eval/builtin/report.ts",
+    "eval:builtin:report": "tsx eval/builtin/report.ts"
   },
   "devDependencies": {
     "@types/chrome": "^0.2.2",
