@@ -64,6 +64,15 @@ export interface Settings {
    * language they read English into.
    */
   inputTargetLang: string;
+  /**
+   * Terms the translator must leave alone, or must render one fixed way.
+   *
+   * Kept as the raw text of the popup's box rather than as parsed entries, so
+   * a round trip through settings returns what the user typed — their
+   * comments, their blank lines, their order. See `core/glossary.ts` for the
+   * grammar and for why the placeholder looks the way it does.
+   */
+  glossary: string;
   /** Obsidian vault to capture into; empty = the user's current/last vault. */
   obsidianVault: string;
   /** Vault-relative folder for captures; empty = the vault root. */
@@ -98,6 +107,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // over a paragraph gets exactly what they were about to select.
   hoverTranslate: 'alt',
   inputTargetLang: 'English',
+  glossary: '',
   obsidianVault: '',
   obsidianFolder: 'OpenRead',
   enrichOnCapture: false,
@@ -166,6 +176,7 @@ export async function loadSettings(): Promise<Settings> {
     'translationScale',
     'hoverTranslate',
     'inputTargetLang',
+    'glossary',
     'obsidianVault',
     'obsidianFolder',
     'enrichOnCapture',
@@ -202,10 +213,41 @@ export function limitExcept(hosts: readonly string[]): string[] {
   return kept;
 }
 
+/**
+ * Largest glossary we will try to store, in bytes of JSON.
+ *
+ * Same 8,192-byte per-item ceiling as the exception list, and the same
+ * all-or-nothing failure: a pasted terminology file would take the engine and
+ * the target language down with it. 6 KB is several hundred terms.
+ */
+export const MAX_GLOSSARY_BYTES = 6000;
+
+/**
+ * Trim a glossary to something storage will accept, keeping the top.
+ *
+ * The opposite end from `limitExcept`, and deliberately: an exception list
+ * grows by one host at a time as the user browses, so the newest entries are
+ * the ones they just asked for, while a glossary is written top down and its
+ * first lines are the ones that were worth writing first. Cut on a line
+ * boundary — half a rule is a rule that fires on the wrong string.
+ */
+export function limitGlossary(raw: string): string {
+  if (JSON.stringify(raw).length <= MAX_GLOSSARY_BYTES) return raw;
+  const lines = raw.split(/\r?\n/);
+  while (
+    lines.length > 0 &&
+    JSON.stringify(lines.join('\n')).length > MAX_GLOSSARY_BYTES
+  ) {
+    lines.pop();
+  }
+  return lines.join('\n');
+}
+
 /** Persist a full settings object. */
 export async function saveSettings(settings: Settings): Promise<void> {
   await chrome.storage.sync.set({
     ...settings,
     autoTranslateExcept: limitExcept(settings.autoTranslateExcept),
+    glossary: limitGlossary(settings.glossary),
   });
 }

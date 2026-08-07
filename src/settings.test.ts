@@ -6,7 +6,12 @@
  * down with it.
  */
 import { describe, it, expect } from 'vitest';
-import { limitExcept, MAX_EXCEPT_BYTES } from './settings';
+import {
+  limitExcept,
+  limitGlossary,
+  MAX_EXCEPT_BYTES,
+  MAX_GLOSSARY_BYTES,
+} from './settings';
 
 describe('limitExcept', () => {
   it('leaves an ordinary list alone', () => {
@@ -40,5 +45,48 @@ describe('limitExcept', () => {
 
   it('cannot loop forever on a single entry that is too big on its own', () => {
     expect(limitExcept(['x'.repeat(MAX_EXCEPT_BYTES * 2)])).toEqual([]);
+  });
+});
+
+describe('limitGlossary', () => {
+  it('leaves an ordinary glossary alone', () => {
+    const raw = 'OpenRead\nReact Native\nbug = 瑕疵';
+    expect(limitGlossary(raw)).toBe(raw);
+  });
+
+  it('trims a pasted terminology file to something storage accepts', () => {
+    const raw = Array.from(
+      { length: 500 },
+      (_, i) => `term-number-${String(i)} = 替換詞彙${String(i)}`,
+    ).join('\n');
+    const kept = limitGlossary(raw);
+
+    expect(JSON.stringify(kept).length).toBeLessThanOrEqual(MAX_GLOSSARY_BYTES);
+    // The top kept, not the bottom: a glossary is written in order, unlike an
+    // exception list that grows one site at a time as the user browses.
+    expect(kept.startsWith('term-number-0 = ')).toBe(true);
+  });
+
+  it('cuts on a line boundary, so no half rule survives', () => {
+    const raw = Array.from(
+      { length: 500 },
+      (_, i) => `term-number-${String(i)} = 替換詞彙${String(i)}`,
+    ).join('\n');
+    // Half a rule is a rule that fires on the wrong string — `term-number-1`
+    // truncated to `term-numb` would rewrite every word starting that way.
+    for (const line of limitGlossary(raw).split('\n')) {
+      expect(raw.split('\n')).toContain(line);
+    }
+  });
+
+  it('cannot loop forever on one line that is too big on its own', () => {
+    expect(limitGlossary('x'.repeat(MAX_GLOSSARY_BYTES * 2))).toBe('');
+  });
+
+  it('still holds hundreds of terms', () => {
+    const raw = Array.from({ length: 200 }, (_, i) => `Term${String(i)}`).join(
+      '\n',
+    );
+    expect(limitGlossary(raw)).toBe(raw);
   });
 });

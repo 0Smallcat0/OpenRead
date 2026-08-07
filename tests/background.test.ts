@@ -362,6 +362,128 @@ describe('the streaming broker', () => {
     ]);
   });
 
+  it('hides a glossary term from the engine and puts it back after', async () => {
+    mocks.loadSettings.mockResolvedValue({
+      baseUrl: BASE_URL,
+      glossary: 'OpenRead',
+    });
+    let seen = '';
+    mocks.translateStream.mockImplementation(
+      async (params: { text: string; onChunk: (c: string) => void }) => {
+        seen = params.text;
+        params.onChunk('[[0]] 很快。');
+      },
+    );
+    const port = connect();
+    port.send({
+      type: 'START_STREAM',
+      text: 'OpenRead is fast.',
+      targetLang: 'Traditional Chinese',
+      model: 'qwen3:latest',
+    });
+    await settle();
+
+    // The engine never saw the term at all, which is the point: it cannot
+    // translate what it was not given.
+    expect(seen).toBe('[[0]] is fast.');
+    expect(port.posted).toEqual([
+      { status: 'streaming', chunk: 'OpenRead 很快。' },
+      { status: 'done' },
+    ]);
+  });
+
+  it('translates again unprotected when a placeholder does not survive', async () => {
+    mocks.loadSettings.mockResolvedValue({
+      baseUrl: BASE_URL,
+      glossary: 'OpenRead',
+    });
+    const sent: string[] = [];
+    mocks.translateStream.mockImplementation(
+      async (params: { text: string; onChunk: (c: string) => void }) => {
+        sent.push(params.text);
+        // The placeholder was eaten — measured behaviour for some target
+        // languages with other placeholder shapes, so worth handling here.
+        params.onChunk(sent.length === 1 ? '很快。' : '開放閱讀很快。');
+      },
+    );
+    const port = connect();
+    port.send({
+      type: 'START_STREAM',
+      text: 'OpenRead is fast.',
+      targetLang: 'Traditional Chinese',
+      model: 'qwen3:latest',
+    });
+    await settle();
+
+    expect(sent).toEqual(['[[0]] is fast.', 'OpenRead is fast.']);
+    // A translated term, not a sentence with the subject missing.
+    expect(port.posted).toEqual([
+      { status: 'streaming', chunk: '開放閱讀很快。' },
+      { status: 'done' },
+    ]);
+  });
+
+  it('leaves a block with no glossary term streaming as before', async () => {
+    mocks.loadSettings.mockResolvedValue({
+      baseUrl: BASE_URL,
+      glossary: 'OpenRead',
+    });
+    mocks.translateStream.mockImplementation(
+      async (params: { onChunk: (c: string) => void }) => {
+        params.onChunk('你好');
+        params.onChunk('世界');
+      },
+    );
+    const port = connect();
+    port.send({
+      type: 'START_STREAM',
+      text: 'Hello world',
+      targetLang: 'Traditional Chinese',
+      model: 'qwen3:latest',
+    });
+    await settle();
+
+    // Two chunks, not one: buffering is the price of the glossary and is paid
+    // only by the blocks that use it.
+    expect(port.posted).toEqual([
+      { status: 'streaming', chunk: '你好' },
+      { status: 'streaming', chunk: '世界' },
+      { status: 'done' },
+    ]);
+  });
+
+  it('does not protect a block that is nothing but the term', async () => {
+    mocks.loadSettings.mockResolvedValue({
+      baseUrl: BASE_URL,
+      glossary: 'OpenRead',
+    });
+    const sent: string[] = [];
+    mocks.translateStream.mockImplementation(
+      async (params: { text: string; onChunk: (c: string) => void }) => {
+        sent.push(params.text);
+        params.onChunk('OpenRead');
+      },
+    );
+    const port = connect();
+    port.send({
+      type: 'START_STREAM',
+      text: 'OpenRead',
+      targetLang: 'Traditional Chinese',
+      model: 'qwen3:latest',
+    });
+    await settle();
+
+    // Every call, not the last one. Recording only the last passed with the
+    // guard removed: the protected attempt lost its placeholder, the
+    // unprotected retry ran with the original text, and the assertion read
+    // that retry and called it a pass.
+    //
+    // `[[0]]` on its own has no language to detect, and the built-in engine
+    // answers that with "Could not tell what language this is written in" —
+    // an error, on a heading that needed no translating.
+    expect(sent).toEqual(['OpenRead']);
+  });
+
   it('reads the Ollama URL itself instead of taking it from the message', async () => {
     // The base URL must never ride the message bus.
     mocks.translateStream.mockResolvedValue(undefined);

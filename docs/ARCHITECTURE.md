@@ -15,15 +15,31 @@ src/
     stream.ts             StreamAssembler — reluctant-buffer streaming logic
     zh-convert.ts         OpenCC s2twp conversion + phrase-safe streaming transform
     prompt.ts             system prompt + adaptive anti-echo few-shot
+    tw-vocab.ts           mainland → Taiwan word choices, for Traditional targets
+    bcp47.ts              language name → the tag Chrome's translator takes
+    auto-translate.ts     whether a page translates itself, and per-site exceptions
+    glossary.ts           terms held out of translation behind a placeholder
     capture.ts            capture → Markdown + obsidian:// URI builders
     enrich.ts             enrich prompt + tolerant small-model JSON salvager
+    diagnostics.ts        connection probe verdicts + engine-failure wording
+    dnr-rule.ts           the Origin-strip rule, so Ollama needs no OLLAMA_ORIGINS
     types.ts              shared domain types
   api/
+    builtin.ts            Chrome's on-device translator: pairs, packs, retry
     ollama.ts             typed streaming + single-shot + enrich client
+    probe.ts              is the server there, and does it have that model
   messaging.ts            typed content⇄background port + one-shot protocol
   settings.ts             typed chrome.storage.sync wrapper
   ui/
     selection.ts          shared selection icon + panel + stream client
+    fullpage.ts           the live queue: viewport first, then follow the reader
+    blocks.ts             what counts as a translatable block, and what is ours
+    hover.ts              hold a key, point at one paragraph
+    input-translate.ts    replace what you typed, keeping the undo stack
+    pdf-blocks.ts         lines → paragraphs, by line pitch and column overlap
+    pdf-translate.ts      a whole PDF, each page's translation under that page
+    port-translate.ts     one block through the background port
+    popup.ts              the settings UI's logic, testable without a popup
     capture.ts            capture orchestrator: enrich round-trip + write
   entrypoints/
     background.ts         service worker: stream broker + PDF router + enrich

@@ -81,6 +81,10 @@ seconds.
   by default. `Ctrl+Z` takes it back.
 - **One selection** — select text, click the floating **文**, or press
   **`Ctrl+Shift+Y`**. Escape closes the panel.
+- **Names it keeps getting wrong** — list them in the popup, one a line.
+  `OpenRead` on its own keeps the name as written; `bug = 瑕疵` pins how a term
+  is translated. The built-in engine takes no prompt, so the term is held out
+  of the sentence and put back after.
 - **A whole PDF** — open any `.pdf` and press translate. Each page's
   translation is placed under the page itself, so the layout, the figures and
   the equations stay exactly as the author set them.
@@ -182,7 +186,7 @@ all, since that is the easy way to send nothing and prove nothing.
 ```bash
 pnpm install
 pnpm build        # -> .output/chrome-mv3, load it unpacked
-pnpm test         # 596 unit tests
+pnpm test         # 630 unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)
 pnpm shoot        # re-shoot every screenshot and the clip on this page

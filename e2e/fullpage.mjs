@@ -22,12 +22,15 @@
  *      page that is already translated without translating it again
  *  10. holding a key and pointing at a paragraph translates that paragraph
  *  11. a text box is translated in place, and Ctrl+Z still takes it back
- *  12. a PDF is translated page by page in the bundled viewer, and undone
- *  13. Chrome actually bound every keyboard shortcut the manifest asks for
+ *  12. a glossary term comes back verbatim, and its placeholder does not
+ *  13. a PDF is translated page by page in the bundled viewer, and undone
+ *  14. Chrome actually bound every keyboard shortcut the manifest asks for
  *
- * The last two cannot be tested anywhere else. jsdom lays nothing out, so every
- * block sits at 0,0 and "near the viewport" is true of all of them, and it has
- * no IntersectionObserver at all.
+ * Several of these cannot be tested anywhere else. jsdom lays nothing out, so
+ * every block sits at 0,0 and "near the viewport" is true of all of them, and
+ * it has no IntersectionObserver at all. And whether a placeholder survives
+ * translation is a fact about Chrome's model rather than about this code — the
+ * unit tests can only assert what happens either way.
  *
  * Requires a Chrome on disk, and a local Ollama with the model pulled if
  * `OPENREAD_ENGINE=ollama`. Not in CI: GitHub's runners have no GPU and no
@@ -158,7 +161,9 @@ try {
     async () => await chrome.commands.getAll(),
   );
   const unbound = commands
-    .filter((command) => command.name !== '_execute_action' && !command.shortcut)
+    .filter(
+      (command) => command.name !== '_execute_action' && !command.shortcut,
+    )
     .map((command) => command.name);
   console.log(
     `shortcuts: ${commands
@@ -408,7 +413,10 @@ try {
     autoTranslateExcept: [],
   });
   const auto = await afterReload('a foreign page, auto on');
-  check(auto.count > 0, 'auto-translate was on and the page was left in English');
+  check(
+    auto.count > 0,
+    'auto-translate was on and the page was left in English',
+  );
 
   // The failure that matters most: rewriting a page the reader can already
   // read. example.com declares `lang="en"`, so asking for English must be a
@@ -556,9 +564,12 @@ try {
       await sleep(2000);
       note = (await packState()).note;
       if (note.startsWith('Ready') || note.startsWith('Could not')) break;
-      if (waited % 30000 === 0) console.log(`    ${String(waited / 1000)}s: ${note}`);
+      if (waited % 30000 === 0)
+        console.log(`    ${String(waited / 1000)}s: ${note}`);
     }
-    console.log(`  after downloading (${String(Math.round(waited / 1000))} s): ${note}`);
+    console.log(
+      `  after downloading (${String(Math.round(waited / 1000))} s): ${note}`,
+    );
     check(note.startsWith('Ready'), `the download did not finish (${note})`);
     // Hand the page back. Everything after this addresses "the active tab", and
     // leaving the popup in front sends those messages to a document with no
@@ -608,7 +619,9 @@ try {
       text: translated.textContent ?? '',
     };
   });
-  console.log(`  translation-only + highlight + large: ${JSON.stringify(styled)}`);
+  console.log(
+    `  translation-only + highlight + large: ${JSON.stringify(styled)}`,
+  );
 
   check(styled !== null, 'nothing was translated, so nothing could be styled');
   check(
@@ -637,7 +650,9 @@ try {
     translations: document.querySelectorAll('.oit-bilingual').length,
     firstVisible: document.querySelector('main p, p')?.textContent ?? '',
   }));
-  console.log(`  after switching back to bilingual: ${JSON.stringify(restyled)}`);
+  console.log(
+    `  after switching back to bilingual: ${JSON.stringify(restyled)}`,
+  );
 
   check(
     restyled.originals === 0,
@@ -647,7 +662,6 @@ try {
     restyled.translations === beforeSwitch,
     'switching the display mode re-translated the page instead of restyling it',
   );
-
 
   // ---- one paragraph, by pointing at it ----
   //
@@ -689,12 +703,14 @@ try {
     if (pointed.one) break;
   }
   console.log(`  after Alt + point at paragraph 1: ${JSON.stringify(pointed)}`);
-  check(pointed?.one === true, 'holding Alt and pointing at a paragraph did not translate it');
+  check(
+    pointed?.one === true,
+    'holding Alt and pointing at a paragraph did not translate it',
+  );
   check(
     pointed?.total === 1,
     `pointing at one paragraph translated ${String(pointed?.total)} of them`,
   );
-
 
   // ---- the box you are typing in ----
   //
@@ -702,7 +718,10 @@ try {
   // is used rather than assigning `value` — the page learns the field changed,
   // and Ctrl+Z can take the translation back — is only testable here.
   console.log('\n--- the box you are typing in ---');
-  await configure({ inputTargetLang: 'English', targetLang: 'Traditional Chinese' });
+  await configure({
+    inputTargetLang: 'English',
+    targetLang: 'Traditional Chinese',
+  });
   await page.reload({ waitUntil: 'domcontentloaded' });
   await sleep(1500);
   const typed = '這是一段用中文寫的留言，需要翻成英文再送出。';
@@ -729,7 +748,10 @@ try {
   // is bound, which is the half that was actually broken and is asserted at the
   // top of this file.
   await worker.evaluate(async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
     if (tab?.id !== undefined)
       await chrome.tabs.sendMessage(tab.id, { type: 'TRANSLATE_INPUT' });
   });
@@ -737,9 +759,7 @@ try {
   let boxed = beforeInput;
   for (let waited = 0; waited < 25000; waited += 500) {
     await sleep(500);
-    boxed = await page.evaluate(
-      () => document.getElementById('compose').value,
-    );
+    boxed = await page.evaluate(() => document.getElementById('compose').value);
     if (boxed !== beforeInput) break;
   }
   console.log(`  typed:      ${beforeInput}`);
@@ -765,6 +785,59 @@ try {
     'Ctrl+Z did not take the translation back, so the undo stack was wiped',
   );
 
+  // ---- terms the translator must not touch ----
+  //
+  // The glossary hides a term behind `[[0]]`, translates, and puts it back.
+  // Whether that placeholder survives is a fact about Chrome's model, not
+  // about this code, so it is checked against the real one — the unit tests
+  // can only assert what happens either way.
+  console.log('\n--- the glossary ---');
+  await configure({
+    autoTranslate: 'off',
+    targetLang: 'Traditional Chinese',
+    glossary: ['OpenRead', 'widget = 小工具'].join('\n'),
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await sleep(1500);
+  await page.evaluate(() => {
+    const p = document.createElement('p');
+    p.id = 'glossary-block';
+    p.textContent =
+      'The OpenRead widget reads a page and translates it, and OpenRead never sends the text anywhere.';
+    document.body.replaceChildren(p);
+  });
+  await sleep(400);
+  await translatePage();
+
+  let glossed = '';
+  for (let waited = 0; waited < 30000; waited += 500) {
+    await sleep(500);
+    glossed = await page.evaluate(
+      () =>
+        document.querySelector('#glossary-block .oit-bilingual')?.textContent ??
+        '',
+    );
+    if (glossed) break;
+  }
+  console.log(`  translated: ${glossed}`);
+  check(glossed !== '', 'the glossary block was never translated');
+  check(
+    (glossed.match(/OpenRead/g) ?? []).length === 2,
+    `both occurrences of the protected name should survive verbatim (${glossed})`,
+  );
+  check(
+    glossed.includes('小工具'),
+    `the pinned translation of "widget" is missing (${glossed})`,
+  );
+  check(
+    !/\[\[\s*\d+\s*\]\]/.test(glossed),
+    `a placeholder was left in the translation (${glossed})`,
+  );
+  check(
+    !/widget/i.test(glossed),
+    `"widget" was left in English rather than pinned (${glossed})`,
+  );
+  await configure({ glossary: '' });
 
   // ---- the bundled PDF viewer ----
   //
@@ -783,14 +856,19 @@ try {
 
   const askPdf = () =>
     worker.evaluate(async () => {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
       if (tab?.id !== undefined)
         await chrome.tabs.sendMessage(tab.id, { type: 'TRANSLATE_PAGE' });
     });
 
   const pdfState = () =>
     pdf.evaluate(() => {
-      const blocks = Array.from(document.querySelectorAll('.oit-pdf-translation'));
+      const blocks = Array.from(
+        document.querySelectorAll('.oit-pdf-translation'),
+      );
       return {
         pages: blocks.length,
         paragraphs: blocks.reduce((n, b) => n + b.children.length, 0),
@@ -813,7 +891,8 @@ try {
   for (; pdfWaited < 420000; pdfWaited += 2000) {
     await sleep(2000);
     pdfDone = await pdfState();
-    if (pdfDone.badge.startsWith('Done') || pdfDone.badge.startsWith('Nothing')) break;
+    if (pdfDone.badge.startsWith('Done') || pdfDone.badge.startsWith('Nothing'))
+      break;
     if (pdfWaited % 60000 === 0 && pdfWaited > 0) {
       console.log(`    ${String(pdfWaited / 1000)}s: ${pdfDone.badge}`);
     }
@@ -844,37 +923,42 @@ try {
   // underneath it, which is what a reader actually does.
   // Guarded: with nothing translated, this used to throw on a null rect and
   // bury the real failure under "Cannot read properties of null".
-  const dragBox = pdfDone.pages === 0 ? null : await pdf.evaluate(() => {
-    const paragraph = document.querySelector('.oit-pdf-translation p');
-    if (!paragraph) return null;
-    paragraph.scrollIntoView({ block: 'center' });
-    const rect = paragraph.getBoundingClientRect();
-    return {
-      x1: rect.left + 4,
-      y1: rect.top + rect.height / 2,
-      x2: rect.right - 4,
-      y2: rect.top + rect.height / 2,
-    };
-  });
+  const dragBox =
+    pdfDone.pages === 0
+      ? null
+      : await pdf.evaluate(() => {
+          const paragraph = document.querySelector('.oit-pdf-translation p');
+          if (!paragraph) return null;
+          paragraph.scrollIntoView({ block: 'center' });
+          const rect = paragraph.getBoundingClientRect();
+          return {
+            x1: rect.left + 4,
+            y1: rect.top + rect.height / 2,
+            x2: rect.right - 4,
+            y2: rect.top + rect.height / 2,
+          };
+        });
   if (!dragBox) {
     check(false, 'nothing was translated, so the drag could not be attempted');
   } else {
-  await pdf.evaluate(() => {
-    window.getSelection()?.removeAllRanges();
-  });
-  await pdf.mouse.move(dragBox.x1, dragBox.y1);
-  await pdf.mouse.down();
-  await pdf.mouse.move(dragBox.x2, dragBox.y2, { steps: 12 });
-  await pdf.mouse.up();
-  await sleep(400);
-  const dragged = await pdf.evaluate(() =>
-    (window.getSelection()?.toString() ?? '').trim(),
-  );
-  console.log(`  dragged out with the mouse: ${JSON.stringify(dragged.slice(0, 40))}`);
-  check(
-    dragged.length > 5,
-    'dragging across the translation selected nothing, so it cannot be copied',
-  );
+    await pdf.evaluate(() => {
+      window.getSelection()?.removeAllRanges();
+    });
+    await pdf.mouse.move(dragBox.x1, dragBox.y1);
+    await pdf.mouse.down();
+    await pdf.mouse.move(dragBox.x2, dragBox.y2, { steps: 12 });
+    await pdf.mouse.up();
+    await sleep(400);
+    const dragged = await pdf.evaluate(() =>
+      (window.getSelection()?.toString() ?? '').trim(),
+    );
+    console.log(
+      `  dragged out with the mouse: ${JSON.stringify(dragged.slice(0, 40))}`,
+    );
+    check(
+      dragged.length > 5,
+      'dragging across the translation selected nothing, so it cannot be copied',
+    );
   }
 
   // The same control, the same second meaning it has everywhere else.
@@ -885,7 +969,6 @@ try {
   check(pdfCleared.pages === 0, 'pressing again did not put the document back');
   await pdf.close();
   await page.bringToFront();
-
 } catch (error) {
   failures.push(error?.message ?? String(error));
 } finally {
