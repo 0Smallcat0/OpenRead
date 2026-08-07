@@ -73,6 +73,13 @@ export interface Settings {
    * grammar and for why the placeholder looks the way it does.
    */
   glossary: string;
+  /**
+   * Put a translation under the subtitle a video is showing.
+   *
+   * Off by default. It changes what a video looks like while it plays, which
+   * is not something to start doing to someone who has not asked.
+   */
+  translateSubtitles: boolean;
   /** Obsidian vault to capture into; empty = the user's current/last vault. */
   obsidianVault: string;
   /** Vault-relative folder for captures; empty = the vault root. */
@@ -108,6 +115,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hoverTranslate: 'alt',
   inputTargetLang: 'English',
   glossary: '',
+  translateSubtitles: false,
   obsidianVault: '',
   obsidianFolder: 'OpenRead',
   enrichOnCapture: false,
@@ -177,6 +185,7 @@ export async function loadSettings(): Promise<Settings> {
     'hoverTranslate',
     'inputTargetLang',
     'glossary',
+    'translateSubtitles',
     'obsidianVault',
     'obsidianFolder',
     'enrichOnCapture',
