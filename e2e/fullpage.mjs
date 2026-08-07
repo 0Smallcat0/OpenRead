@@ -23,6 +23,7 @@
  *  10. holding a key and pointing at a paragraph translates that paragraph
  *  11. a text box is translated in place, and Ctrl+Z still takes it back
  *  12. a PDF is translated page by page in the bundled viewer, and undone
+ *  13. Chrome actually bound every keyboard shortcut the manifest asks for
  *
  * The last two cannot be tested anywhere else. jsdom lays nothing out, so every
  * block sits at 0,0 and "near the viewport" is true of all of them, and it has
@@ -145,6 +146,29 @@ try {
       }),
     MODEL,
     ENGINE,
+  );
+
+  // Ask Chrome, rather than trusting the manifest. A suggested key Chrome
+  // reserves is answered by leaving the command unassigned — silently, with the
+  // manifest still reading correctly. `translate-page` shipped that way for
+  // several releases: G was Chrome's "find previous", L was replaced with
+  // afterwards and turned out to be taken as well, and nothing anywhere said
+  // so. There is no way to see this except to ask.
+  const commands = await worker.evaluate(
+    async () => await chrome.commands.getAll(),
+  );
+  const unbound = commands
+    .filter((command) => command.name !== '_execute_action' && !command.shortcut)
+    .map((command) => command.name);
+  console.log(
+    `shortcuts: ${commands
+      .filter((c) => c.name !== '_execute_action')
+      .map((c) => `${c.name}=${c.shortcut || 'UNBOUND'}`)
+      .join('  ')}`,
+  );
+  check(
+    unbound.length === 0,
+    `Chrome refused to bind a shortcut: ${unbound.join(', ')}`,
   );
 
   const page = await browser.newPage();
@@ -698,6 +722,12 @@ try {
   const beforeInput = await page.evaluate(
     () => document.getElementById('compose').value,
   );
+  // The message, not the key. An extension command is a browser-level
+  // accelerator, and a key synthesised through CDP is a page event — it never
+  // reaches `chrome.commands`, so driving the shortcut here is not something
+  // this harness can do at all. What it *can* do is ask Chrome whether the key
+  // is bound, which is the half that was actually broken and is asserted at the
+  // top of this file.
   await worker.evaluate(async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id !== undefined)
@@ -794,6 +824,41 @@ try {
   check(
     /[一-鿿]/.test(pdfDone.sample),
     `what came back is not in the target language (${pdfDone.sample})`,
+  );
+
+  // A translation nobody can copy out is half a feature, and this block lives
+  // inside the viewer's own container rather than in a document of its own.
+  // Dragged with the mouse, not selected through the DOM. Selecting a range
+  // programmatically proves the text is selectable in principle; it says
+  // nothing about whether a drag over this block is intercepted by the viewer
+  // underneath it, which is what a reader actually does.
+  const dragBox = await pdf.evaluate(() => {
+    const paragraph = document.querySelector('.oit-pdf-translation p');
+    if (!paragraph) return null;
+    paragraph.scrollIntoView({ block: 'center' });
+    const rect = paragraph.getBoundingClientRect();
+    return {
+      x1: rect.left + 4,
+      y1: rect.top + rect.height / 2,
+      x2: rect.right - 4,
+      y2: rect.top + rect.height / 2,
+    };
+  });
+  await pdf.evaluate(() => {
+    window.getSelection()?.removeAllRanges();
+  });
+  await pdf.mouse.move(dragBox.x1, dragBox.y1);
+  await pdf.mouse.down();
+  await pdf.mouse.move(dragBox.x2, dragBox.y2, { steps: 12 });
+  await pdf.mouse.up();
+  await sleep(400);
+  const dragged = await pdf.evaluate(() =>
+    (window.getSelection()?.toString() ?? '').trim(),
+  );
+  console.log(`  dragged out with the mouse: ${JSON.stringify(dragged.slice(0, 40))}`);
+  check(
+    dragged.length > 5,
+    'dragging across the translation selected nothing, so it cannot be copied',
   );
 
   // The same control, the same second meaning it has everywhere else.

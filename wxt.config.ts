@@ -51,10 +51,15 @@ export default defineConfig({
       // `translate-selection` reported `Ctrl+Shift+Y`, so the documented
       // keyboard route to whole-page translation did nothing at all. Probed
       // against a real Chrome: G dropped, U/L/K each assigned.
+      // Not L either. L was chosen when G turned out to be Chrome's "find
+      // previous", and `chrome.commands.getAll()` now reports L unbound too —
+      // so whole-page translation has had no working shortcut for several
+      // releases while the manifest looked correct. A manifest test cannot see
+      // this; only asking Chrome can, which `e2e:page` now does.
       'translate-page': {
         suggested_key: {
-          default: 'Ctrl+Shift+L',
-          mac: 'Command+Shift+L',
+          default: 'Ctrl+Shift+U',
+          mac: 'Command+Shift+U',
         },
         description: 'Translate the whole page (again to undo)',
       },
