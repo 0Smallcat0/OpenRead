@@ -463,6 +463,66 @@ describe('togglePageTranslation', () => {
     expect(document.getElementById(PROGRESS_ID)).toBeNull();
   });
 
+  it('keeps what the reader had when they press Stop during the wait', async () => {
+    await togglePageTranslation(document, deps());
+
+    const run = togglePageTranslation(
+      document,
+      deps({
+        targetLang: 'Japanese',
+        // Never resolves: the pack download the reader is waiting through.
+        translate: () => new Promise<string>(() => undefined),
+      }),
+    );
+    await Promise.resolve();
+    document
+      .querySelector<HTMLButtonElement>('#oit-page-progress button')
+      ?.click();
+
+    expect(await run).toBeNull();
+    // Not erased. Stopping a wait is not a request to lose what was on screen.
+    const kept = Array.from(
+      document.querySelectorAll<HTMLElement>(`.${BILINGUAL_CLASS}`),
+    );
+    expect(kept).toHaveLength(3);
+    expect(kept.every((n) => n.lang === 'zh-Hant')).toBe(true);
+  });
+
+  it('keeps the old translation up while the new engine is still warming', async () => {
+    await togglePageTranslation(document, deps());
+    expect(isPageTranslated(document)).toBe(true);
+
+    let release: (value: string) => void = () => undefined;
+    const pending = new Promise<string>((resolve) => {
+      release = resolve;
+    });
+    let first = true;
+    const run = togglePageTranslation(
+      document,
+      deps({
+        targetLang: 'Japanese',
+        translate: (text) => {
+          if (!first) return Promise.resolve(`[ja] ${text}`);
+          first = false;
+          return pending;
+        },
+      }),
+    );
+    await Promise.resolve();
+
+    // The pack is still downloading. What the reader had must still be there.
+    const during = document.querySelectorAll(`.${BILINGUAL_CLASS}`);
+    expect(during).toHaveLength(3);
+    expect(during[0]?.getAttribute('lang')).toBe('zh-Hant');
+
+    release('warm');
+    await run;
+    const after = Array.from(
+      document.querySelectorAll<HTMLElement>(`.${BILINGUAL_CLASS}`),
+    );
+    expect(after.every((n) => n.lang === 'ja')).toBe(true);
+  });
+
   it('retranslates in one press after the target language changes', async () => {
     // Reported from use: translate a page, switch language in the popup, press
     // translate — and the page was erased instead. A second press then did the
@@ -486,7 +546,12 @@ describe('togglePageTranslation', () => {
     );
 
     expect(result?.translated).toBe(3);
-    expect(seen).toHaveLength(3);
+    // Four calls for three blocks. The extra one comes first and its result is
+    // thrown away: it is what makes Chrome fetch the language pack for the new
+    // pair *before* the old translation is taken off the page. Clearing first
+    // left the reader looking at a bare page for up to two minutes, which is
+    // what the download costs, and read as the extension hanging.
+    expect(seen).toHaveLength(4);
     expect(isPageTranslated(document)).toBe(true);
     const nodes = Array.from(
       document.querySelectorAll<HTMLElement>(`.${BILINGUAL_CLASS}`),
