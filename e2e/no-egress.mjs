@@ -239,8 +239,39 @@ try {
     if (!workerTarget) await sleep(500);
   }
   if (!workerTarget) throw new Error('the service worker never appeared');
-  await watch(workerTarget);
   const worker = await workerTarget.worker();
+
+  // The language pack, before anything is being watched.
+  //
+  // Two reasons, and the order matters for both. A profile that has never
+  // translated makes Chrome fetch the en -> zh-Hant model on the first
+  // request, and a run that spends its budget waiting for that reports
+  // "nothing was translated, so nothing was proven" — which is this file
+  // saying red about the machine it is on, in the one harness whose whole job
+  // is to be believed. And the fetch is the browser process's own, not this
+  // extension's, so doing it before the Network listeners attach keeps the
+  // recorded requests to exactly what the claim is about rather than adding
+  // one that has to be explained away.
+  //
+  // In the worker on purpose: `Translator.create()` throws NotAllowedError
+  // without a user gesture in a page while the pack is still `downloadable`.
+  const packStart = Date.now();
+  const packed = await worker.evaluate(async () => {
+    try {
+      const translator = await Translator.create({
+        sourceLanguage: 'en',
+        targetLanguage: 'zh-Hant',
+      });
+      return await translator.translate('Warming the language pack.');
+    } catch (error) {
+      return `FAILED: ${error.message}`;
+    }
+  });
+  console.log(
+    `pack:     ${packed} (${Math.round((Date.now() - packStart) / 1000)} s)`,
+  );
+
+  await watch(workerTarget);
 
   // The engine under test, set explicitly rather than relied on as the
   // default: a defaults change should not silently turn this into a test of
