@@ -204,6 +204,21 @@ try {
     console.log(
       `pack: ${warmed} (${Math.round((Date.now() - warmStart) / 1000)} s)`,
     );
+
+    // The detector has a model of its own, downloaded separately, and every
+    // request that omits a source language waits on it — subtitles, the text
+    // box, a PDF. On a fresh profile that wait is minutes, in silence.
+    const detector = await worker.evaluate(async () => {
+      try {
+        if (!('LanguageDetector' in self)) return 'no LanguageDetector';
+        const d = await LanguageDetector.create();
+        const [best] = await d.detect('Warming the language detector.');
+        return best?.detectedLanguage ?? 'no answer';
+      } catch (error) {
+        return `FAILED: ${error.message}`;
+      }
+    });
+    console.log(`detector: ${detector}`);
   }
 
   const page = await browser.newPage();

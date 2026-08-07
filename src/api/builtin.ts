@@ -123,16 +123,57 @@ export function isBuiltinSupported(): boolean {
  * translates from a language the text is not in, which produces confident
  * nonsense. Declining sends the request to Ollama instead.
  */
+/**
+ * The detector, created once and shared.
+ *
+ * Chrome downloads a model for this one too, separately from any translation
+ * pack, and until it arrives every `create()` waits. Per call that meant every
+ * subtitle cue, every text box and every PDF paragraph queuing behind its own
+ * copy of the same download — the mistake `sharedTranslator` below exists to
+ * document, repeated on the other API.
+ *
+ * Held as the promise rather than the instance so concurrent callers wait on
+ * one download instead of starting several.
+ */
+let sharedDetector: Promise<DetectorInstance> | null = null;
+
 export async function detectLanguage(
   text: string,
   signal?: AbortSignal,
+  /**
+   * Chrome fetching the detector's model, 0-1.
+   *
+   * Reported for the same reason the translator reports its own: on a profile
+   * that has never used it, `LanguageDetector.availability()` answers
+   * `downloadable` and `create()` does not resolve for minutes. Every caller
+   * that omits a source language — subtitles, the text box, a PDF — waited on
+   * that in complete silence, which looked like the whole extension being
+   * dead, because from the outside it was.
+   */
+  onDownloadProgress?: (loaded: number) => void,
 ): Promise<string | null> {
   const detectors = detectorFactory();
   if (!detectors) return null;
   try {
-    const detector = await detectors.create({ signal });
+    sharedDetector ??= detectors.create({
+      monitor: onDownloadProgress
+        ? (m: DownloadMonitor) => {
+            m.addEventListener('downloadprogress', (event) => {
+              onDownloadProgress(event.loaded);
+            });
+          }
+        : undefined,
+    });
+    let detector: DetectorInstance;
+    try {
+      detector = await untilAborted(sharedDetector, signal);
+    } catch (error) {
+      // A failed create must not be cached: the next caller would await a
+      // rejected promise forever rather than trying again.
+      sharedDetector = null;
+      throw error;
+    }
     const results = await detector.detect(text.slice(0, 1000));
-    detector.destroy?.();
     const best = results[0];
     // A last resort, so the bar is low. It only runs when the page declined to
     // say what language it is in, and on the short fragments that make a
@@ -200,9 +241,10 @@ function sharedTranslator(
   return created;
 }
 
-/** Forget every cached translator. Exported for tests. */
+/** Forget every cached translator and the shared detector. For tests. */
 export function resetTranslatorCache(): void {
   translatorCache.clear();
+  sharedDetector = null;
 }
 
 export type PackAvailability =
@@ -375,7 +417,8 @@ export async function translateBuiltin({
 
   // The page's own declaration first; detection only when it made none.
   const sourceLanguage =
-    normaliseLang(sourceLang) ?? (await detectLanguage(text, signal));
+    normaliseLang(sourceLang) ??
+    (await detectLanguage(text, signal, onDownloadProgress));
   if (!sourceLanguage) {
     throw new BuiltinUnavailableError(
       'Could not tell what language this is written in.',
