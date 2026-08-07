@@ -247,6 +247,11 @@ describe('mountSubtitleTranslate', () => {
     Object.defineProperty(video, 'paused', { value: false });
     mount({ notify: (m: string) => said.push(m) });
     video.dispatchEvent(new Event('play', { bubbles: true }));
+    // The translation has to land before the timer is allowed to fire: what
+    // silences the notice is a translation appearing on screen, not a cue
+    // existing. YouTube exposes a text track even with its captions switched
+    // off, so "we saw a cue" said nothing about what the reader could see.
+    await flush();
     vi.advanceTimersByTime(9000);
     vi.useRealTimers();
 
