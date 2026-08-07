@@ -41,7 +41,10 @@ interface Registered {
   onConnect: (port: FakePort) => void;
   onMessage: (
     request: unknown,
-    sender: { tab?: { id?: number } },
+    // `url` matters as much as `id` now: the PDF route reads the address from
+    // the sender rather than the message, so a stub without one cannot tell a
+    // legitimate route from a page naming somebody else's tab.
+    sender: { tab?: { id?: number; url?: string }; url?: string },
     sendResponse: (response: unknown) => void,
   ) => unknown;
 }

@@ -158,6 +158,19 @@ console.log(
   `pack:     ${packed} (${Math.round((Date.now() - packStart) / 1000)} s)`,
 );
 
+// Is the extension actually alive? One loaded over CDP can vanish — a
+// `chrome.runtime.reload()` uninstalls it outright, since Chrome cannot
+// re-install what it was handed this way — and every feature then looks broken
+// in the same way. That is an expensive hour, and this line is the whole cure.
+const alive = await worker
+  .evaluate(async () => chrome.runtime.getManifest().version)
+  .catch(() => null);
+if (!alive) {
+  console.error('The extension is not responding. Nothing below would work.');
+  process.exit(1);
+}
+console.log(`version:  ${alive}`);
+
 console.log('\ntabs:');
 for (const [index, tab] of TABS.entries()) {
   const page =
