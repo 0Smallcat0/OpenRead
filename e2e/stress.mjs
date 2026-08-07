@@ -18,6 +18,9 @@
  *  S14 a caption is repainted far more often than it changes, a translation
  *      arriving after its cue has gone is worse than none, and a page's
  *      declared language is not the language its subtitles are in
+ *  S15 the `<video>` + `<track>` half of subtitles had never run in a browser
+ *      at all: jsdom implements no media element, so `activeCues`, the overlay
+ *      and its fullscreen re-parenting shipped never having executed
  *
  * Not in CI, for the same reason as the other harnesses: it needs a real Chrome
  * and it takes a couple of minutes. Run it after anything that touches the
@@ -810,8 +813,167 @@ try {
     subServer.close();
     await configure({ translateSubtitles: false });
   }
+
+  // ---------------------------------------------------------------- S15
+  //
+  // The other half of subtitles: a plain `<video>` with a real text track,
+  // which is the standard and the path S14 does not touch. Nothing in this
+  // path had ever run in a browser — jsdom implements no media element, so
+  // `activeCues`, `cuechange`, the overlay and its fullscreen re-parenting
+  // were shipped never having executed.
+  //
+  // The timeline comes from `canvas.captureStream()` rather than a media file
+  // committed to the repository. Measured against both options first: the
+  // captured stream advances `currentTime`, fires `cuechange` and populates
+  // `activeCues`, which is everything this needs, and costs no binary in git.
+  console.log('\nS15 — a <video> with a real text track');
+  const TRACK_PORT = 9340;
+  const trackServer = createServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    response.end(
+      // `zh-Hant-TW` again, for the same reason S14 carries it: the page's
+      // declared language must never be taken as the subtitle's.
+      '<!doctype html><html lang="zh-Hant-TW"><head><meta charset="utf-8">' +
+        '<title>Track</title></head><body>' +
+        '<video id="clip" muted style="width:640px;height:360px"></video>' +
+        '</body></html>',
+    );
+  });
+  await new Promise((resolve) =>
+    trackServer.listen(TRACK_PORT, '127.0.0.1', resolve),
+  );
+
+  try {
+    await configure({
+      translateSubtitles: true,
+      targetLang: 'Traditional Chinese',
+    });
+    await page.goto(`http://127.0.0.1:${TRACK_PORT}/`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await sleep(1500);
+
+    await page.evaluate(() => {
+      const video = document.getElementById('clip');
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 64;
+      const context = canvas.getContext('2d');
+      const paint = () => {
+        context.fillStyle = '#204060';
+        context.fillRect(0, 0, 64, 64);
+        requestAnimationFrame(paint);
+      };
+      paint();
+      video.srcObject = canvas.captureStream(30);
+      void video.play().catch(() => undefined);
+      // Added after the element exists, which is the case `addtrack` is for:
+      // a player that fetches its captions once the video is already there.
+      const track = video.addTextTrack('subtitles', 'en', 'en');
+      track.mode = 'showing';
+      track.addCue(
+        new VTTCue(0.3, 4, 'The first line of the clip, spoken clearly.'),
+      );
+      track.addCue(
+        new VTTCue(4, 9, 'A second line, quite different from the first.'),
+      );
+    });
+
+    const overlayText = () =>
+      page.evaluate(
+        () =>
+          document.querySelector('.oit-subtitle-overlay .oit-subtitle')
+            ?.textContent ?? '',
+      );
+
+    let firstTrack = '';
+    for (let waited = 0; waited < 30000; waited += 250) {
+      firstTrack = await overlayText();
+      if (firstTrack) break;
+      await sleep(250);
+    }
+    observe('S15 first cue', firstTrack || '(none)');
+    check(firstTrack !== '', 'a real text track produced no translation');
+    check(
+      !/[A-Za-z]{4,}/.test(firstTrack),
+      `the cue came back in English (${firstTrack})`,
+    );
+
+    const placed = await page.evaluate(() => {
+      const overlay = document.querySelector('.oit-subtitle-overlay');
+      return {
+        parent: overlay?.parentElement?.tagName ?? null,
+        top: overlay?.style.top ?? '',
+        width: overlay?.style.width ?? '',
+        visibility: overlay?.style.visibility ?? '',
+      };
+    });
+    observe('S15 overlay', JSON.stringify(placed));
+    // The overlay is positioned against the video's box, so an unset `top`
+    // means it is sitting wherever the document put it.
+    check(placed.top !== '', 'the overlay was never positioned over the video');
+    check(
+      placed.visibility !== 'hidden',
+      'the overlay stayed hidden while showing a translation',
+    );
+
+    let secondTrack = firstTrack;
+    for (let waited = 0; waited < 30000; waited += 250) {
+      secondTrack = await overlayText();
+      if (secondTrack && secondTrack !== firstTrack) break;
+      await sleep(250);
+    }
+    observe('S15 second cue', secondTrack || '(none)');
+    check(
+      secondTrack !== firstTrack,
+      'the track moved to its second cue and the translation did not',
+    );
+
+    // Fullscreen re-parents rather than repositions: the browser renders the
+    // fullscreen element's subtree and nothing else, so an overlay left on
+    // `body` is invisible exactly when someone is most likely to be watching.
+    // Needs transient activation, which `page.evaluate` cannot grant.
+    const cdpPage = await page.createCDPSession();
+    await cdpPage.send('Runtime.evaluate', {
+      expression: "document.getElementById('clip').requestFullscreen()",
+      awaitPromise: true,
+      userGesture: true,
+    });
+    await sleep(1500);
+    const inFullscreen = await page.evaluate(() => {
+      const overlay = document.querySelector('.oit-subtitle-overlay');
+      return {
+        fullscreen: document.fullscreenElement?.id ?? null,
+        parentIsFullscreen:
+          overlay?.parentElement === document.fullscreenElement,
+      };
+    });
+    observe('S15 fullscreen', JSON.stringify(inFullscreen));
+    check(
+      inFullscreen.fullscreen === 'clip',
+      'the video never entered fullscreen, so the re-parenting was not tested',
+    );
+    check(
+      inFullscreen.parentIsFullscreen,
+      'in fullscreen the overlay stayed outside the fullscreen element, where nothing renders',
+    );
+    await cdpPage.send('Runtime.evaluate', {
+      expression: 'document.exitFullscreen()',
+      awaitPromise: true,
+      userGesture: true,
+    });
+  } finally {
+    trackServer.close();
+    await configure({ translateSubtitles: false });
+  }
 } catch (error) {
   console.error(`\nharness failed: ${error?.stack ?? String(error)}`);
+  // Counted, not merely printed. Without this a throw in an early scenario
+  // skipped every scenario after it and the run still ended in PASS with exit
+  // 0 — a harness reporting success for work it did not do, which is the
+  // failure mode most of the scenarios above exist to catch elsewhere.
+  failures.push(
+    `the harness threw before finishing: ${String(error?.message ?? error)}`,
+  );
 } finally {
   await browser?.disconnect();
   chrome.kill();
