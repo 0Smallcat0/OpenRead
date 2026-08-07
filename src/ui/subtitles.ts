@@ -213,6 +213,7 @@ function attachRendered(
   selector: string,
   deps: SubtitleDeps,
   onCue: () => void,
+  onTranslation: () => void,
 ): Attachment {
   const doc = container.ownerDocument;
   ensureStyle(doc);
@@ -220,7 +221,7 @@ function attachRendered(
 
   const translator = new CueTranslator(deps, (translation) => {
     line.textContent = translation;
-    if (translation) onCue();
+    if (translation) onTranslation();
   });
 
   const read = (): void => {
@@ -228,6 +229,7 @@ function attachRendered(
       container.querySelectorAll<HTMLElement>(selector),
     );
     const cue = segments.map((s) => s.textContent ?? '').join(' ');
+    if (isTranslatableCue(cue)) onCue();
     translator.offer(cue);
   };
 
@@ -260,6 +262,7 @@ function attachTextTrack(
   video: HTMLVideoElement,
   deps: SubtitleDeps,
   onCue: () => void,
+  onTranslation: () => void,
 ): Attachment {
   const doc = video.ownerDocument;
   ensureStyle(doc);
@@ -293,7 +296,7 @@ function attachTextTrack(
     overlay.style.visibility = translation ? 'visible' : 'hidden';
     if (translation) {
       place();
-      onCue();
+      onTranslation();
     }
   });
 
@@ -306,7 +309,9 @@ function attachTextTrack(
         if (text) texts.push(text);
       }
     }
-    translator.offer(texts.join(' '));
+    const cue = texts.join(' ');
+    if (isTranslatableCue(cue)) onCue();
+    translator.offer(cue);
   };
 
   const tracks = Array.from(video.textTracks);
@@ -378,7 +383,10 @@ export function mountSubtitleTranslate(
         doc.querySelectorAll<HTMLElement>(container),
       )) {
         if (attached.has(host)) continue;
-        attached.set(host, attachRendered(host, line, deps, seeCue));
+        attached.set(
+          host,
+          attachRendered(host, line, deps, seeCue, seeTranslation),
+        );
       }
     }
     // A player that draws its own captions is already covered, and attaching
@@ -397,30 +405,43 @@ export function mountSubtitleTranslate(
         continue;
       }
       if (attached.has(video)) continue;
-      attached.set(video, attachTextTrack(video, deps, seeCue));
+      attached.set(video, attachTextTrack(video, deps, seeCue, seeTranslation));
     }
     for (const element of Array.from(attached.keys())) {
       if (!element.isConnected) detach(element);
     }
   };
 
-  // One video playing for a while with nothing to translate is the shape of
-  // "captions are off". Said once, and only if a cue never arrives — a video
-  // whose captions are on answers this before the timer fires.
+  // A video playing with nothing appearing has two different causes, and
+  // telling a reader the wrong one is worse than telling them nothing.
+  //
+  // No cue at all: the player's captions are off, which is the prerequisite
+  // this feature cannot satisfy for itself. A cue that produced no
+  // translation: the captions are already in the language being translated
+  // into — what a channel with its own Chinese subtitle track looks like to a
+  // reader asking for Chinese, and the first version of this notice would
+  // have told them to switch on captions that were already on.
   let sawCue = false;
+  let sawTranslation = false;
   let told = false;
   const seeCue = (): void => {
     sawCue = true;
+  };
+  const seeTranslation = (): void => {
+    sawCue = true;
+    sawTranslation = true;
   };
   const watchForSilence = (): void => {
     if (!deps.enabled || !deps.notify || told) return;
     const video = doc.querySelector('video');
     if (!video || video.paused) return;
     doc.defaultView?.setTimeout(() => {
-      if (sawCue || told || !deps.enabled) return;
+      if (sawTranslation || told || !deps.enabled) return;
       told = true;
       deps.notify?.(
-        'OpenRead has nothing to translate here — turn the video’s own captions on (CC).',
+        sawCue
+          ? `These captions are already in ${deps.targetLang}, so there is nothing to translate.`
+          : 'OpenRead has nothing to translate here — turn the video’s own captions on (CC).',
       );
     }, NO_CAPTIONS_AFTER_MS);
   };
