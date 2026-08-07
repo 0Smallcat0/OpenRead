@@ -1,14 +1,21 @@
 # Chrome Web Store listing copy
 
-Paste-ready copy for the store listing, current as of **2.11.0**. Two languages
+Paste-ready copy for the store listing, current as of **2.18.1**. Two languages
 are provided; pick one as the listing language (zh-TW recommended for the
 primary audience) and add the other via the dashboard's localized-listing
 option if desired.
 
-> Rewritten for 2.11.0. The previous copy described an Ollama-only product and
-> told the reader to set `OLLAMA_ORIGINS` before starting the server — a step
-> 2.5.0 removed, and a requirement 2.7.0 removed, since the default engine is
-> Chrome's own on-device translator and needs nothing installed.
+> Updated for 2.18.1. Seven features shipped between 2.11.0 and here that the
+> copy did not mention — a whole PDF rather than a selection inside one,
+> translating the box you are typing in, one paragraph by pointing at it,
+> thirty-nine target languages instead of eight, three settings for how a
+> translation looks, and translating a page automatically. A listing that
+> describes a smaller product than the one it links to is a listing that loses
+> the install.
+>
+> The earlier rewrite for 2.11.0 replaced copy describing an Ollama-only
+> product that told the reader to set `OLLAMA_ORIGINS` before starting a
+> server — a step 2.5.0 removed and a requirement 2.7.0 removed.
 
 ## Name (≤ 45 chars)
 
@@ -36,15 +43,25 @@ API 金鑰、不需要帳號。第一次翻某個語言對時，Chrome 會下載
 適合不能上傳雲端的文件：未發表的論文、合約、內部資料。
 
 特色
-• 整頁雙語翻譯：譯文附在原文下方而非取代原文，看起來怪的句子可以立刻對照原文
-• 網頁與 PDF 通用：內建 PDF.js 檢視器，.pdf 連結自動導入，選字翻譯用法完全相同
+• 整頁雙語翻譯：譯文附在原文下方而非取代原文，看起來怪的句子可以立刻對照原文。
+  先翻你看得到的部分，捲動時自動跟上，長文或動態載入的頁面按一次就夠
+• 整篇 PDF：每一頁的譯文放在該頁下方，版面、雙欄、圖表、公式一律不動
+• 一段就好：按住 Alt 指向某一段，只翻那一段——不用拖曳選取，也不改寫整頁
+• 翻譯你正在打的字：在任何輸入框按右鍵（或 Ctrl+Shift+K），內容換成譯文，
+  Ctrl+Z 可以還原
+• 自動翻譯：可設定成「只翻外語頁面」或「每頁都翻」，預設關閉，任何網站都能
+  單獨排除
+• 三十九種目標語言，每一種都對真實 Chrome 驗證過支援
+• 外觀可調：雙語或只顯示譯文、四種標記樣式、三種字級，改了立即生效不用重翻
 • 台灣用語在地化：OpenCC s2twp 詞組級簡繁轉換（界面→介面、公里不會變公裡），
   另有一層針對內建引擎的台灣詞彙修正（用戶→使用者、運行→執行）
 • 同語言短路：內容已是目標語言時直接跳過翻譯，零延遲零成本
 • 一鍵存到 Obsidian：翻譯結果連同原文與 YAML frontmatter 寫成筆記
 • 想要更強的可以換引擎：接本機 Ollama 用大型語言模型翻譯，它會參考頁面上下文、
   可以自己選模型，並且解鎖擷取筆記的自動摘要與標籤
-• 鍵盤可用：Ctrl+Shift+Y 翻譯選取範圍，Esc 關閉面板，面板本身是有標記的對話框
+• 鍵盤可用：Ctrl+Shift+Y 翻譯選取範圍、Ctrl+Shift+U 翻譯整頁、Ctrl+Shift+K
+  翻譯輸入框，Esc 關閉面板，面板本身是有標記的對話框。每個功能都另有右鍵入口，
+  快捷鍵被其他程式佔用時仍然可用
 
 需求
 • Chrome 138 以上（內建翻譯模型由 Chrome 提供）
@@ -75,7 +92,22 @@ internal material.
 
 Features
 • Whole-page bilingual translation — the translation is appended under the
-  original, never over it, so a sentence that looks wrong can be checked
+  original, never over it, so a sentence that looks wrong can be checked. What
+  you can see is translated first and the page keeps up as you scroll, so a
+  long article or an endless feed needs one press rather than one per screen
+• A whole PDF — each page's translation is placed under the page itself, so
+  the layout, the columns, the figures and the equations stay as the author
+  set them
+• One paragraph — hold Alt and point at it. No drag, and the rest of the page
+  is left alone
+• The box you are typing in — right-click in any text field (or Ctrl+Shift+K)
+  and what you wrote is replaced with its translation. Ctrl+Z takes it back
+• Automatic translation — optional, off by default: translate pages in another
+  language as they load, with any site excludable in one click
+• Thirty-nine target languages, every one verified against a real Chrome
+• Three settings for how it looks — the original beside the translation or the
+  translation alone, four ways of marking it, three sizes, all applying to a
+  page you are already reading without translating it again
 • Web pages and PDFs alike — .pdf navigations open in a bundled PDF.js
   viewer with the same select-to-translate UI
 • Taiwan-convention Chinese — OpenCC s2twp phrase-level conversion, plus a
@@ -87,8 +119,10 @@ Features
 • A stronger engine when you want one: point it at a local Ollama server to
   translate with an LLM that reads the surrounding page, choose your own
   model, and unlock automatic titles, summaries and tags on captures
-• Keyboard-workable: Ctrl+Shift+Y translates the selection, Escape closes
-  the panel, and the panel is a labelled dialog with a live region
+• Keyboard-workable: Ctrl+Shift+Y translates the selection, Ctrl+Shift+U the
+  page, Ctrl+Shift+K the text box you are in; Escape closes the panel, and the
+  panel is a labelled dialog with a live region. Every one of these also has a
+  right-click entry, so a shortcut another program has taken costs nothing
 
 Requirements
 • Chrome 138 or later (the built-in translation model ships with Chrome)
@@ -110,17 +144,24 @@ Engineering & evaluation: https://github.com/0Smallcat0/OpenRead/blob/main/docs/
   "Store icon" is a required field of its own — the icon inside the package is
   what Chrome shows in the toolbar, not what the store listing shows.
 - Screenshots (1280×800, in [`screenshots/`](screenshots/)), re-shot against
-  2.11.0 on the default built-in engine:
+  2.18.1 on the default built-in engine:
   1. `screenshot-1-translate-web.png` — whole-page bilingual translation on a
      Wikipedia article, with the progress badge showing the finished count.
      This is the one that appears in search results, so it leads with the
      headline feature.
   2. `screenshot-2-select-icon.png` — one paragraph selected, the translation
      panel, and its Save-to-Obsidian and Copy actions.
-  3. `screenshot-3-pdf.png` — the same selection UI inside the bundled PDF.js
-     viewer, on a paper.
-  4. `screenshot-4-popup.png` — the settings popup, showing the built-in
-     engine selected and no server fields to fill in.
+  3. `screenshot-3-pdf.png` — a whole PDF translated in the bundled viewer,
+     framed on the seam so both halves are visible: the page as the author set
+     it, and that page's translation underneath. It used to show the selection
+     UI inside the viewer, which is the same gesture as screenshot two — two of
+     four frames on one gesture describes a smaller product than this one is.
+     Shot at 50% zoom, because the fixture page carries its text at the top and
+     at the viewer's default scale the seam sits below a hand's width of blank
+     paper.
+  4. `screenshot-4-popup.png` — the settings popup: the built-in engine with no
+     server fields to fill in, the language-pack line, automatic translation,
+     and the appearance settings.
 
   The store rejects a screenshot that carries an alpha channel — it wants JPEG
   or 24-bit PNG. All four are 24-bit RGB, which is what `pnpm shoot` produces;
@@ -135,19 +176,23 @@ Engineering & evaluation: https://github.com/0Smallcat0/OpenRead/blob/main/docs/
 
 ## Privacy tab answers
 
-- **Single purpose:** Translate web page and PDF content — a user selection or
-  the whole page — on the user's own machine, using Chrome's built-in
-  on-device translator or a local LLM server the user runs, with optional
-  saving of the result as a note.
+- **Single purpose:** Translate what the user is reading or writing — a
+  selection, a paragraph, a whole page, a whole PDF, or the text field they are
+  typing in — on the user's own machine, using Chrome's built-in on-device
+  translator or a local LLM server the user runs, with optional saving of the
+  result as a note.
 - **Permission justifications:**
   - `storage` — persist user settings (engine, Ollama server URL, model,
-    target language, Obsidian vault/folder, enrichment toggle).
+    target language, the language typed text is translated into, automatic
+    translation and its per-site exceptions, appearance, Obsidian vault/folder,
+    enrichment toggle).
   - `activeTab` — interact with the currently active tab when the user invokes
     the selection UI, asks for a whole-page translation, or opens a local PDF
     in the bundled viewer.
-  - `contextMenus` — add the two right-click entries the features are invoked
-    from ("Translate selection with OpenRead", "Translate this page with
-    OpenRead"). It reads no page content.
+  - `contextMenus` — add the three right-click entries the features are
+    invoked from ("Translate selection with OpenRead", "Translate this page
+    with OpenRead", "Translate what you typed with OpenRead"). It reads no page
+    content.
   - `declarativeNetRequest` — strip the `Origin` header from this extension's
     own requests to the user-configured Ollama server. Ollama rejects requests
     whose origin it does not recognise, and an extension's origin is never on
