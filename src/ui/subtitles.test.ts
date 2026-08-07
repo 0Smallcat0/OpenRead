@@ -131,9 +131,10 @@ describe('mountSubtitleTranslate', () => {
     await flush();
 
     expect(translate).toHaveBeenCalledTimes(1);
-    expect(container.querySelector(`.${SUBTITLE_CLASS}`)?.textContent).toBe(
-      '[One line, painted twice.]',
-    );
+    // The line lives in an overlay of ours, not inside the player's box: two
+    // renderers arguing over one node is what made the caption shudder.
+    expect(container.querySelector(`.${SUBTITLE_CLASS}`)).toBeNull();
+    expect(line()).toBe('[One line, painted twice.]');
   });
 
   it('leaves a sound marker alone', async () => {

@@ -260,7 +260,20 @@ interface Attachment {
   disconnect: () => void;
 }
 
-/** A player that draws captions into the DOM: append inside its container. */
+/**
+ * A player that draws its own captions: read them, draw next to them.
+ *
+ * Nothing is inserted into the player's tree. The first version appended a
+ * line inside the caption box and lifted the box with a `transform`, and the
+ * player fought back — it rebuilds that box and rewrites its position
+ * constantly, so the caption visibly shuddered. Reported as the captions
+ * twitching, which is exactly what two renderers arguing over one node looks
+ * like.
+ *
+ * So the caption is only ever read. The translation is drawn in an overlay of
+ * ours, positioned against the caption's own rectangle, and the player is left
+ * alone to do whatever it likes.
+ */
 function attachRendered(
   container: HTMLElement,
   { line: selector, anchor }: RenderedCaptions,
@@ -269,51 +282,62 @@ function attachRendered(
   onTranslation: () => void,
 ): Attachment {
   const doc = container.ownerDocument;
+  const view = doc.defaultView;
   ensureStyle(doc);
-  const line = lineFor(container, deps.targetLang);
+
+  const overlay = doc.createElement('div');
+  overlay.className = `${SUBTITLE_CLASS}-overlay`;
+  overlay.style.visibility = 'hidden';
+  const line = lineFor(overlay, deps.targetLang);
 
   /**
-   * Keep the line under the caption, wherever the player has just put it.
+   * Put the overlay under the caption, wherever the player has just put it.
    *
-   * Done on every write rather than once at attach: the player rebuilds its
-   * caption box, and a line parented to the box it built two seconds ago is a
-   * line in a detached node.
+   * In fullscreen the browser renders that element's subtree and nothing else,
+   * so an overlay left on `body` disappears exactly when someone is watching.
    */
   const place = (): void => {
-    const host = container.querySelector<HTMLElement>(anchor) ?? container;
-    if (line.parentElement !== host) host.appendChild(line);
-    else if (line.nextElementSibling) host.appendChild(line);
+    const host = doc.fullscreenElement ?? doc.body;
+    if (overlay.parentElement !== host) host.appendChild(overlay);
 
-    // Sized off the caption itself, not inherited. The box this sits in sets
-    // no font size — the segments do — so `0.92em` resolved against the
-    // player's chrome and produced 10px under a 31px caption. Reading it from
-    // the segment also means the reader's own caption-size setting carries
-    // over for free.
-    const segment = container.querySelector<HTMLElement>(selector);
-    if (segment) {
-      const view = container.ownerDocument.defaultView;
-      const size = view
-        ? parseFloat(view.getComputedStyle(segment).fontSize)
-        : 0;
-      if (size > 0)
-        line.style.fontSize = `${String(Math.round(size * 0.92))}px`;
-    }
+    const caption =
+      container.querySelector<HTMLElement>(anchor) ??
+      container.querySelector<HTMLElement>(selector);
+    if (!caption || !view) return;
+    const box = caption.getBoundingClientRect();
+    if (box.width === 0) return;
 
-    // Lift the caption box by exactly the height of the line just added.
-    //
-    // The player positions this box a fixed distance from the bottom of the
-    // video, sized for the caption alone. A second line grows it downward and
-    // out of the frame: measured at y=656 with the video ending at 663, so
-    // seven pixels of a thirty-pixel line were on screen. `transform` rather
-    // than `top`, because `top` is what the player writes and rewrites.
-    const lift = line.textContent ? line.offsetHeight : 0;
-    host.style.transform = lift > 0 ? `translateY(-${String(lift)}px)` : '';
+    // Sized off the caption, not inherited: the box it sits in sets no font
+    // size, so a relative size resolved against the player's chrome and came
+    // out at 10px under a 26px caption. Reading it here also carries the
+    // reader's own caption-size setting for free.
+    const size = parseFloat(view.getComputedStyle(caption).fontSize);
+    if (size > 0) line.style.fontSize = `${String(Math.round(size * 0.92))}px`;
+
+    const hostBox =
+      host === doc.body
+        ? { top: -view.scrollY, left: -view.scrollX }
+        : host.getBoundingClientRect();
+    // Clamped into the video: the player puts its caption close to the bottom
+    // edge, and a second line below it would otherwise be drawn off the
+    // picture — measured at y=656 against a video ending at 663.
+    const frame = container.getBoundingClientRect();
+    const top = Math.min(
+      box.bottom + 2,
+      frame.bottom - overlay.offsetHeight - 4,
+    );
+    overlay.style.top = `${String(top - hostBox.top)}px`;
+    overlay.style.left = `${String(box.left - hostBox.left + box.width / 2)}px`;
+    overlay.style.maxWidth = `${String(Math.round(frame.width * 0.9))}px`;
   };
 
   const translator = new CueTranslator(deps, (translation) => {
-    place();
     line.textContent = translation;
-    if (translation) onTranslation();
+    overlay.style.visibility = translation ? 'visible' : 'hidden';
+    if (translation) {
+      place();
+      onTranslation();
+    }
   });
 
   const read = (): void => {
@@ -323,14 +347,12 @@ function attachRendered(
     const cue = segments.map((s) => s.textContent ?? '').join(' ');
     if (isTranslatableCue(cue)) onCue();
     translator.offer(cue);
+    // The caption moves when the controls appear, when the window resizes and
+    // when the player reflows. Following it costs a rectangle read.
+    if (line.textContent) place();
   };
 
-  // The player rebuilds its segments rather than editing them, so childList
-  // on the subtree is the event; characterData covers the players that do
-  // edit in place.
-  const observer = new doc.defaultView!.MutationObserver(() => {
-    // Our own line is inside the container, so writing a translation would
-    // otherwise re-enter this callback.
+  const observer = new view!.MutationObserver(() => {
     read();
   });
   observer.observe(container, {
@@ -338,17 +360,19 @@ function attachRendered(
     subtree: true,
     characterData: true,
   });
+  doc.addEventListener('fullscreenchange', place);
+  view?.addEventListener('resize', place);
+  view?.addEventListener('scroll', place, { passive: true });
   read();
 
   return {
     disconnect: () => {
       observer.disconnect();
+      doc.removeEventListener('fullscreenchange', place);
+      view?.removeEventListener('resize', place);
+      view?.removeEventListener('scroll', place);
       translator.stop();
-      // The lift belongs to the line; leaving it would hold the player's own
-      // caption up by thirty pixels for the rest of the video.
-      const host = container.querySelector<HTMLElement>(anchor);
-      if (host) host.style.transform = '';
-      line.remove();
+      overlay.remove();
     },
   };
 }
