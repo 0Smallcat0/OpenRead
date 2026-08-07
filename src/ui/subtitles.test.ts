@@ -197,6 +197,34 @@ describe('mountSubtitleTranslate', () => {
     expect(line()).toBe('');
   });
 
+  it('retries a cue whose translation failed, on the next repaint', async () => {
+    // A player repaints the same caption many times a second. If a failure
+    // left the cue claimed, every one of those repaints was skipped too, and
+    // the line stayed blank for as long as the sentence was on screen —
+    // observed on YouTube when the service worker was still starting.
+    let attempts = 0;
+    translate = vi.fn((text: string) => {
+      attempts++;
+      return attempts === 1
+        ? Promise.reject(new Error('worker still waking'))
+        : Promise.resolve(`[${text}]`);
+    });
+    player('One line, still on screen.');
+    mount();
+    await flush();
+    expect(line()).toBe('');
+
+    // The same caption, repainted. Not a new sentence.
+    const fresh = document.createElement('span');
+    fresh.className = 'ytp-caption-segment';
+    fresh.textContent = 'One line, still on screen.';
+    segment().replaceWith(fresh);
+    await flush();
+
+    expect(attempts).toBe(2);
+    expect(line()).toBe('[One line, still on screen.]');
+  });
+
   it('survives a failed translation without breaking the next cue', async () => {
     translate = vi.fn((text: string) =>
       text.startsWith('First')
