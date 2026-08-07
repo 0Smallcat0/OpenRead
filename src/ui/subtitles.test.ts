@@ -7,7 +7,11 @@
  * real browser instead.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mountSubtitleTranslate, SUBTITLE_CLASS } from './subtitles';
+import {
+  mountSubtitleTranslate,
+  SUBTITLE_CLASS,
+  RETRY_AFTER_MS,
+} from './subtitles';
 
 const flush = async (): Promise<void> => {
   for (let i = 0; i < 6; i++) await Promise.resolve();
@@ -197,11 +201,13 @@ describe('mountSubtitleTranslate', () => {
     expect(line()).toBe('');
   });
 
-  it('retries a cue whose translation failed, on the next repaint', async () => {
-    // A player repaints the same caption many times a second. If a failure
-    // left the cue claimed, every one of those repaints was skipped too, and
-    // the line stayed blank for as long as the sentence was on screen —
-    // observed on YouTube when the service worker was still starting.
+  it('retries a cue whose translation failed, without waiting for a repaint', async () => {
+    // Measured on YouTube: zero mutations in twenty seconds while one caption
+    // was on screen. A retry that waits for the player to rewrite the caption
+    // waits forever, which is why the first sentence of a video — failing
+    // against a service worker that is still starting — stayed blank until
+    // the speaker moved on.
+    vi.useFakeTimers();
     let attempts = 0;
     translate = vi.fn((text: string) => {
       attempts++;
@@ -214,15 +220,32 @@ describe('mountSubtitleTranslate', () => {
     await flush();
     expect(line()).toBe('');
 
-    // The same caption, repainted. Not a new sentence.
-    const fresh = document.createElement('span');
-    fresh.className = 'ytp-caption-segment';
-    fresh.textContent = 'One line, still on screen.';
-    segment().replaceWith(fresh);
+    // Nothing touches the DOM. Only time passes.
+    vi.advanceTimersByTime(RETRY_AFTER_MS + 50);
+    vi.useRealTimers();
     await flush();
 
     expect(attempts).toBe(2);
     expect(line()).toBe('[One line, still on screen.]');
+  });
+
+  it('gives up after one retry rather than looping on a cue', async () => {
+    vi.useFakeTimers();
+    let attempts = 0;
+    translate = vi.fn(() => {
+      attempts++;
+      return Promise.reject(new Error('still no'));
+    });
+    player('A line nothing can translate.');
+    mount();
+    await flush();
+    vi.advanceTimersByTime(RETRY_AFTER_MS + 50);
+    await flush();
+    vi.advanceTimersByTime(RETRY_AFTER_MS * 10);
+    vi.useRealTimers();
+    await flush();
+
+    expect(attempts).toBe(2);
   });
 
   it('survives a failed translation without breaking the next cue', async () => {
