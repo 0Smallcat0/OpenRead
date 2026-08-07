@@ -48,11 +48,18 @@ const TABS = [
     what: 'whole page, hover-one-paragraph (hold Alt), select-to-translate',
   },
   {
-    // Captions forced on by the URL. Left to the player they are off, our line
-    // has nothing to translate, and the feature reads as doing nothing at all
-    // — which is exactly how it was reported twice.
-    url: 'https://www.youtube.com/watch?v=aircAruvnKk&cc_load_policy=1&cc_lang_pref=en',
-    what: 'subtitles — captions are already on; play it, then try fullscreen',
+    // Auto-generated English captions and no other track — checked in
+    // `ytInitialPlayerResponse`. That matters more than it sounds: the video
+    // this used to point at is 3Blue1Brown's, which ships its own 中文（台灣）
+    // subtitles, so a reader asking for Chinese got the channel's Chinese
+    // captions, nothing for this to do, and no way to tell why. A video with
+    // a translation of its own is the one place this feature has nothing to
+    // offer, and it is a bad place to demonstrate it from.
+    //
+    // Captions still have to be switched on by hand: YouTube drops
+    // `cc_load_policy` on a watch page and uses the profile's own preference.
+    url: 'https://www.youtube.com/watch?v=qz0aGYrrlhU',
+    what: 'subtitles — press the CC button, English captions with no Chinese track',
   },
   {
     url: 'https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe',
