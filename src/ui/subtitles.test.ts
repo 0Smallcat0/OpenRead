@@ -11,6 +11,7 @@ import {
   mountSubtitleTranslate,
   SUBTITLE_CLASS,
   RETRY_AFTER_MS,
+  GRACE_MS,
 } from './subtitles';
 
 const flush = async (): Promise<void> => {
@@ -131,10 +132,9 @@ describe('mountSubtitleTranslate', () => {
     await flush();
 
     expect(translate).toHaveBeenCalledTimes(1);
-    // The line lives in an overlay of ours, not inside the player's box: two
-    // renderers arguing over one node is what made the caption shudder.
-    expect(container.querySelector(`.${SUBTITLE_CLASS}`)).toBeNull();
-    expect(line()).toBe('[One line, painted twice.]');
+    expect(container.querySelector(`.${SUBTITLE_CLASS}`)?.textContent).toBe(
+      '[One line, painted twice.]',
+    );
   });
 
   it('leaves a sound marker alone', async () => {
@@ -146,7 +146,11 @@ describe('mountSubtitleTranslate', () => {
     expect(line()).toBe('');
   });
 
-  it('clears the old translation the moment the caption changes', async () => {
+  it('holds the previous line briefly rather than blinking on every caption', async () => {
+    // Clearing on every caption change was the flicker. Sampled at 200 ms on
+    // YouTube: 33 of 60 frames had nothing on screen — one blank per caption,
+    // and captions change every second or two.
+    vi.useFakeTimers();
     let release: (value: string) => void = () => undefined;
     translate = vi.fn(
       () =>
@@ -163,8 +167,34 @@ describe('mountSubtitleTranslate', () => {
 
     segment().textContent = 'Second line, still translating.';
     await flush();
-    // Not the previous translation: an old caption under a new line is wrong
-    // in a way the reader cannot see is wrong.
+    // Still up: the next translation is a round trip away, not a sentence away.
+    expect(line()).toBe('第一行');
+
+    release('第二行');
+    await flush();
+    vi.useRealTimers();
+    expect(line()).toBe('第二行');
+  });
+
+  it('does clear when the next translation really is late', async () => {
+    vi.useFakeTimers();
+    translate = vi.fn((text: string) =>
+      text.startsWith('First')
+        ? Promise.resolve('第一行')
+        : new Promise<string>(() => undefined),
+    );
+    player('First line.');
+    mount();
+    await flush();
+    expect(line()).toBe('第一行');
+
+    segment().textContent = 'Second line, never answered.';
+    await flush();
+    vi.advanceTimersByTime(GRACE_MS + 50);
+    vi.useRealTimers();
+
+    // A stale translation under a caption it does not belong to is worse than
+    // nothing once it stops being momentary.
     expect(line()).toBe('');
   });
 
