@@ -113,13 +113,23 @@ export function collectPdfLines(
 export const PARAGRAPH_PITCH_RATIO = 1.5;
 
 /**
- * How far a line's left edge may move and still be the same paragraph.
+ * Do two lines share any horizontal space at all?
  *
- * As a multiple of the line height, so it scales with zoom. Generous enough to
- * allow an indented first line, tight enough that the second column of a
- * two-column paper starts a new paragraph rather than continuing the first.
+ * This replaces comparing left edges, which was wrong about the most visible
+ * text on the page. A centred title moves its left edge by however much the
+ * lines differ in width — measured on the viewer's sample paper, 157px to
+ * 462px between the two lines of one title — so a left-edge rule split every
+ * centred heading, author list and affiliation into fragments and translated
+ * each one on its own. "Trace-based Just-in-Time Type Specialization for
+ * Dynamic" and "Languages" are not two paragraphs.
+ *
+ * Overlap gets both cases right for the same reason: centred lines overlap
+ * heavily however their edges move, and the second column of a two-column page
+ * does not overlap the first at all.
  */
-export const COLUMN_SHIFT_RATIO = 2.5;
+function overlaps(a: Box, b: Box): boolean {
+  return Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0;
+}
 
 /** The typical top-to-top distance between lines, ignoring column breaks. */
 function medianPitch(lines: PdfLine[]): number {
@@ -157,13 +167,11 @@ export function groupIntoParagraphs(lines: PdfLine[]): PdfParagraph[] {
   for (const line of lines) {
     const previous = current[current.length - 1];
     if (previous) {
-      const height = Math.max(previous.box.height, line.box.height, 1);
       const step = line.box.top - previous.box.top;
-      const shift = Math.abs(line.box.left - previous.box.left);
       // Back up the page: the next column, or a footnote block.
       const newColumn = step < 0;
       const spaced = pitch > 0 && step > pitch * PARAGRAPH_PITCH_RATIO;
-      if (newColumn || spaced || shift > height * COLUMN_SHIFT_RATIO) {
+      if (newColumn || spaced || !overlaps(previous.box, line.box)) {
         flush();
       }
     }

@@ -84,6 +84,9 @@ async function select(text: string): Promise<HTMLElement> {
       getBoundingClientRect: () => RECT,
       // One rectangle per line fragment; a one-line selection has one.
       getClientRects: () => [RECT],
+      // Where the selection sits. A real Range always has one, and the icon is
+      // withheld when it is inside this extension's own UI.
+      commonAncestorContainer: document.body,
     }),
   } as unknown as Selection);
 
@@ -826,5 +829,34 @@ describe('a disconnect that arrives after a second translation started', () => {
 
     expect(panelText()).toBe('另一句話。');
     expect(panelText()).not.toContain('worker stopped');
+  });
+});
+
+describe('the extension never offers to translate itself', () => {
+  it('withholds the icon for a selection inside an inserted translation', async () => {
+    // Reported from use on a translated PDF: dragging across the translation —
+    // to copy it, which is the obvious thing to do with one — put the 文 icon
+    // over it offering to translate the translation. `blocks.ts` has said since
+    // the beginning that this extension's UI must never become input to itself;
+    // this path did not honour it.
+    const panel = document.createElement('div');
+    panel.className = 'oit-pdf-translation';
+    panel.textContent = '這是一段已經翻好的譯文。';
+    document.body.appendChild(panel);
+
+    vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => '這是一段已經翻好的譯文。',
+      rangeCount: 1,
+      getRangeAt: () => ({
+        getBoundingClientRect: () => RECT,
+        getClientRects: () => [RECT],
+        commonAncestorContainer: panel,
+      }),
+    } as unknown as Selection);
+
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 70));
+
+    expect(document.getElementById('oit-translate-icon')).toBeNull();
   });
 });

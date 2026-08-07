@@ -19,6 +19,7 @@ import {
   type StartStreamMessage,
   type StreamResponse,
 } from '../messaging';
+import { OWN_UI } from './blocks';
 
 const ICON_ID = 'oit-translate-icon';
 const PANEL_ID = 'oit-translate-panel';
@@ -819,6 +820,18 @@ export function mountSelectionTranslator(
       selection.rangeCount > 0
     ) {
       const range = selection.getRangeAt(0);
+      // Never our own insertions. `blocks.ts` has said since the beginning that
+      // this extension's UI must never become input to itself, and this path
+      // did not honour it: dragging across a translation — to copy it, which is
+      // the obvious thing to do with one — put the 文 icon over it offering to
+      // translate the translation. Reported from use on a translated PDF, where
+      // the panel is the only thing worth selecting.
+      const container: Node | undefined = range.commonAncestorContainer;
+      const scope =
+        container?.nodeType === 1
+          ? (container as Element)
+          : (container?.parentElement ?? null);
+      if (scope?.closest(OWN_UI)) return null;
       return {
         text,
         rect: range.getBoundingClientRect(),

@@ -124,7 +124,8 @@ describe('groupIntoParagraphs', () => {
 
   it('splits at the second column of a two-column page', () => {
     // Left column runs down the page, then the right column starts again at
-    // the top. Without this a paper reads as one paragraph per page.
+    // the top. Without this a paper reads as one paragraph per page. The lines
+    // are 400px wide, so 50 and 500 share no horizontal space at all.
     const { layer, rectOf } = layerOf([
       { text: 'Left column, first line.', top: 100, left: 50 },
       { text: 'Left column, second line.', top: 114, left: 50 },
@@ -143,6 +144,23 @@ describe('groupIntoParagraphs', () => {
       { text: 'continuing at the margin.', top: 114, left: 50 },
     ]);
     expect(collectPdfParagraphs(layer, rectOf)).toHaveLength(1);
+  });
+
+  it('keeps a centred title together', () => {
+    // The bug this replaces, and the most visible text on the page. A centred
+    // title moves its left edge by however much the lines differ in width —
+    // measured at 157px to 462px on the viewer's sample paper — so a
+    // left-edge rule split every heading, author list and affiliation into
+    // fragments and translated each one alone.
+    const { layer, rectOf } = layerOf([
+      { text: 'Trace-based Type Specialization for Dynamic', top: 100, left: 157 },
+      { text: 'Languages', top: 133, left: 462 },
+    ]);
+    const paragraphs = collectPdfParagraphs(layer, rectOf);
+    expect(paragraphs).toHaveLength(1);
+    expect(paragraphs[0]?.text).toBe(
+      'Trace-based Type Specialization for Dynamic Languages',
+    );
   });
 
   it('collapses the whitespace a layout leaves behind', () => {

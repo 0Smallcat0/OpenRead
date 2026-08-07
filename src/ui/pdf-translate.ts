@@ -96,6 +96,10 @@ function ensureStyle(doc: Document): void {
   border-radius: 8px;
   box-shadow: 0 1px 6px rgb(0 0 0 / 0.2);
   white-space: pre-wrap;
+  /* Said outright rather than inherited. This block lives inside the viewer's
+     own container, and a translation nobody can copy out is half a feature. */
+  user-select: text;
+  -webkit-user-select: text;
 }
 .${PDF_TRANSLATION_CLASS} p {
   margin: 0 0 0.9em;
