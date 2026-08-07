@@ -13,6 +13,8 @@
  *      whole item, taking the target language and the engine down with it
  *   S8 two copies of "our own UI" had drifted, so a selection panel — and every
  *      token streamed into one — read as the page growing new text
+ *  S13 whole-page translation ran on the top frame only, so an article inside
+ *      an iframe came back untranslated with nothing to say why
  *
  * Not in CI, for the same reason as the other harnesses: it needs a real Chrome
  * and it takes a couple of minutes. Run it after anything that touches the
@@ -29,6 +31,7 @@
  */
 import puppeteer from 'puppeteer-core';
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:http';
 import { mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -42,7 +45,8 @@ const CHROME =
 // and that two runs shared state — a stress harness is the last place a run
 // should be able to pass on what the previous one left behind.
 const PROFILE =
-  process.env.OPENREAD_PROFILE ?? mkdtempSync(join(tmpdir(), 'openread-stress-'));
+  process.env.OPENREAD_PROFILE ??
+  mkdtempSync(join(tmpdir(), 'openread-stress-'));
 const PORT = 9360;
 const EXTENSION = fileURLToPath(
   new URL('../.output/chrome-mv3', import.meta.url),
@@ -102,7 +106,8 @@ try {
     throw new Error('no service worker');
   })();
   const worker = await workerTarget.worker();
-  const configure = (v) => worker.evaluate(async (x) => chrome.storage.sync.set(x), v);
+  const configure = (v) =>
+    worker.evaluate(async (x) => chrome.storage.sync.set(x), v);
   const selectAndTranslate = async () => {
     await page.evaluate(() => {
       const target = document.querySelector('main p');
@@ -114,7 +119,10 @@ try {
       selection?.addRange(range);
     });
     await worker.evaluate(async () => {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
       if (tab?.id !== undefined)
         await chrome.tabs.sendMessage(tab.id, { type: 'TRANSLATE_SELECTION' });
     });
@@ -122,7 +130,10 @@ try {
 
   const press = () =>
     worker.evaluate(async () => {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
       if (tab?.id !== undefined)
         await chrome.tabs.sendMessage(tab.id, { type: 'TRANSLATE_PAGE' });
     });
@@ -243,7 +254,10 @@ try {
   });
   await sleep(6000);
   const routeB = await page.evaluate(
-    () => document.querySelectorAll('#route-b-0 .oit-bilingual, main .oit-bilingual').length,
+    () =>
+      document.querySelectorAll(
+        '#route-b-0 .oit-bilingual, main .oit-bilingual',
+      ).length,
   );
   observe('S2 route A translated', String(routeA.translated));
   observe('S2 route B translated after body swap', String(routeB));
@@ -271,7 +285,10 @@ try {
   observe('S3 markers', String(toggled.marked));
   observe('S3 blocks carrying two translations', String(dupes));
   observe('S3 badges', String(toggled.badges));
-  check(dupes === 0, `${String(dupes)} block(s) ended up with two translations`);
+  check(
+    dupes === 0,
+    `${String(dupes)} block(s) ended up with two translations`,
+  );
   check(
     toggled.marked === toggled.translated,
     'markers and translations disagree after rapid toggling',
@@ -303,7 +320,10 @@ try {
   await sleep(2000);
   await press();
   const undone = await settle(3000);
-  observe('S4b translated after pressing a finished page', String(undone.translated));
+  observe(
+    'S4b translated after pressing a finished page',
+    String(undone.translated),
+  );
   check(
     undone.translated === 0,
     'pressing a finished page no longer undoes it',
@@ -350,7 +370,10 @@ try {
   console.log('\nS7 — how large an exception list storage will actually take');
   const quota = await worker.evaluate(async () => {
     const build = (n) =>
-      Array.from({ length: n }, (_, i) => `site-${i}-with-a-fairly-long-name.example.com`);
+      Array.from(
+        { length: n },
+        (_, i) => `site-${i}-with-a-fairly-long-name.example.com`,
+      );
     const attempt = async (n) => {
       try {
         await chrome.storage.sync.set({ autoTranslateExcept: build(n) });
@@ -361,8 +384,14 @@ try {
     };
     return { at200: await attempt(200), atCapSize: await attempt(120) };
   });
-  observe('S7 raw write of 200 hosts', quota.at200 ? 'accepted' : 'REJECTED by quota');
-  observe('S7 raw write of 120 hosts (inside the cap)', quota.atCapSize ? 'accepted' : 'REJECTED');
+  observe(
+    'S7 raw write of 200 hosts',
+    quota.at200 ? 'accepted' : 'REJECTED by quota',
+  );
+  observe(
+    'S7 raw write of 120 hosts (inside the cap)',
+    quota.atCapSize ? 'accepted' : 'REJECTED',
+  );
   check(
     quota.atCapSize,
     'a list inside MAX_EXCEPT_BYTES was still rejected — the cap in settings.ts is too generous',
@@ -377,7 +406,10 @@ try {
   });
   observe('S7 other settings after that', String(stillSaves));
   await worker.evaluate(async () =>
-    chrome.storage.sync.set({ autoTranslateExcept: [], targetLang: 'Traditional Chinese' }),
+    chrome.storage.sync.set({
+      autoTranslateExcept: [],
+      targetLang: 'Traditional Chinese',
+    }),
   );
 
   // ---------------------------------------------------------------- S8
@@ -401,7 +433,10 @@ try {
     `${String(beforeSelection.translated)} -> ${String(afterSelection.translated)}`,
   );
   observe('S8 progress badges', String(afterSelection.badges));
-  check(panelText.length > 0, 'the selection panel never opened on a watched page');
+  check(
+    panelText.length > 0,
+    'the selection panel never opened on a watched page',
+  );
   check(
     afterSelection.badges === 0,
     'selecting text made whole-page translation start over',
@@ -418,7 +453,10 @@ try {
   const busyPanel = await page.evaluate(
     () => document.getElementById('oit-translate-panel')?.textContent ?? '',
   );
-  observe('S9 panel while the page ran', busyPanel.length > 0 ? 'opened' : 'NEVER OPENED');
+  observe(
+    'S9 panel while the page ran',
+    busyPanel.length > 0 ? 'opened' : 'NEVER OPENED',
+  );
   observe('S9 page translations', String(busy.translated));
   check(busyPanel.length > 0, 'a selection made during a page run was starved');
   check(busy.translated > 0, 'a selection during a page run stopped the page');
@@ -467,7 +505,8 @@ try {
   const afterGiveUp = await stats();
   observe('S10 badges after new content', String(afterGiveUp.badges));
   check(
-    afterGiveUp.badges === 0 && afterGiveUp.translated === callsBefore.translated,
+    afterGiveUp.badges === 0 &&
+      afterGiveUp.translated === callsBefore.translated,
     'the page kept asking a server it had already given up on',
   );
 
@@ -480,11 +519,14 @@ try {
     waitUntil: 'domcontentloaded',
   });
   await sleep(2500);
-  const viewerReady = await viewer.evaluate(
-    () => Boolean(document.getElementById('viewerContainer')),
+  const viewerReady = await viewer.evaluate(() =>
+    Boolean(document.getElementById('viewerContainer')),
   );
   observe('S11 viewer container', viewerReady ? 'present' : 'MISSING');
-  observe('S11 page errors', viewerErrors.length === 0 ? 'none' : viewerErrors[0]);
+  observe(
+    'S11 page errors',
+    viewerErrors.length === 0 ? 'none' : viewerErrors[0],
+  );
   check(viewerReady, 'the bundled PDF viewer no longer renders its container');
   await viewer.close();
 
@@ -532,6 +574,119 @@ try {
   }
   await configure({ engine: 'builtin' });
 
+  // ---------------------------------------------------------------- S13
+  //
+  // Frames. Whole-page translation ran on the top frame only, which kept ad
+  // iframes from spending the reader's GPU and kept one badge on the page —
+  // and left an article inside an iframe untranslated with nothing to say why.
+  // The test is now what is in the frame rather than where it sits, so this
+  // scenario needs both kinds on one page at once.
+  //
+  // Served locally rather than built with `srcdoc`: an `about:srcdoc` frame
+  // needs `match_origin_as_fallback` before Chrome will inject a content script
+  // at all, so a srcdoc fixture would be measuring a manifest key instead of
+  // the frame test, and would go green the day the real behaviour broke.
+  console.log('\nS13 — an article in an iframe, and an ad in another');
+  const FRAME_PORT = 9338;
+  const ARTICLE = Array.from(
+    { length: 6 },
+    (_, i) =>
+      `<p>Paragraph number ${i} of an article that happens to be embedded in a frame, written at enough length to be worth translating on its own.</p>`,
+  ).join('\n');
+  const pages = {
+    '/parent':
+      '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Parent</title></head><body>' +
+      '<p>The page the reader actually navigated to, with its own paragraph of prose to translate.</p>' +
+      '<iframe id="article" src="/article" width="600" height="400"></iframe>' +
+      '<iframe id="ad" src="/ad" width="300" height="600"></iframe>' +
+      '</body></html>',
+    '/article':
+      '<!doctype html><html lang="en"><head><meta charset="utf-8"></head><body>' +
+      ARTICLE +
+      '</body></html>',
+    // A 300x600 skyscraper: deliberately past the size floor, so the only
+    // thing that can keep it out is having nothing to read. A leaderboard
+    // would fail on height and the block count would never be exercised.
+    '/ad':
+      '<!doctype html><html lang="en"><head><meta charset="utf-8"></head><body>' +
+      '<p>Buy this now, and save money today on everything in the entire store.</p>' +
+      '</body></html>',
+  };
+  const frameServer = createServer((request, response) => {
+    const body = pages[new URL(request.url, 'http://127.0.0.1').pathname];
+    if (!body) {
+      response.writeHead(404);
+      response.end();
+      return;
+    }
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    response.end(body);
+  });
+  await new Promise((resolve) =>
+    frameServer.listen(FRAME_PORT, '127.0.0.1', resolve),
+  );
+
+  try {
+    await page.goto(`http://127.0.0.1:${FRAME_PORT}/parent`, {
+      waitUntil: 'networkidle0',
+    });
+    await sleep(1500);
+    await press();
+
+    const frameStats = async () => {
+      const counts = { top: 0, article: 0, ad: 0, badges: 0 };
+      for (const frame of page.frames()) {
+        const url = frame.url();
+        const where = url.endsWith('/article')
+          ? 'article'
+          : url.endsWith('/ad')
+            ? 'ad'
+            : url.endsWith('/parent')
+              ? 'top'
+              : null;
+        if (!where) continue;
+        const seen = await frame
+          .evaluate(() => ({
+            translated: document.querySelectorAll('.oit-bilingual').length,
+            badges: document.querySelectorAll('#oit-page-progress').length,
+          }))
+          .catch(() => ({ translated: 0, badges: 0 }));
+        counts[where] = seen.translated;
+        counts.badges += seen.badges;
+      }
+      return counts;
+    };
+
+    let frames = await frameStats();
+    for (let waited = 0; waited < 60000; waited += 1000) {
+      await sleep(1000);
+      frames = await frameStats();
+      if (frames.top > 0 && frames.article >= 6) break;
+    }
+    observe('S13 top frame translated', String(frames.top));
+    observe('S13 article frame translated', String(frames.article));
+    observe('S13 ad frame translated', String(frames.ad));
+    observe('S13 badges across all frames', String(frames.badges));
+    check(frames.top > 0, 'the top frame was not translated');
+    check(
+      frames.article > 0,
+      'an article inside an iframe was still left untranslated',
+    );
+    check(
+      frames.ad === 0,
+      'an ad-sized frame with one line of copy was translated anyway',
+    );
+    // The reason the old restriction existed. Every qualifying frame runs its
+    // own pass, and a badge is positioned against the viewport it lives in, so
+    // more than one would put Stop buttons in corners of the page that stop
+    // different things.
+    check(
+      frames.badges <= 1,
+      `${frames.badges} progress badges across the frames, expected at most 1`,
+    );
+  } finally {
+    frameServer.close();
+  }
 } catch (error) {
   console.error(`\nharness failed: ${error?.stack ?? String(error)}`);
 } finally {
