@@ -80,16 +80,21 @@ function ensureStyle(doc: Document): void {
   if (doc.getElementById(STYLE_ID)) return;
   const style = doc.createElement('style');
   style.id = STYLE_ID;
-  // Sized and coloured like the viewer's own chrome rather than like the page,
-  // because it is not part of the document: it is a reading aid sitting next
-  // to one. `max-width` keeps a translated column readable on a wide window,
-  // where the page itself is centred and the text would otherwise run the full
-  // width of the viewer.
+  // Coloured like the viewer's own chrome rather than like the page, because it
+  // is not part of the document: it is a reading aid sitting next to one.
+  //
+  // Its *width* comes from the page above it — set inline by `matchPageWidth`
+  // and kept in step by a ResizeObserver. A width of its own read as a separate
+  // document floating beside the paper rather than as part of it, and the
+  // viewer's zoom pulled the two further apart with every step.
   style.textContent = `
 .${PDF_TRANSLATION_CLASS} {
-  max-width: 68ch;
   margin: 0 auto 24px;
   padding: 16px 20px;
+  /* The inline width set by matchPageWidth is the page's width, and padding
+     has to fit inside it — content-box put 20px of this block over each edge
+     of the paper it belongs to. */
+  box-sizing: border-box;
   font: 15px/1.7 system-ui, -apple-system, sans-serif;
   color: #111;
   background: #fff;
@@ -102,10 +107,26 @@ function ensureStyle(doc: Document): void {
   -webkit-user-select: text;
 }
 .${PDF_TRANSLATION_CLASS} p {
-  margin: 0 0 0.9em;
+  /* The block matches the page so it reads as part of the document; the text
+     inside it does not, because a page of a paper is far wider than a readable
+     line. At the page's full width this ran to about 130 characters a line and
+     the result was a wall — reported as "everything is crammed together". */
+  max-width: 34em;
+  margin: 0 auto 0.9em;
 }
 .${PDF_TRANSLATION_CLASS} p:last-child {
   margin-bottom: 0;
+}
+/* Selection has to be given a colour back. The vendored viewer carries an
+   OpenRead patch setting a global transparent ::selection, re-enabled only
+   inside .textLayer, so the text layer and the canvas under it do not both
+   render the highlight. This panel is neither, so selecting it highlighted
+   nothing — the text was selected the whole time and only looked as though it
+   was not. Reported as "I cannot select the translation". */
+.${PDF_TRANSLATION_CLASS}::selection,
+.${PDF_TRANSLATION_CLASS} ::selection {
+  background: rgba(0, 100, 255, 0.35);
+  color: inherit;
 }
 @media (prefers-color-scheme: dark) {
   .${PDF_TRANSLATION_CLASS} {
@@ -127,13 +148,34 @@ function renderedPages(doc: Document): HTMLElement[] {
 }
 
 /** Nearest first, so the reader's page is translated before page fourteen. */
-function byDistanceFromViewport(doc: Document, pages: HTMLElement[]): HTMLElement[] {
+function byDistanceFromViewport(
+  doc: Document,
+  pages: HTMLElement[],
+): HTMLElement[] {
   const middle = (doc.defaultView?.innerHeight ?? 0) / 2;
   return [...pages].sort((a, b) => {
     const da = Math.abs(a.getBoundingClientRect().top - middle);
     const db = Math.abs(b.getBoundingClientRect().top - middle);
     return da - db;
   });
+}
+
+/**
+ * Keep the panel exactly as wide as the page it belongs to.
+ *
+ * The viewer centres pages and rescales them on zoom, so a panel with a width
+ * of its own drifts out of line with the paper the moment anything changes.
+ * Reported from use: "the translation is not aligned with the text".
+ */
+function matchPageWidth(page: HTMLElement, block: HTMLElement): void {
+  const apply = (): void => {
+    block.style.width = `${String(page.getBoundingClientRect().width)}px`;
+  };
+  apply();
+  const view = page.ownerDocument.defaultView;
+  if (typeof view?.ResizeObserver === 'function') {
+    new view.ResizeObserver(apply).observe(page);
+  }
 }
 
 function attachPage(
@@ -153,6 +195,7 @@ function attachPage(
     block.appendChild(paragraph);
   }
   page.after(block);
+  matchPageWidth(page, block);
   page.setAttribute(PDF_TRANSLATED_ATTR, '');
 }
 
@@ -244,8 +287,9 @@ export async function translatePdf(
   watcher.observe(viewer, { childList: true, subtree: true });
 
   await Promise.all(
-    Array.from({ length: Math.min(PAGE_CONCURRENCY, Math.max(queued.length, 1)) }, () =>
-      drain(),
+    Array.from(
+      { length: Math.min(PAGE_CONCURRENCY, Math.max(queued.length, 1)) },
+      () => drain(),
     ),
   );
 

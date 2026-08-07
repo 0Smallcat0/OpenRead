@@ -647,7 +647,15 @@ export function mountSelectionTranslator(
         targetLang: settings.targetLang,
         model: settings.modelId,
         retryCount: attempt,
-        sourceLang: document.documentElement.lang || undefined,
+        // The page knows what it is written in — but only about its own text.
+        // A selection inside a text box is what the reader typed, in the
+        // language they think in, and claiming the page's language for it made
+        // the engine answer "already in that language" and hand the words back
+        // untouched. Reported from use: Chinese typed into a box on an `en`
+        // page, asked for English, came back as the same Chinese.
+        sourceLang: fromEditableField()
+          ? undefined
+          : document.documentElement.lang || undefined,
       };
       port.postMessage(message);
     };
@@ -839,6 +847,40 @@ export function mountSelectionTranslator(
       };
     }
     return null;
+  }
+
+  /**
+   * Is the current selection inside something the reader types into?
+   *
+   * Deep, because the focused field inside an open shadow root reports the host
+   * as active, and a comment box in a web component would otherwise look like
+   * page text.
+   */
+  function fromEditableField(): boolean {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return false;
+    const container = selection.getRangeAt(0).commonAncestorContainer as
+      | Node
+      | undefined;
+    const scope =
+      container?.nodeType === 1
+        ? (container as Element)
+        : (container?.parentElement ?? null);
+    if (
+      scope?.closest('input, textarea, [contenteditable=""], [contenteditable="true"]')
+    ) {
+      return true;
+    }
+    // A selection inside a text box is reported by the browser as spanning the
+    // field's host element rather than its internal text, so the range above
+    // can miss it. The focused element settles that.
+    const active = document.activeElement;
+    return Boolean(
+      active &&
+        active.matches(
+          'input, textarea, [contenteditable=""], [contenteditable="true"]',
+        ),
+    );
   }
 
   /** Offer the 文 icon for whatever is selected now, or take it away. */

@@ -17,8 +17,6 @@ import {
   TRANSLATE_SELECTION_COMMAND,
   TRANSLATE_PAGE_COMMAND,
   TRANSLATE_INPUT_COMMAND,
-  type TranslateSelectionMessage,
-  type TranslatePageMessage,
   type PortRequest,
   type RuntimeRequest,
   type EnrichCaptureResponse,
@@ -162,6 +160,7 @@ export default defineBackground(() => {
    * cursor: a selection, or the page.
    */
   const MENU_PAGE = 'openread-translate-page';
+  const MENU_INPUT = 'openread-translate-input';
   const MENU_SELECTION = 'openread-translate-selection';
 
   function createMenus(): void {
@@ -178,6 +177,16 @@ export default defineBackground(() => {
         title: 'Translate this page with OpenRead',
         contexts: ['page'],
       });
+      // Right-click, not only Ctrl+Shift+K. A command is reachable exactly as
+      // far as Chrome's willingness to bind its key, and that willingness is
+      // neither documented nor stable — `translate-page` shipped with an
+      // unbound shortcut for several releases without anything saying so. A
+      // feature with one route in has none the day that route fails.
+      chrome.contextMenus.create({
+        id: MENU_INPUT,
+        title: 'Translate what you typed with OpenRead',
+        contexts: ['editable'],
+      });
       // `create` reports failures here rather than throwing.
       void chrome.runtime.lastError;
     });
@@ -187,12 +196,14 @@ export default defineBackground(() => {
   chrome.runtime.onInstalled.addListener(createMenus);
 
   chrome.contextMenus?.onClicked.addListener((info, tab) => {
-    const message: TranslateSelectionMessage | TranslatePageMessage | null =
+    const message: RuntimeRequest | null =
       info.menuItemId === MENU_SELECTION
         ? { type: 'TRANSLATE_SELECTION' }
         : info.menuItemId === MENU_PAGE
           ? { type: 'TRANSLATE_PAGE' }
-          : null;
+          : info.menuItemId === MENU_INPUT
+            ? { type: 'TRANSLATE_INPUT' }
+            : null;
     if (!message || tab?.id === undefined) return;
     // No receiver on a page without our content script; that is expected.
     void chrome.tabs.sendMessage(tab.id, message).catch(() => undefined);

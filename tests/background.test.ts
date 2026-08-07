@@ -606,7 +606,7 @@ describe('the Origin-strip rule', () => {
 });
 
 describe('the right-click menu', () => {
-  it('offers an item for a selection and one for the page', () => {
+  it('offers an item for a selection, the page, and a text box', () => {
     // Whole-page translation shipped reachable only from a toolbar popup and
     // a keyboard shortcut. A user with it installed opened the context menu,
     // found Chrome's own translate item and not this one, and asked where the
@@ -616,7 +616,7 @@ describe('the right-click menu', () => {
         .map((m) => m.contexts)
         .flat()
         .sort(),
-    ).toEqual(['page', 'selection']);
+    ).toEqual(['editable', 'page', 'selection']);
     for (const item of createdMenus) {
       expect(item.title).toContain('OpenRead');
     }
