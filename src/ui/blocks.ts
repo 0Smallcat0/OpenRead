@@ -74,7 +74,7 @@ const CONTENT_ROOT = 'main, [role="main"], article';
  * page growing new text and scheduled a full re-collection of it.
  */
 export const OWN_UI =
-  '#oit-translate-panel, #oit-translate-icon, .oit-bilingual, #oit-page-progress';
+  '#oit-translate-panel, #oit-translate-icon, .oit-bilingual, #oit-page-progress, .oit-pdf-translation';
 
 /** Marks a block whose translation has already been appended. */
 export const TRANSLATED_ATTR = 'data-oit-translated';

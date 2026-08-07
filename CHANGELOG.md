@@ -5,6 +5,43 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.18.1] - 2026-08-07
+
+### Fixed
+
+- **Whole-page translation had no working keyboard shortcut, and had not for
+  several releases.** `Ctrl+Shift+L` was chosen when `Ctrl+Shift+G` turned out
+  to be Chrome's "find previous"; asking `chrome.commands.getAll()` now shows
+  Chrome silently declines to bind `L` as well. Chrome answers a suggested key
+  it reserves by leaving the command unassigned, with the manifest still
+  reading correctly and nothing anywhere saying so. It is `Ctrl+Shift+U` now,
+  and `pnpm e2e:page` asks Chrome what it actually bound rather than trusting
+  the manifest — the only way this class of bug is visible at all.
+
+- **Selecting a translation offered to translate the translation.** Dragging
+  across an inserted translation — to copy it, which is the obvious thing to do
+  with one — put the 文 icon over it. `blocks.ts` has said since the beginning
+  that this extension's UI must never become input to itself; the selection
+  path did not honour it. Reported from use on a translated PDF, where the
+  panel is the only thing worth selecting, and it applied equally to a
+  translated web page and to the translation panel itself.
+
+- **Centred headings in a PDF were split into fragments and translated
+  separately.** Paragraph breaks were inferred partly from how far a line's
+  left edge moved, and a centred title moves its left edge by however much the
+  lines differ in width — measured at 157px against 462px between the two lines
+  of one title on the viewer's sample paper. So every centred heading, author
+  list and affiliation came apart. Lines are now compared by horizontal
+  overlap, which gets both cases right for the same reason: centred lines
+  overlap heavily however their edges move, and the second column of a
+  two-column page does not overlap the first at all.
+
+- **The PDF translation panel says it is selectable rather than inheriting
+  whatever the viewer decided.** It sits inside the viewer's own container, and
+  a translation nobody can copy out is half a feature. `pnpm e2e:page` now
+  drags across it with the mouse rather than selecting it through the DOM,
+  because only the drag exercises what a reader actually does.
+
 ## [2.18.0] - 2026-08-07
 
 ### Added
