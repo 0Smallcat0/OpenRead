@@ -112,6 +112,35 @@ try {
     throw new Error('no service worker');
   })();
   const worker = await workerTarget.worker();
+
+  // The language pack, before the first scenario rather than during it.
+  //
+  // The profile is thrown away every run, so Chrome fetches the en -> zh-Hant
+  // model on the first request and S1 through S4 race it: one run reported
+  // "a feed that never stops appending stopped being translated", "replacing
+  // document.body left the page unwatched" and "pressing the button during an
+  // automatic pass left the page untranslated" — three unrelated scenarios,
+  // all reading zero, while S5 onward translated normally. Not one of them was
+  // about the code.
+  //
+  // In the worker on purpose: `Translator.create()` throws NotAllowedError
+  // without a user gesture in a page while the pack is still `downloadable`.
+  const packStart = Date.now();
+  const packed = await worker.evaluate(async () => {
+    try {
+      const translator = await Translator.create({
+        sourceLanguage: 'en',
+        targetLanguage: 'zh-Hant',
+      });
+      return await translator.translate('Warming the language pack.');
+    } catch (error) {
+      return `FAILED: ${error.message}`;
+    }
+  });
+  console.log(
+    `pack: ${packed} (${Math.round((Date.now() - packStart) / 1000)} s)`,
+  );
+
   const configure = (v) =>
     worker.evaluate(async (x) => chrome.storage.sync.set(x), v);
   const selectAndTranslate = async () => {

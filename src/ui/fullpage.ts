@@ -1154,6 +1154,53 @@ async function drainQueue(
  * node, so the toggle can tell "already done" from "done in the language you
  * just moved away from".
  */
+/**
+ * Wait until the engine can answer, without touching the page.
+ *
+ * One real block of the page rather than a fixed phrase: the source language
+ * is whatever the document is written in, and a canned English sentence on a
+ * Japanese page would warm the wrong pair — or fail detection outright.
+ *
+ * Resolves false when the reader pressed Stop, which is the one case where the
+ * old translation should survive.
+ */
+async function engineReady(
+  root: Document,
+  deps: PageTranslateDeps,
+): Promise<boolean> {
+  const sample = root.querySelector<HTMLElement>(`[${TRANSLATED_ATTR}]`);
+  if (!sample) return true;
+  const text = visibleText(sample).trim().slice(0, 200);
+  if (!text) return true;
+
+  const controller = new AbortController();
+  const progress = progressFor(root, deps, () => controller.abort());
+  progress.update(0, 1);
+  // Raced against the abort rather than awaited. Aborting a signal does not
+  // make a promise settle, and a `translate` that ignores the signal would
+  // otherwise leave the reader's Stop button doing nothing at all — the press
+  // has to end the wait whatever the engine does about it.
+  await Promise.race([
+    deps
+      .translate(text, controller.signal, 0, (loaded) =>
+        progress.downloading(loaded),
+      )
+      // A failure here is the run's problem to report, in its own words, with
+      // its own retry. All this had to know is that the wait is over.
+      .catch(() => undefined),
+    new Promise<void>((resolve) => {
+      controller.signal.addEventListener('abort', () => {
+        resolve();
+      });
+    }),
+  ]);
+  if (controller.signal.aborted) {
+    progress.finish('Kept the translation you had');
+    return false;
+  }
+  return true;
+}
+
 export async function togglePageTranslation(
   root: Document,
   deps: PageTranslateDeps,
@@ -1178,8 +1225,18 @@ export async function togglePageTranslation(
       root.getElementById(PROGRESS_ID)?.remove();
       return null;
     }
-    // Stale: clear the old language out of the way and run again, so one
-    // press means one thing.
+    // Stale: a different language is on the page. It has to go, but not yet.
+    //
+    // Clearing first is what this used to do, and the first request in the new
+    // language is also the one that makes Chrome fetch a language pack — up to
+    // two minutes. So the reader pressed once, lost the translation they had,
+    // and sat in front of a bare page with a progress badge on it. Reported
+    // from use as the extension hanging, which is exactly what it looked like.
+    //
+    // So the engine is made ready first, and the old translation stays up
+    // while that happens. Cancelling during the wait keeps what was already
+    // there, which is the answer a reader who pressed Stop wants.
+    if (!(await engineReady(root, deps))) return null;
     clearPageTranslation(root);
     root.getElementById(PROGRESS_ID)?.remove();
   }
