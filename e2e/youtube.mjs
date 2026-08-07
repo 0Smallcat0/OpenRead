@@ -184,15 +184,36 @@ try {
   let translated = 0;
   for (let waited = 0; waited < 60000; waited += 1500) {
     await sleep(1500);
-    const state = await page.evaluate(() => ({
-      original: Array.from(document.querySelectorAll('.ytp-caption-segment'))
-        .map((s) => s.textContent)
-        .join(' ')
-        .trim(),
-      translation:
-        document.querySelector('.oit-subtitle')?.textContent?.trim() ?? '',
-      time: Math.round(document.querySelector('video')?.currentTime ?? 0),
-    }));
+    const state = await page.evaluate(() => {
+      const line = document.querySelector('.oit-subtitle');
+      const segment = document.querySelector('.ytp-caption-segment');
+      const video = document.querySelector('video');
+      const lineBox = line?.getBoundingClientRect();
+      const capBox = segment?.getBoundingClientRect();
+      const videoBox = video?.getBoundingClientRect();
+      return {
+        original: Array.from(document.querySelectorAll('.ytp-caption-segment'))
+          .map((s) => s.textContent)
+          .join(' ')
+          .trim(),
+        translation: line?.textContent?.trim() ?? '',
+        time: Math.round(video?.currentTime ?? 0),
+        // Geometry, because text alone said this was working for four rounds
+        // while the line was painting at the top of the frame at 10px in the
+        // caption colour, over the picture. Everything read `textContent` and
+        // nothing read a bounding box.
+        below: Boolean(lineBox && capBox && lineBox.top > capBox.top),
+        inside: Boolean(
+          lineBox && videoBox && lineBox.bottom <= videoBox.bottom + 4,
+        ),
+        size: line
+          ? Math.round(parseFloat(getComputedStyle(line).fontSize))
+          : 0,
+        capSize: segment
+          ? Math.round(parseFloat(getComputedStyle(segment).fontSize))
+          : 0,
+      };
+    });
     if (
       state.translation &&
       !seen.some((s) => s.translation === state.translation)
@@ -225,6 +246,15 @@ try {
     check(
       state.translation !== state.original,
       `a caption came back unchanged (${state.original})`,
+    );
+    check(
+      state.below,
+      `the translation was not under the caption (line ${String(state.size)}px)`,
+    );
+    check(state.inside, 'the translation was painted outside the video');
+    check(
+      state.capSize > 0 && state.size >= state.capSize * 0.7,
+      `the translation is ${String(state.size)}px against a ${String(state.capSize)}px caption`,
     );
   }
 } catch (error) {
