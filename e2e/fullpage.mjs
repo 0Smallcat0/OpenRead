@@ -176,6 +176,36 @@ try {
     `Chrome refused to bind a shortcut: ${unbound.join(', ')}`,
   );
 
+  // Wait for the language pack before measuring anything.
+  //
+  // On a profile that has never translated, Chrome fetches the en -> zh-Hant
+  // model on the first request, and everything downstream races it: a run on a
+  // fresh profile reported "2 block(s) reported a failure" and, on another,
+  // three timing assertions in phases that had nothing to do with each other.
+  // Both passed on a warm profile with identical code, which is a harness
+  // saying "red" about the machine it is on.
+  //
+  // Done in the service worker on purpose: `Translator.create()` throws
+  // NotAllowedError without a user gesture in a page or an extension page
+  // while the pack is still `downloadable`, and a worker has no such gate.
+  if (ENGINE === 'builtin') {
+    const warmStart = Date.now();
+    const warmed = await worker.evaluate(async () => {
+      try {
+        const translator = await Translator.create({
+          sourceLanguage: 'en',
+          targetLanguage: 'zh-Hant',
+        });
+        return await translator.translate('Warming the language pack.');
+      } catch (error) {
+        return `FAILED: ${error.message}`;
+      }
+    });
+    console.log(
+      `pack: ${warmed} (${Math.round((Date.now() - warmStart) / 1000)} s)`,
+    );
+  }
+
   const page = await browser.newPage();
   await page.goto(TARGET, { waitUntil: 'domcontentloaded' });
   // A tab that existed before the extension loaded has no content script. A
