@@ -62,6 +62,7 @@ const MARKUP = `
       <input id="siteExcept" type="checkbox" />
       <span id="siteExceptLabel"></span>
     </label>
+    <textarea id="glossary"></textarea>
     <input id="obsidianVault" type="text" />
     <input id="obsidianFolder" type="text" />
     <input id="enrichOnCapture" type="checkbox" />
@@ -71,7 +72,8 @@ const MARKUP = `
 `;
 
 let stored: Record<string, unknown>;
-let packState: 'unavailable' | 'downloadable' | 'downloading' | 'available' | null;
+let packState:
+  'unavailable' | 'downloadable' | 'downloading' | 'available' | null;
 let downloads: number;
 let probe: ReturnType<typeof vi.fn>;
 let written: string[];
@@ -448,6 +450,22 @@ describe('settings are written through as they change', () => {
     expect(stored.engine).toBe('ollama');
   });
 
+  it('stores a glossary the moment it is typed', async () => {
+    await open();
+    const glossary = document.getElementById('glossary') as HTMLTextAreaElement;
+    const typed = `# names
+OpenRead
+
+bug = 瑕疵`;
+    glossary.value = typed;
+    glossary.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+
+    // Stored verbatim, not parsed: what comes back has to be what was typed,
+    // comments and blank lines included, or editing it is destructive.
+    expect(stored.glossary).toBe(typed);
+  });
+
   it('stores the capture fields as they are left', async () => {
     await open();
     const vault = document.getElementById('obsidianVault') as HTMLInputElement;
@@ -484,9 +502,9 @@ describe('settings are written through as they change', () => {
       return originalSet(values);
     };
 
-    document.getElementById('translatePage')?.dispatchEvent(
-      new MouseEvent('click', { bubbles: true }),
-    );
+    document
+      .getElementById('translatePage')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await settle();
     order.push('translated');
 
@@ -522,9 +540,9 @@ describe('automatic translation', () => {
     await settle();
   }
 
-  const mode = (): HTMLSelectElement =>
-    $('autoTranslate') as HTMLSelectElement;
-  const siteExcept = (): HTMLInputElement => $('siteExcept') as HTMLInputElement;
+  const mode = (): HTMLSelectElement => $('autoTranslate') as HTMLSelectElement;
+  const siteExcept = (): HTMLInputElement =>
+    $('siteExcept') as HTMLInputElement;
 
   it('is off until it is asked for', async () => {
     // An extension that starts rewriting pages the moment it is installed is

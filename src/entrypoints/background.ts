@@ -13,6 +13,12 @@ import { translateBuiltin, BuiltinUnavailableError } from '../api/builtin';
 import { buildOriginStripRule, ORIGIN_STRIP_RULE_ID } from '../core/dnr-rule';
 import { describeEngineFailure } from '../core/diagnostics';
 import {
+  parseGlossary,
+  protectTerms,
+  restoreTerms,
+  type ProtectedText,
+} from '../core/glossary';
+import {
   STREAM_PORT_NAME,
   TRANSLATE_SELECTION_COMMAND,
   TRANSLATE_PAGE_COMMAND,
@@ -229,7 +235,62 @@ export default defineBackground(() => {
       const { signal } = controller;
 
       void (async () => {
-        const { engine, baseUrl } = await loadSettings();
+        const { engine, baseUrl, glossary } = await loadSettings();
+
+        // The glossary, applied here rather than in either engine, because it
+        // is a property of what the user wants translated and not of what
+        // translates it. Both paths below run through `withGlossary`.
+        const entries = parseGlossary(glossary);
+        const hidden =
+          entries.length > 0 ? protectTerms(message.text, entries) : null;
+        // A block that is *only* a protected term leaves nothing behind to
+        // translate, and language detection on `[[0]]` fails outright — which
+        // would surface as "Could not tell what language this is written in"
+        // on a line that needed no translating in the first place.
+        const remaining = hidden?.text.replace(/\[\[\s*\d+\s*\]\]/g, ' ') ?? '';
+        const guarded: ProtectedText | null =
+          hidden && hidden.values.length > 0 && /\p{L}/u.test(remaining)
+            ? hidden
+            : null;
+
+        /**
+         * Run one engine, with the glossary's terms hidden while it works.
+         *
+         * Streaming is given up for exactly the blocks a glossary touches: the
+         * placeholder that comes back has to be swapped for the term before the
+         * text is shown, and a chunk boundary can land in the middle of one.
+         * Blocks with no glossary term in them stream as before, so the cost is
+         * paid only where the feature is used.
+         */
+        const withGlossary = async (
+          run: (
+            text: string,
+            onChunk: (chunk: string) => void,
+          ) => Promise<void>,
+        ): Promise<void> => {
+          if (!guarded) {
+            await run(message.text, (chunk) =>
+              post({ status: 'streaming', chunk }),
+            );
+            return;
+          }
+          let buffered = '';
+          await run(guarded.text, (chunk) => (buffered += chunk));
+          if (signal.aborted) return;
+          const restored = restoreTerms(buffered, guarded);
+          if (restored.complete) {
+            post({ status: 'streaming', chunk: restored.text });
+            return;
+          }
+          // A placeholder did not survive, so the term is missing from the
+          // sentence rather than merely translated. Translating again without
+          // protection costs a second call and gives the reader a translated
+          // term, which is the lesser of the two losses.
+          let plain = '';
+          await run(message.text, (chunk) => (plain += chunk));
+          if (signal.aborted) return;
+          post({ status: 'streaming', chunk: plain });
+        };
 
         // Why the built-in engine bowed out, kept for the message below. Null
         // whenever it never ran or never failed.
@@ -240,17 +301,19 @@ export default defineBackground(() => {
         // one be reached.
         if (engine === 'builtin') {
           try {
-            await translateBuiltin({
-              text: message.text,
-              targetLang: message.targetLang,
-              sourceLang: message.sourceLang,
-              signal,
-              onChunk: (chunk) => post({ status: 'streaming', chunk }),
-              // Without this the first use of a language pair is a silent
-              // two-minute wait, which reads as a broken extension.
-              onDownloadProgress: (loaded) =>
-                post({ status: 'downloading', loaded }),
-            });
+            await withGlossary((text, onChunk) =>
+              translateBuiltin({
+                text,
+                targetLang: message.targetLang,
+                sourceLang: message.sourceLang,
+                signal,
+                onChunk,
+                // Without this the first use of a language pair is a silent
+                // two-minute wait, which reads as a broken extension.
+                onDownloadProgress: (loaded) =>
+                  post({ status: 'downloading', loaded }),
+              }),
+            );
             post({ status: 'done' });
             return;
           } catch (error) {
@@ -272,16 +335,18 @@ export default defineBackground(() => {
 
         await originRuleReady;
         try {
-          await translateStream({
-            text: message.text,
-            baseUrl,
-            model: message.model,
-            targetLang: message.targetLang,
-            context: message.context,
-            retryCount: message.retryCount ?? 0,
-            signal,
-            onChunk: (chunk) => post({ status: 'streaming', chunk }),
-          });
+          await withGlossary((text, onChunk) =>
+            translateStream({
+              text,
+              baseUrl,
+              model: message.model,
+              targetLang: message.targetLang,
+              context: message.context,
+              retryCount: message.retryCount ?? 0,
+              signal,
+              onChunk,
+            }),
+          );
           post({ status: 'done' });
         } catch (error) {
           if (signal.aborted || (error as Error).name === 'AbortError') return;

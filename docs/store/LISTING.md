@@ -51,6 +51,7 @@ API 金鑰、不需要帳號。第一次翻某個語言對時，Chrome 會下載
   Ctrl+Z 可以還原
 • 自動翻譯：可設定成「只翻外語頁面」或「每頁都翻」，預設關閉，任何網站都能
   單獨排除
+• 術語表：不想被翻的名字寫一行就好，也可以指定某個詞固定翻成什麼
 • 三十九種目標語言，每一種都對真實 Chrome 驗證過支援
 • 外觀可調：雙語或只顯示譯文、四種標記樣式、三種字級，改了立即生效不用重翻
 • 台灣用語在地化：OpenCC s2twp 詞組級簡繁轉換（界面→介面、公里不會變公裡），
@@ -104,6 +105,8 @@ Features
   and what you wrote is replaced with its translation. Ctrl+Z takes it back
 • Automatic translation — optional, off by default: translate pages in another
   language as they load, with any site excludable in one click
+• A glossary — a name a line to keep it as written, or `term = translation` to
+  pin how one is rendered every time
 • Thirty-nine target languages, every one verified against a real Chrome
 • Three settings for how it looks — the original beside the translation or the
   translation alone, four ways of marking it, three sizes, all applying to a
@@ -184,8 +187,8 @@ Engineering & evaluation: https://github.com/0Smallcat0/OpenRead/blob/main/docs/
 - **Permission justifications:**
   - `storage` — persist user settings (engine, Ollama server URL, model,
     target language, the language typed text is translated into, automatic
-    translation and its per-site exceptions, appearance, Obsidian vault/folder,
-    enrichment toggle).
+    translation and its per-site exceptions, appearance, the user's glossary of
+    terms, Obsidian vault/folder, enrichment toggle).
   - `activeTab` — interact with the currently active tab when the user invokes
     the selection UI, asks for a whole-page translation, or opens a local PDF
     in the bundled viewer.

@@ -25,7 +25,8 @@
           color: #eee;
         }
         input,
-        select {
+        select,
+        textarea {
           background: #2a2a2a;
           color: #eee;
           border-color: #444;
@@ -42,7 +43,8 @@
         font-weight: 600;
       }
       input,
-      select {
+      select,
+      textarea {
         width: 100%;
         box-sizing: border-box;
         padding: 7px 9px;
@@ -50,6 +52,14 @@
         /* #ccc was 1.61:1 against white — below the 3:1 a control border needs */
         border: 1px solid #8b93a1;
         border-radius: 6px;
+      }
+      textarea {
+        /* Monospace because the grammar is column-aligned: the reader is
+           scanning for the `=` that separates a term from what it becomes. */
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        resize: vertical;
       }
       button {
         margin-top: 16px;
@@ -154,15 +164,31 @@
         padding: 6px 10px;
         font-size: 12px;
       }
-      #autoNote {
+      #autoNote,
+      .hint {
         margin: 6px 0 0;
         font-size: 11px;
         line-height: 1.45;
         color: #4b5563;
       }
+      .hint {
+        margin: 0 0 6px;
+      }
+      .hint code {
+        font-size: 11px;
+        /* Only just visible against the popup, on purpose: these are examples
+           of a format, not controls. */
+        background: #f1f3f5;
+        border-radius: 3px;
+        padding: 0 3px;
+      }
       @media (prefers-color-scheme: dark) {
-        #autoNote {
+        #autoNote,
+        .hint {
           color: #9ca3af;
+        }
+        .hint code {
+          background: #333;
         }
       }
       /* The connection line sits under the URL field it reports on, so it reads
@@ -343,6 +369,22 @@
         <option value="same">Same as the original</option>
         <option value="large">Larger than the original</option>
       </select>
+
+      <hr />
+
+      <!-- Names a translator gets wrong and no prompt can fix, because the
+           built-in engine takes no prompt. See core/glossary.ts. -->
+      <label for="glossary">Never translate these</label>
+      <p class="hint">
+        One a line. <code>OpenRead</code> keeps it as written;
+        <code>bug = 瑕疵</code> pins how it is translated.
+      </p>
+      <textarea
+        id="glossary"
+        rows="4"
+        spellcheck="false"
+        placeholder="OpenRead&#10;React Native&#10;bug = 瑕疵"
+      ></textarea>
 
       <hr />
 
