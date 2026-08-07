@@ -834,7 +834,16 @@ try {
     p.id = 'glossary-block';
     p.textContent =
       'The OpenRead widget reads a page and translates it, and OpenRead never sends the text anywhere.';
-    document.body.replaceChildren(p);
+    // A code span in prose. `code` is on the skip list, so its text never
+    // reached the engine and the translation simply lost it — a sentence
+    // ending "redefined as ." on every documentation page. It goes in as a
+    // placeholder now, which only works if the placeholder survives, which is
+    // a fact about Chrome and belongs here rather than in a unit test.
+    const withCode = document.createElement('p');
+    withCode.id = 'code-block';
+    withCode.innerHTML =
+      'This attribute is considered a legacy attribute and redefined as <code>allow=\"fullscreen\"</code>.';
+    document.body.replaceChildren(p, withCode);
   });
   await sleep(400);
   await translatePage();
@@ -867,6 +876,22 @@ try {
     !/widget/i.test(glossed),
     `"widget" was left in English rather than pinned (${glossed})`,
   );
+  let coded = '';
+  for (let waited = 0; waited < 30000; waited += 500) {
+    coded = await page.evaluate(
+      () =>
+        document.querySelector('#code-block .oit-bilingual')?.textContent ?? '',
+    );
+    if (coded) break;
+    await sleep(500);
+  }
+  console.log(`  with a code span: ${coded}`);
+  check(coded !== '', 'the block with a code span was never translated');
+  check(
+    coded.includes('allow="fullscreen"'),
+    `the code span was dropped from the translation (${coded})`,
+  );
+
   await configure({ glossary: '' });
 
   // ---- the bundled PDF viewer ----

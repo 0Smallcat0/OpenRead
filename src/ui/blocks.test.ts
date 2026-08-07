@@ -17,7 +17,9 @@ import {
   TRANSLATED_ATTR,
   BILINGUAL_CLASS,
   queryDeep,
+  protectedText,
 } from './blocks';
+import { restoreTerms } from '../core/glossary';
 
 const visible = { isVisible: () => true };
 
@@ -159,7 +161,9 @@ describe('collectBlocks', () => {
     // and leaves the marker behind. Measured on a real SPA — both blocks kept
     // the marker, neither kept a translation, and the whole-page run reported
     // "Nothing to translate on this page" over untranslated content.
-    render(`<p ${TRANSLATED_ATTR}>Brand new text from the next route here.</p>`);
+    render(
+      `<p ${TRANSLATED_ATTR}>Brand new text from the next route here.</p>`,
+    );
     const collected = collectBlocks(document.body, visible);
     expect(textsOf(collected)).toEqual([
       'Brand new text from the next route here.',
@@ -498,7 +502,9 @@ describe('web components', () => {
 
 describe('queryDeep', () => {
   it('finds matches on both sides of a shadow boundary', () => {
-    render(`<span class="${BILINGUAL_CLASS}">light</span><div id="host"></div>`);
+    render(
+      `<span class="${BILINGUAL_CLASS}">light</span><div id="host"></div>`,
+    );
     const shadow = (
       document.getElementById('host') as HTMLElement
     ).attachShadow({ mode: 'open' });
@@ -507,5 +513,79 @@ describe('queryDeep', () => {
     expect(
       queryDeep(document.body, `.${BILINGUAL_CLASS}`).map((n) => n.textContent),
     ).toEqual(['light', 'shadow']);
+  });
+});
+
+describe('protectedText', () => {
+  const block = (html: string): HTMLElement => {
+    document.body.innerHTML = `<p id="b">${html}</p>`;
+    return document.getElementById('b')!;
+  };
+
+  it('leaves a block with no code alone, at no cost', () => {
+    const hidden = protectedText(block('Just a sentence of ordinary prose.'));
+    expect(hidden.text).toBe('Just a sentence of ordinary prose.');
+    expect(hidden.values).toEqual([]);
+  });
+
+  it('hides a code span behind a placeholder', () => {
+    // The measured failure: asked to translate `allow="fullscreen"`, Chrome
+    // deletes it, and the sentence loses the thing it is about.
+    const hidden = protectedText(
+      block('Redefined as <code>allow="fullscreen"</code>.'),
+    );
+    expect(hidden.text).toBe('Redefined as [[0]].');
+    expect(hidden.values).toEqual(['allow="fullscreen"']);
+  });
+
+  it('puts the code back exactly as it was', () => {
+    const hidden = protectedText(
+      block('Run <code>npm install</code> then <kbd>Ctrl+C</kbd>.'),
+    );
+    expect(hidden.text).toBe('Run [[0]] then [[1]].');
+    expect(restoreTerms('先執行 [[0]] 再按 [[1]]。', hidden)).toEqual({
+      text: '先執行 npm install 再按 Ctrl+C。',
+      complete: true,
+    });
+  });
+
+  it('covers the other verbatim tags, not just code', () => {
+    const hidden = protectedText(
+      block('See <samp>out.txt</samp>, <var>n</var> and <tt>old</tt> here.'),
+    );
+    expect(hidden.values).toEqual(['out.txt', 'n', 'old']);
+  });
+
+  it('does not protect a block that is nothing but code', () => {
+    // `[[0]]` alone has no language to detect, and the engine answers that
+    // with an error rather than a translation. The fallback is `visibleText`,
+    // which skips code — so the block reads as empty and is never collected,
+    // which is what happens to a code-only block today and is right.
+    const hidden = protectedText(block('<code>npm install openread</code>'));
+    expect(hidden.values).toEqual([]);
+    expect(hidden.text).toBe('');
+  });
+
+  it('never issues a token number the prose already contains', () => {
+    const hidden = protectedText(
+      block('See [[0]] and run <code>npm test</code> now.'),
+    );
+    expect(hidden.text).toBe('See [[0]] and run [[1]] now.');
+    expect(restoreTerms(hidden.text, hidden).text).toBe(
+      'See [[0]] and run npm test now.',
+    );
+  });
+
+  it('skips an empty code span rather than issuing a token for nothing', () => {
+    const hidden = protectedText(block('Nothing here: <code>  </code> right.'));
+    expect(hidden.values).toEqual([]);
+  });
+
+  it('still skips what visibleText skips', () => {
+    const hidden = protectedText(
+      block('Prose <code>x = 1</code><style>p{color:red}</style> ends.'),
+    );
+    expect(hidden.text).toBe('Prose [[0]] ends.');
+    expect(hidden.values).toEqual(['x = 1']);
   });
 });

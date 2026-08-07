@@ -132,8 +132,13 @@ function matcher(term: string): RegExp {
   return new RegExp(`${before}${body}${after}`, 'giu');
 }
 
+/** The placeholder for one index. Exported so other protections agree on it. */
+export function tokenFor(index: number): string {
+  return `[[${String(index)}]]`;
+}
+
 /** Token numbers already present in the text, so ours never collide. */
-function takenIndices(text: string): Set<number> {
+export function takenIndices(text: string): Set<number> {
   const taken = new Set<number>();
   for (const match of text.matchAll(TOKEN_PATTERN)) {
     taken.add(Number(match[1]));
@@ -176,7 +181,7 @@ export function protectTerms(
       // the name is written, and a page that wrote `openread` was wrong.
       values.push(entry.as || entry.term);
       indices.push(index);
-      return `[[${String(index)}]]`;
+      return tokenFor(index);
     });
   }
   return { text: out, values, indices };
