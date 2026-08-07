@@ -43,6 +43,21 @@ const STYLE_ID = 'oit-subtitle-style';
 interface RenderedCaptions {
   container: string;
   line: string;
+  /**
+   * Where the translation goes, which is not where the container is.
+   *
+   * The container spans the whole video and is only a positioning context;
+   * the caption a reader sees lives in a box the player positions inside it.
+   * Appending to the container put the translation at the top-left of the
+   * frame at 10px, in the caption colour, over whatever the video was showing:
+   * measured at y=70 while the caption itself was at y=590. The text was
+   * right every time and nobody could see it, which is why this survived four
+   * rounds of "it works" — every check read `textContent` and none read a
+   * bounding box.
+   *
+   * Resolved on every write, because the player rebuilds this box.
+   */
+  anchor: string;
 }
 
 const RENDERED: RenderedCaptions[] = [
@@ -57,6 +72,7 @@ const RENDERED: RenderedCaptions[] = [
   {
     container: '.ytp-caption-window-container',
     line: '.ytp-caption-segment',
+    anchor: '.caption-window',
   },
 ];
 
@@ -247,7 +263,7 @@ interface Attachment {
 /** A player that draws captions into the DOM: append inside its container. */
 function attachRendered(
   container: HTMLElement,
-  selector: string,
+  { line: selector, anchor }: RenderedCaptions,
   deps: SubtitleDeps,
   onCue: () => void,
   onTranslation: () => void,
@@ -256,7 +272,46 @@ function attachRendered(
   ensureStyle(doc);
   const line = lineFor(container, deps.targetLang);
 
+  /**
+   * Keep the line under the caption, wherever the player has just put it.
+   *
+   * Done on every write rather than once at attach: the player rebuilds its
+   * caption box, and a line parented to the box it built two seconds ago is a
+   * line in a detached node.
+   */
+  const place = (): void => {
+    const host = container.querySelector<HTMLElement>(anchor) ?? container;
+    if (line.parentElement !== host) host.appendChild(line);
+    else if (line.nextElementSibling) host.appendChild(line);
+
+    // Sized off the caption itself, not inherited. The box this sits in sets
+    // no font size — the segments do — so `0.92em` resolved against the
+    // player's chrome and produced 10px under a 31px caption. Reading it from
+    // the segment also means the reader's own caption-size setting carries
+    // over for free.
+    const segment = container.querySelector<HTMLElement>(selector);
+    if (segment) {
+      const view = container.ownerDocument.defaultView;
+      const size = view
+        ? parseFloat(view.getComputedStyle(segment).fontSize)
+        : 0;
+      if (size > 0)
+        line.style.fontSize = `${String(Math.round(size * 0.92))}px`;
+    }
+
+    // Lift the caption box by exactly the height of the line just added.
+    //
+    // The player positions this box a fixed distance from the bottom of the
+    // video, sized for the caption alone. A second line grows it downward and
+    // out of the frame: measured at y=656 with the video ending at 663, so
+    // seven pixels of a thirty-pixel line were on screen. `transform` rather
+    // than `top`, because `top` is what the player writes and rewrites.
+    const lift = line.textContent ? line.offsetHeight : 0;
+    host.style.transform = lift > 0 ? `translateY(-${String(lift)}px)` : '';
+  };
+
   const translator = new CueTranslator(deps, (translation) => {
+    place();
     line.textContent = translation;
     if (translation) onTranslation();
   });
@@ -289,6 +344,10 @@ function attachRendered(
     disconnect: () => {
       observer.disconnect();
       translator.stop();
+      // The lift belongs to the line; leaving it would hold the player's own
+      // caption up by thirty pixels for the rest of the video.
+      const host = container.querySelector<HTMLElement>(anchor);
+      if (host) host.style.transform = '';
       line.remove();
     },
   };
@@ -415,14 +474,14 @@ export function mountSubtitleTranslate(
 
   const scan = (): void => {
     if (!deps.enabled) return;
-    for (const { container, line } of RENDERED) {
+    for (const shape of RENDERED) {
       for (const host of Array.from(
-        doc.querySelectorAll<HTMLElement>(container),
+        doc.querySelectorAll<HTMLElement>(shape.container),
       )) {
         if (attached.has(host)) continue;
         attached.set(
           host,
-          attachRendered(host, line, deps, seeCue, seeTranslation),
+          attachRendered(host, shape, deps, seeCue, seeTranslation),
         );
       }
     }
