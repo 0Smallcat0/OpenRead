@@ -150,13 +150,20 @@ extension's.
 | ------------------------- | --------------------------- | ------------------------- |
 | To install                | nothing                     | a server + a 5.2 GB model |
 | A 44-block article        | **~2 s**                    | 54 s                      |
+| chrF on 27 fixtures       | 36.5                        | **46.4**                  |
 | Reads surrounding context | no                          | yes                       |
 | Choose the model          | no                          | yes                       |
 | Capture enrichment        | no                          | yes                       |
 
-Both run entirely on your machine. Switch in the popup; `ollama pull qwen3` and
-`ollama serve` is the whole Ollama setup, with no `OLLAMA_ORIGINS` step —
-[here is why](docs/ENGINEERING.md#how-it-works).
+Both run entirely on your machine, and both numbers come from the same 27
+fixtures against the same Taiwanese references — the built-in engine's are in
+[`eval/BUILTIN-RESULTS.md`](eval/BUILTIN-RESULTS.md), the model's in
+[`eval/BENCHMARK-RESULTS.md`](eval/BENCHMARK-RESULTS.md). Ten chrF is the price
+of installing nothing; a whole segment finishes on the built-in engine in about
+the time Ollama takes to paint its first character.
+
+Switch in the popup; `ollama pull qwen3` and `ollama serve` is the whole Ollama
+setup, with no `OLLAMA_ORIGINS` step — [here is why](docs/ENGINEERING.md#how-it-works).
 
 ## Privacy
 
@@ -188,6 +195,7 @@ pnpm install
 pnpm build        # -> .output/chrome-mv3, load it unpacked
 pnpm test         # 630 unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
+pnpm eval:builtin # score the default engine in a real Chrome -> eval/BUILTIN-RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)
 pnpm shoot        # re-shoot every screenshot and the clip on this page
 pnpm e2e:page     # whole-page translation in a real Chrome, end to end
