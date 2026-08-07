@@ -31,7 +31,19 @@ const STYLE_ID = 'oit-pdf-translation-style';
 const PAGE_CONCURRENCY = 1;
 
 export interface PdfTranslateDeps {
-  translate: (text: string, signal: AbortSignal) => Promise<string>;
+  translate: (
+    text: string,
+    signal: AbortSignal,
+    /**
+     * Chrome fetching a language pack, 0-1.
+     *
+     * Not optional in spirit. A first PDF on a fresh profile sat at
+     * "Translating 0/2" for minutes with nothing else said, because this path
+     * never reported the download the page path had reported since 2.15.0 —
+     * the same two minutes of silence, one surface over.
+     */
+    onDownloadProgress?: (loaded: number) => void,
+  ) => Promise<string>;
   targetLang: string;
   /** Skip text already in the target language, as everywhere else. */
   shouldSkipText?: (text: string) => boolean;
@@ -204,6 +216,7 @@ async function translatePdfPage(
   page: HTMLElement,
   deps: PdfTranslateDeps,
   signal: AbortSignal,
+  onDownloadProgress?: (loaded: number) => void,
 ): Promise<number> {
   const layer = page.querySelector('.textLayer');
   if (!layer) return 0;
@@ -223,7 +236,9 @@ async function translatePdfPage(
   for (const paragraph of paragraphs) {
     if (signal.aborted) return 0;
     try {
-      const result = (await deps.translate(paragraph.text, signal)).trim();
+      const result = (
+        await deps.translate(paragraph.text, signal, onDownloadProgress)
+      ).trim();
       // Unchanged means already in the target language; printing it would
       // repeat the page in the panel under it.
       if (result && result !== paragraph.text) out.push(result);
@@ -267,7 +282,9 @@ export async function translatePdf(
       const next = byDistanceFromViewport(doc, queued).shift();
       if (!next) break;
       queued = queued.filter((page) => page !== next);
-      const done = await translatePdfPage(next, deps, controller.signal);
+      const done = await translatePdfPage(next, deps, controller.signal, (l) =>
+        progress.downloading(l),
+      );
       if (controller.signal.aborted) return;
       paragraphs += done;
       pages++;

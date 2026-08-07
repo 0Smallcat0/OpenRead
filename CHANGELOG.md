@@ -62,6 +62,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   width is the page's, and `content-box` had been laying 20px of padding over
   each edge of the paper.
 
+- **A first PDF said nothing while it waited for a language pack.** The page
+  path has reported that download since 2.15.0, whose entry reads "two minutes
+  of silence on the first use of a language pair is the bug this replaces" —
+  and the PDF path, added three versions later, never passed the callback. The
+  same two minutes of silence, one surface over: a fresh profile sat at
+  "Translating 0/2" with nothing else said. It reports the download now.
+
+  Found only because `pnpm e2e:page` runs on a throwaway profile. On a warm one
+  the pack is already there and this is invisible, which is exactly the profile
+  every hand-check and every quick verification had used.
+
+- **`pnpm e2e:stress` hardcoded one developer's profile directory.** It could
+  not run anywhere else, and two runs on this machine shared state — which a
+  stress harness is the last place to want. A throwaway profile by default, like
+  the other two. Its PDF wait is also seven minutes now, and prints elapsed time
+  every minute: 120 seconds of a first-run download looked exactly like a hang,
+  and telling those apart has already cost three wrong diagnoses.
+
 - **Translating what you have typed is on the right-click menu.** It was
   reachable only by `Ctrl+Shift+K`, and a command is reachable exactly as far
   as Chrome's willingness to bind its key — which is neither documented nor
