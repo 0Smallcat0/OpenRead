@@ -140,6 +140,17 @@ try {
   console.log(
     `pack: ${packed} (${Math.round((Date.now() - packStart) / 1000)} s)`,
   );
+  const detector = await worker.evaluate(async () => {
+    try {
+      if (!('LanguageDetector' in self)) return 'no LanguageDetector';
+      const d = await LanguageDetector.create();
+      const [best] = await d.detect('Warming the language detector.');
+      return best?.detectedLanguage ?? 'no answer';
+    } catch (error) {
+      return `FAILED: ${error.message}`;
+    }
+  });
+  console.log(`detector: ${detector}`);
 
   const configure = (v) =>
     worker.evaluate(async (x) => chrome.storage.sync.set(x), v);

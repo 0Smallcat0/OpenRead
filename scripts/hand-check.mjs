@@ -168,6 +168,22 @@ console.log(
   `pack:     ${packed} (${Math.round((Date.now() - packStart) / 1000)} s)`,
 );
 
+// The detector has a model of its own, downloaded separately from any
+// translation pack, and every request that omits a source language waits on
+// it: subtitles, the text box, a PDF. On a profile that has never used it,
+// that wait is minutes long and completely silent.
+const detector = await worker.evaluate(async () => {
+  try {
+    if (!('LanguageDetector' in self)) return 'no LanguageDetector';
+    const d = await LanguageDetector.create();
+    const [best] = await d.detect('Warming the language detector.');
+    return best?.detectedLanguage ?? 'no answer';
+  } catch (error) {
+    return `FAILED: ${error.message}`;
+  }
+});
+console.log(`detector: ${detector}`);
+
 // Is the extension actually alive? One loaded over CDP can vanish — a
 // `chrome.runtime.reload()` uninstalls it outright, since Chrome cannot
 // re-install what it was handed this way — and every feature then looks broken
