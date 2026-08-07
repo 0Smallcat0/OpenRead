@@ -12,12 +12,15 @@ import {
 import { translateViaPort } from '../ui/port-translate';
 import { shouldBypassAI } from '../core/language';
 import { shouldAutoTranslate } from '../core/auto-translate';
+import { shouldTranslateFrame } from '../core/frames';
+import { collectBlocks } from '../ui/blocks';
 import { loadSettings, type Settings } from '../settings';
 import type { PageLanguageResponse } from '../messaging';
 
 /**
  * Web-page content script: mounts the shared selection translator on every
- * frame, and handles whole-page translation on the top frame. Model + target
+ * frame, and runs whole-page translation on every frame that carries an
+ * article rather than an advert — see `core/frames.ts`. Model + target
  * language are read from storage at translate time so changes in the popup
  * take effect without a reload. No secret is involved — inference is local;
  * the background broker holds the Ollama server URL.
@@ -41,9 +44,13 @@ export default defineContentScript({
       },
     });
 
+    const isTop = window.top === window;
+
     const pageDeps = (settings: Settings, unprompted = false) => ({
       targetLang: settings.targetLang,
       unprompted,
+      // One badge a page, in the frame the reader's viewport belongs to.
+      silent: !isTop,
       translate: (
         text: string,
         signal: AbortSignal,
@@ -80,12 +87,57 @@ export default defineContentScript({
       },
     });
 
-    // Only the top frame translates the page. Every frame receives the
-    // broadcast, and an ad iframe running its own pass would spend the user's
-    // GPU on someone else's banner while stacking a second progress badge in
-    // the same corner.
-    if (window.top !== window) return;
+    /**
+     * The host in the address bar, from inside any frame.
+     *
+     * `ancestorOrigins` is ordered innermost first, so the last entry is the
+     * top document's origin — readable cross-origin, which is what makes this
+     * possible at all. Empty for a sandboxed frame, whose origin is opaque;
+     * the caller treats that as "cannot tell" rather than guessing, because
+     * the guess would be this frame's own host and a per-site exception that
+     * silently applies to the wrong site is worse than one that does nothing.
+     */
+    const pageHost = (): string => {
+      if (isTop) return location.hostname;
+      const origins = location.ancestorOrigins;
+      const outermost = origins?.[origins.length - 1];
+      if (!outermost) return '';
+      try {
+        return new URL(outermost).hostname;
+      } catch {
+        return '';
+      }
+    };
 
+    /**
+     * Whether this frame joins a whole-page run.
+     *
+     * This used to be `window.top === window`, and the reason was sound: every
+     * frame receives the broadcast, and an ad iframe running its own pass
+     * would spend the reader's GPU on someone else's banner. The cost was that
+     * an article inside an iframe — an embedded document viewer, a comment
+     * system, a syndicated post — came back untranslated with nothing to say
+     * why, because nothing about it looks embedded to a reader.
+     *
+     * `core/frames.ts` has the test and the sizes. It is asked here, at the
+     * moment of the press, rather than once at mount: a frame that had two
+     * paragraphs when the script loaded may have thirty by the time anyone
+     * asks for a translation.
+     */
+    const framePasses = (settings: Settings): boolean =>
+      shouldTranslateFrame({
+        isTop,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        blocks: collectBlocks(document, {
+          // Everything in the frame, not just what is in view: a frame scrolls
+          // separately, and whether it holds an article is not a question
+          // about where its scrollbar happens to be.
+          isVisible: () => true,
+          shouldSkipText: (text: string) =>
+            shouldBypassAI(text, settings.targetLang),
+        }).length,
+      });
 
     chrome.runtime.onMessage.addListener(
       (message: unknown, _sender, sendResponse) => {
@@ -93,7 +145,10 @@ export default defineContentScript({
 
         // Answered synchronously, so no `return true` is needed and the popup
         // is never left waiting on a channel that closed.
-        if (type === 'PAGE_LANGUAGE') {
+        // Top frame only. `chrome.tabs.sendMessage` resolves on the first
+        // responder, and an embedded frame answering `lang="en"` for a Chinese
+        // page would decide auto-translation for the whole tab.
+        if (type === 'PAGE_LANGUAGE' && isTop) {
           const response: PageLanguageResponse = {
             lang: document.documentElement.getAttribute('lang'),
           };
@@ -128,6 +183,7 @@ export default defineContentScript({
         if (type !== 'TRANSLATE_PAGE') return;
         void (async () => {
           const settings = await loadSettings();
+          if (!framePasses(settings)) return;
           await togglePageTranslation(document, pageDeps(settings));
         })();
       },
@@ -174,9 +230,16 @@ export default defineContentScript({
         .map((element) => element.textContent ?? '')
         .join(' ')
         .slice(0, 1000);
+      // The site the reader is on, which in a frame is not `location.hostname`.
+      // A per-site exception is a statement about the address bar: excluding
+      // news.example.com must also stop the article embedded inside it, and
+      // must not be defeated by that article living on a CDN host nobody typed.
+      const host = pageHost();
+      if (!host) return;
+      if (!framePasses(settings)) return;
       const decided = shouldAutoTranslate({
         mode: settings.autoTranslate,
-        host: location.hostname,
+        host,
         except: settings.autoTranslateExcept,
         pageLang: document.documentElement.getAttribute('lang'),
         sample,

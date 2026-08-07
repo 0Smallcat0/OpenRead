@@ -18,6 +18,7 @@ src/
     tw-vocab.ts           mainland → Taiwan word choices, for Traditional targets
     bcp47.ts              language name → the tag Chrome's translator takes
     auto-translate.ts     whether a page translates itself, and per-site exceptions
+    frames.ts             which iframes hold an article rather than an advert
     glossary.ts           terms held out of translation behind a placeholder
     capture.ts            capture → Markdown + obsidian:// URI builders
     enrich.ts             enrich prompt + tolerant small-model JSON salvager

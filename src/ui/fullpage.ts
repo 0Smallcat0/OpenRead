@@ -145,6 +145,17 @@ export interface PageTranslateDeps {
    * either way, so "nothing yet" still becomes "translated" on its own.
    */
   unprompted?: boolean;
+  /**
+   * Translate without the corner badge.
+   *
+   * For a frame that is not the top one. Every qualifying frame runs its own
+   * pass, and a badge is positioned against the viewport it is in — so three
+   * embedded articles would put three badges in three different corners of the
+   * page, two of them possibly scrolled out of sight, each offering a Stop
+   * that stops only its own frame. The top frame keeps the one badge, and its
+   * count is about the top document.
+   */
+  silent?: boolean;
 }
 
 /** The three things a reader can change about how a translation looks. */
@@ -482,6 +493,20 @@ export interface Progress {
 export function mountPageProgress(doc: Document, onStop: () => void): Progress {
   ensureStyle(doc);
   return mountProgress(doc, onStop);
+}
+
+/** The badge, or nothing at all, depending on where this frame sits. */
+function progressFor(
+  doc: Document,
+  deps: PageTranslateDeps,
+  onStop: () => void,
+): Progress {
+  if (!deps.silent) return mountProgress(doc, onStop);
+  return {
+    update: () => undefined,
+    downloading: () => undefined,
+    finish: () => undefined,
+  };
 }
 
 function mountProgress(doc: Document, onStop: () => void): Progress {
@@ -843,7 +868,7 @@ export async function translatePage(
 
   if (blocks.length === 0) {
     if (!deps.unprompted) {
-      const progress = mountProgress(root, stopPageTranslation);
+      const progress = progressFor(root, deps, stopPageTranslation);
       progress.finish('Nothing to translate on this page');
     }
     // Still worth watching: on an app that renders after load, "nothing to
@@ -880,7 +905,7 @@ async function drainQueue(
   };
   run = current;
 
-  const progress = mountProgress(root, stopPageTranslation);
+  const progress = progressFor(root, deps, stopPageTranslation);
   /** Recomputed, not fixed: the queue can grow under a reader who scrolls. */
   const total = (): number =>
     current.done + current.inFlight + current.queue.length;
