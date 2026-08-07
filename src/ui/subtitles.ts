@@ -112,6 +112,15 @@ export const NO_CAPTIONS_AFTER_MS = 8000;
  */
 export const RETRY_AFTER_MS = 700;
 
+/**
+ * How long the previous translation stays up while the next one is fetched.
+ *
+ * Long enough that the common case never blanks — the built-in engine answers
+ * a caption in tens of milliseconds — and short enough that one which really
+ * is late does not sit under the wrong caption for a whole sentence.
+ */
+export const GRACE_MS = 400;
+
 function ensureStyle(doc: Document): void {
   if (doc.getElementById(STYLE_ID)) return;
   const style = doc.createElement('style');
@@ -173,6 +182,7 @@ class CueTranslator {
   private controller: AbortController | null = null;
   private showing = '';
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private grace: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly deps: SubtitleDeps,
@@ -182,12 +192,16 @@ class CueTranslator {
   stop(): void {
     this.controller?.abort();
     this.controller = null;
-    if (this.timer !== null) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
+    this.clearTimers();
     this.showing = '';
     this.write('');
+  }
+
+  private clearTimers(): void {
+    if (this.timer !== null) clearTimeout(this.timer);
+    if (this.grace !== null) clearTimeout(this.grace);
+    this.timer = null;
+    this.grace = null;
   }
 
   offer(raw: string, retried = false): void {
@@ -197,12 +211,11 @@ class CueTranslator {
 
     this.controller?.abort();
     this.controller = null;
-    if (this.timer !== null) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
+    this.clearTimers();
 
     if (!cue || !isTranslatableCue(cue)) {
+      // Nothing is coming, so there is nothing to wait for: a sound marker or
+      // a gap in the speech clears at once.
       this.write('');
       return;
     }
@@ -213,10 +226,21 @@ class CueTranslator {
       return;
     }
 
-    // Cleared rather than left showing the previous line: the old translation
-    // under a new caption is a specific kind of wrong, where the reader has no
-    // way to tell it is stale.
-    this.write('');
+    // Not cleared yet.
+    //
+    // Clearing here is honest — an old translation under a new caption is a
+    // kind of wrong the reader cannot see — and it was also the flicker.
+    // Sampled at 200 ms over twelve seconds of playback: 33 of 60 frames had
+    // nothing on screen, one blank per caption change, and captions change
+    // every second or two. Text, gone, text, gone.
+    //
+    // What the blank was protecting against lasts one round trip, which is
+    // tens of milliseconds on the built-in engine. The blank lasted just as
+    // long and was far easier to see. So the previous line stays up for a
+    // grace period, and is cleared only if the next one really is late.
+    this.grace = setTimeout(() => {
+      if (this.showing === cue) this.write('');
+    }, GRACE_MS);
 
     const controller = new AbortController();
     this.controller = controller;
@@ -229,7 +253,9 @@ class CueTranslator {
         // caption printed twice is worse than one printed once.
         if (!trimmed || trimmed === cue) return;
         this.cache.set(cue, trimmed);
-        if (this.showing === cue) this.write(trimmed);
+        if (this.showing !== cue) return;
+        this.clearTimers();
+        this.write(trimmed);
       })
       .catch(() => {
         // Try once more, on a timer.
@@ -261,18 +287,27 @@ interface Attachment {
 }
 
 /**
- * A player that draws its own captions: read them, draw next to them.
+ * A player that draws its own captions: put the translation in the same box.
  *
- * Nothing is inserted into the player's tree. The first version appended a
- * line inside the caption box and lifted the box with a `transform`, and the
- * player fought back — it rebuilds that box and rewrites its position
- * constantly, so the caption visibly shuddered. Reported as the captions
- * twitching, which is exactly what two renderers arguing over one node looks
- * like.
+ * Three shapes were tried and measured, and only this one holds still.
  *
- * So the caption is only ever read. The translation is drawn in an overlay of
- * ours, positioned against the caption's own rectangle, and the player is left
- * alone to do whatever it likes.
+ * Appended to the caption *container* — the element that spans the whole video
+ * — the line landed at the top-left of the frame at 10px, because that
+ * container is a positioning context and carries none of the caption's own
+ * type. Correct text, invisible.
+ *
+ * Appended to the caption box with a `transform` to lift the box back into
+ * frame, the player fought it: it rewrites that box's position constantly, so
+ * the caption itself visibly shuddered.
+ *
+ * Drawn in an overlay of ours, positioned from the caption's rectangle on
+ * every mutation, it flickered — a discrete jump per reposition — and drifted
+ * over the control bar.
+ *
+ * So: appended to the caption box, and nothing else touched. Measured on
+ * youtube.com that a node put there survives the caption changing and that the
+ * box element is reused rather than rebuilt, which is what makes this stable:
+ * the player lays the box out, and the translation is simply in it.
  */
 function attachRendered(
   container: HTMLElement,
@@ -284,62 +319,39 @@ function attachRendered(
   const doc = container.ownerDocument;
   const view = doc.defaultView;
   ensureStyle(doc);
-
-  const overlay = doc.createElement('div');
-  overlay.className = `${SUBTITLE_CLASS}-overlay`;
-  overlay.style.visibility = 'hidden';
-  const line = lineFor(overlay, deps.targetLang);
+  const line = lineFor(container, deps.targetLang);
 
   /**
-   * Put the overlay under the caption, wherever the player has just put it.
+   * Last child of the caption box, and sized like the caption.
    *
-   * In fullscreen the browser renders that element's subtree and nothing else,
-   * so an overlay left on `body` disappears exactly when someone is watching.
+   * Idempotent on purpose: it runs on every write, and writing a style that is
+   * already set is what a flicker is made of. Only the parent and the size are
+   * touched, and only when they are wrong.
    */
   const place = (): void => {
-    const host = doc.fullscreenElement ?? doc.body;
-    if (overlay.parentElement !== host) host.appendChild(overlay);
+    const host = container.querySelector<HTMLElement>(anchor) ?? container;
+    if (line.parentElement !== host || line.nextElementSibling) {
+      host.appendChild(line);
+    }
 
-    const caption =
-      container.querySelector<HTMLElement>(anchor) ??
-      container.querySelector<HTMLElement>(selector);
-    if (!caption || !view) return;
-    const box = caption.getBoundingClientRect();
-    if (box.width === 0) return;
-
-    // Sized off the caption *segment*, which is the element that carries the
-    // font size — the box around it does not, so reading the box gave the
-    // player's chrome size instead: 12px under a 40px caption in fullscreen,
-    // reported as the text being tiny. Reading the segment also carries the
-    // reader's own caption-size setting for free.
-    const sized = container.querySelector<HTMLElement>(selector) ?? caption;
-    const size = parseFloat(view.getComputedStyle(sized).fontSize);
-    if (size > 0) line.style.fontSize = `${String(Math.round(size * 0.92))}px`;
-
-    const hostBox =
-      host === doc.body
-        ? { top: -view.scrollY, left: -view.scrollX }
-        : host.getBoundingClientRect();
-    // Clamped into the video: the player puts its caption close to the bottom
-    // edge, and a second line below it would otherwise be drawn off the
-    // picture — measured at y=656 against a video ending at 663.
-    const frame = container.getBoundingClientRect();
-    const top = Math.min(
-      box.bottom + 2,
-      frame.bottom - overlay.offsetHeight - 4,
+    // The box carries no font size — the segment inside it does — so reading
+    // the box gave the player's chrome instead: 12px under a 40px caption in
+    // fullscreen. Reading the segment also carries the reader's own
+    // caption-size setting without this knowing the setting exists.
+    const segment = container.querySelector<HTMLElement>(selector);
+    if (!segment || !view) return;
+    const size = Math.round(
+      parseFloat(view.getComputedStyle(segment).fontSize) * 0.92,
     );
-    overlay.style.top = `${String(top - hostBox.top)}px`;
-    overlay.style.left = `${String(box.left - hostBox.left + box.width / 2)}px`;
-    overlay.style.maxWidth = `${String(Math.round(frame.width * 0.9))}px`;
+    const wanted = `${String(size)}px`;
+    if (size > 0 && line.style.fontSize !== wanted)
+      line.style.fontSize = wanted;
   };
 
   const translator = new CueTranslator(deps, (translation) => {
+    if (translation) place();
     line.textContent = translation;
-    overlay.style.visibility = translation ? 'visible' : 'hidden';
-    if (translation) {
-      place();
-      onTranslation();
-    }
+    if (translation) onTranslation();
   });
 
   const read = (): void => {
@@ -349,11 +361,11 @@ function attachRendered(
     const cue = segments.map((s) => s.textContent ?? '').join(' ');
     if (isTranslatableCue(cue)) onCue();
     translator.offer(cue);
-    // The caption moves when the controls appear, when the window resizes and
-    // when the player reflows. Following it costs a rectangle read.
-    if (line.textContent) place();
   };
 
+  // The player rebuilds its caption lines rather than editing them, so
+  // childList on the subtree is the event; characterData covers the players
+  // that do edit in place.
   const observer = new view!.MutationObserver(() => {
     read();
   });
@@ -362,19 +374,13 @@ function attachRendered(
     subtree: true,
     characterData: true,
   });
-  doc.addEventListener('fullscreenchange', place);
-  view?.addEventListener('resize', place);
-  view?.addEventListener('scroll', place, { passive: true });
   read();
 
   return {
     disconnect: () => {
       observer.disconnect();
-      doc.removeEventListener('fullscreenchange', place);
-      view?.removeEventListener('resize', place);
-      view?.removeEventListener('scroll', place);
       translator.stop();
-      overlay.remove();
+      line.remove();
     },
   };
 }
