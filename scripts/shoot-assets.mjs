@@ -577,29 +577,48 @@ try {
       waitUntil: 'domcontentloaded',
     });
     await sleep(5500);
-    const line = await three.evaluate(() => {
-      const span =
-        [...document.querySelectorAll('.textLayer span')].find((s) =>
-          /purely peer-to-peer/.test(s.textContent ?? ''),
-        ) ?? document.querySelector('.textLayer span');
-      const r = span.getBoundingClientRect();
-      return { x: r.x, y: r.y, w: r.width, h: r.height };
+
+    // Whole-document translation, not a selection: selecting text is already
+    // screenshot two, and a store listing that spends two of its four frames on
+    // the same gesture is describing a smaller product than it has. Each page's
+    // translation is placed under the page, so the shot has to show both — the
+    // paper as the author set it, and that page in the reader's language.
+    await three.bringToFront();
+    await worker.evaluate(async () => {
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      if (tab?.id !== undefined)
+        await chrome.tabs.sendMessage(tab.id, { type: 'TRANSLATE_PAGE' });
     });
-    await three.mouse.move(line.x + 2, line.y + line.h / 2);
-    await three.mouse.down();
-    await three.mouse.move(line.x + line.w - 4, line.y + line.h * 3.4, {
-      steps: 20,
-    });
-    await three.mouse.up();
-    await sleep(600);
-    const icon3 = await three.$('#oit-translate-icon');
-    if (icon3) {
-      const box = await icon3.boundingBox();
-      await three.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await three.mouse.down();
-      await three.mouse.up();
+    for (let waited = 0; waited < 240000; waited += 2000) {
+      await sleep(2000);
+      const done = await three.evaluate(
+        () =>
+          document.querySelectorAll('.oit-pdf-translation').length > 0 &&
+          !(
+            document.getElementById('oit-page-progress')?.textContent ?? ''
+          ).startsWith('Translating'),
+      );
+      if (done) break;
     }
-    await waitForPanel(three);
+    // Zoomed out first. The fixture page is a full sheet carrying eight lines
+    // at the top, so at the viewer's default scale the seam between page and
+    // translation sits below a hand's width of blank paper — the first attempt
+    // at this shot was 80% empty white. Half scale puts the paper's own text
+    // and its translation in one frame, which is the only arrangement that
+    // shows where a translation goes.
+    await three.evaluate(() => {
+      const app = window.PDFViewerApplication;
+      if (app?.pdfViewer) app.pdfViewer.currentScaleValue = '0.5';
+    });
+    await sleep(1500);
+    await three.evaluate(() => {
+      const container = document.getElementById('viewerContainer');
+      if (container) container.scrollTop = 0;
+    });
+    await sleep(1200);
     await three.mouse.move(1240, 760);
     await sleep(600);
     const shot3 = join(STORE_SHOTS, 'screenshot-3-pdf.png');
