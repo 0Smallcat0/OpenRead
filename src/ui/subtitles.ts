@@ -307,11 +307,13 @@ function attachRendered(
     const box = caption.getBoundingClientRect();
     if (box.width === 0) return;
 
-    // Sized off the caption, not inherited: the box it sits in sets no font
-    // size, so a relative size resolved against the player's chrome and came
-    // out at 10px under a 26px caption. Reading it here also carries the
+    // Sized off the caption *segment*, which is the element that carries the
+    // font size — the box around it does not, so reading the box gave the
+    // player's chrome size instead: 12px under a 40px caption in fullscreen,
+    // reported as the text being tiny. Reading the segment also carries the
     // reader's own caption-size setting for free.
-    const size = parseFloat(view.getComputedStyle(caption).fontSize);
+    const sized = container.querySelector<HTMLElement>(selector) ?? caption;
+    const size = parseFloat(view.getComputedStyle(sized).fontSize);
     if (size > 0) line.style.fontSize = `${String(Math.round(size * 0.92))}px`;
 
     const hostBox =
