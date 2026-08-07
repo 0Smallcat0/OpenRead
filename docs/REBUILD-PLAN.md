@@ -223,8 +223,10 @@ for anyone who has not already decided to trust the project. A GitHub release
 with a prebuilt zip (shipped in 2.2.15) closes part of that gap; the store
 closes the rest.
 
-The kit in [`docs/store/`](store/SUBMISSION.md) is current as of 2.4.0. What
-remains is the $5 registration and the upload, both of which need the
-maintainer's own account and card, plus a re-shoot of the four listing
-screenshots — they predate whole-page translation, and the first one is what a
-browser shows in search results.
+The kit in [`docs/store/`](store/SUBMISSION.md) is current as of 2.18.1: the
+listing copy names the seven features that shipped after 2.11.0, and the four
+screenshots were re-shot against the built extension — the old set predated
+whole-page translation, and the first one is what a browser shows in search
+results. The $5 registration is paid and the item exists. What remains is
+uploading the current package and pressing submit, both from the maintainer's
+own account.

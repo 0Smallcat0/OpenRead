@@ -2,7 +2,7 @@
 
 > **Everything in this guide is ready except the parts only you can do.** The
 > package builds, the listing copy and the four screenshots are current as of
-> 2.11.0, and the privacy answers are drafted. What remains is a one-time **$5
+> 2.18.1, and the privacy answers are drafted. What remains is a one-time **$5
 > developer registration**, paid with your own card, and the upload from your
 > own account — account creation and payment are yours to perform, not
 > something to hand to a tool. Budget about 20 minutes plus review time.
@@ -24,6 +24,10 @@ pnpm zip        # -> .output/openread-<version>-chrome.zip
 3. Pay the one-time **US$5** registration fee.
 
 ## 2. Create the item
+
+> For an item that already exists, the upload is not on the listing page: it is
+> **Package → Upload new package**. The Store listing tab has no upload control
+> at all, which is easy to read as "there is nowhere to put the new build".
 
 1. **Add new item** → upload `.output/openread-<version>-chrome.zip`.
 2. **Store listing tab** — paste from [`LISTING.md`](LISTING.md):
