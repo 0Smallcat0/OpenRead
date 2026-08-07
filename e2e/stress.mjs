@@ -15,6 +15,8 @@
  *      token streamed into one — read as the page growing new text
  *  S13 whole-page translation ran on the top frame only, so an article inside
  *      an iframe came back untranslated with nothing to say why
+ *  S14 a caption is repainted far more often than it changes, and a
+ *      translation that arrives after its cue has gone is worse than none
  *
  * Not in CI, for the same reason as the other harnesses: it needs a real Chrome
  * and it takes a couple of minutes. Run it after anything that touches the
@@ -686,6 +688,120 @@ try {
     );
   } finally {
     frameServer.close();
+  }
+
+  // ---------------------------------------------------------------- S14
+  //
+  // Subtitles. A caption is on screen for about two seconds and is repainted
+  // far more often than it changes, so the two things that can go wrong are
+  // both about time: a translation that arrives after its cue has gone, and a
+  // round trip spent on a repaint of the line already showing.
+  //
+  // The fixture is a player-shaped DOM driven from the test rather than
+  // YouTube itself: a harness that needs a video with captions, a consent
+  // dialog and somebody's network is one that goes red for reasons that are
+  // not this code. What it does verify is everything downstream of the
+  // selector — the observer, the cache, the abandonment of a stale cue, and a
+  // real translation through the real broker. That the selector still matches
+  // today's YouTube is the part this cannot check, and the module says so.
+  console.log('\nS14 — subtitles, at the speed captions actually change');
+  const SUB_PORT = 9339;
+  const CUES = [
+    'The first line of the film, spoken clearly.',
+    'A second line, quite different from the first.',
+    '[Music]',
+    'The first line of the film, spoken clearly.',
+  ];
+  const subServer = createServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    response.end(
+      '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Player</title></head>' +
+        '<body><div class="ytp-caption-window-container">' +
+        '<span class="ytp-caption-segment">' +
+        CUES[0] +
+        '</span></div></body></html>',
+    );
+  });
+  await new Promise((resolve) =>
+    subServer.listen(SUB_PORT, '127.0.0.1', resolve),
+  );
+
+  try {
+    await configure({
+      translateSubtitles: true,
+      targetLang: 'Traditional Chinese',
+    });
+    await page.goto(`http://127.0.0.1:${SUB_PORT}/`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await sleep(1500);
+
+    const showCue = (text) =>
+      page.evaluate((value) => {
+        document.querySelector('.ytp-caption-segment').textContent = value;
+      }, text);
+
+    const readLine = () =>
+      page.evaluate(
+        () => document.querySelector('.oit-subtitle')?.textContent ?? '',
+      );
+
+    let first = '';
+    for (let waited = 0; waited < 30000; waited += 250) {
+      first = await readLine();
+      if (first) break;
+      await sleep(250);
+    }
+    observe('S14 first cue', first || '(none)');
+    check(first !== '', 'the first caption was never translated');
+    check(
+      !/[A-Za-z]{4,}/.test(first),
+      `the first cue came back in English (${first})`,
+    );
+
+    await showCue(CUES[1]);
+    let second = '';
+    for (let waited = 0; waited < 30000; waited += 250) {
+      second = await readLine();
+      if (second && second !== first) break;
+      await sleep(250);
+    }
+    observe('S14 second cue', second || '(none)');
+    check(second !== first, 'the caption changed and the translation did not');
+
+    // A sound marker is not speech, and a translator asked for one answers
+    // confidently and wrongly.
+    await showCue(CUES[2]);
+    await sleep(2000);
+    const marker = await readLine();
+    observe('S14 on [Music]', marker === '' ? '(blank, correct)' : marker);
+    check(marker === '', `a sound marker was translated (${marker})`);
+
+    // The line comes back. It must not cost a second round trip, and the
+    // observable form of that is that it appears without a gap.
+    await showCue(CUES[3]);
+    await sleep(400);
+    const repeated = await readLine();
+    observe('S14 repeated cue', repeated || '(none)');
+    check(
+      repeated === first,
+      `a repeated line was not served from the cache (${repeated})`,
+    );
+
+    // And off means off.
+    await configure({ translateSubtitles: false });
+    await sleep(1500);
+    const afterOff = await page.evaluate(
+      () => document.querySelectorAll('.oit-subtitle').length,
+    );
+    observe('S14 lines after switching off', String(afterOff));
+    check(
+      afterOff === 0,
+      'switching subtitles off left the translation on screen',
+    );
+  } finally {
+    subServer.close();
+    await configure({ translateSubtitles: false });
   }
 } catch (error) {
   console.error(`\nharness failed: ${error?.stack ?? String(error)}`);

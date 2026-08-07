@@ -62,6 +62,7 @@ const MARKUP = `
       <input id="siteExcept" type="checkbox" />
       <span id="siteExceptLabel"></span>
     </label>
+    <input id="translateSubtitles" type="checkbox" />
     <textarea id="glossary"></textarea>
     <input id="obsidianVault" type="text" />
     <input id="obsidianFolder" type="text" />
@@ -464,6 +465,22 @@ bug = 瑕疵`;
     // Stored verbatim, not parsed: what comes back has to be what was typed,
     // comments and blank lines included, or editing it is destructive.
     expect(stored.glossary).toBe(typed);
+  });
+
+  it('stores the subtitle switch the moment it is flipped', async () => {
+    await open();
+    const box = document.getElementById(
+      'translateSubtitles',
+    ) as HTMLInputElement;
+    // Off on a profile that never set it: the feature changes what a video
+    // looks like while it plays, so it has to be asked for.
+    expect(box.checked).toBe(false);
+
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+
+    expect(stored.translateSubtitles).toBe(true);
   });
 
   it('stores the capture fields as they are left', async () => {
