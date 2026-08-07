@@ -220,6 +220,7 @@ function attachRendered(
 
   const translator = new CueTranslator(deps, (translation) => {
     line.textContent = translation;
+    if (translation) onCue();
   });
 
   const read = (): void => {
@@ -227,7 +228,6 @@ function attachRendered(
       container.querySelectorAll<HTMLElement>(selector),
     );
     const cue = segments.map((s) => s.textContent ?? '').join(' ');
-    if (cue.trim()) onCue();
     translator.offer(cue);
   };
 
@@ -291,7 +291,10 @@ function attachTextTrack(
   const translator = new CueTranslator(deps, (translation) => {
     line.textContent = translation;
     overlay.style.visibility = translation ? 'visible' : 'hidden';
-    if (translation) place();
+    if (translation) {
+      place();
+      onCue();
+    }
   });
 
   const read = (): void => {
@@ -303,7 +306,6 @@ function attachTextTrack(
         if (text) texts.push(text);
       }
     }
-    if (texts.length > 0) onCue();
     translator.offer(texts.join(' '));
   };
 
@@ -379,13 +381,22 @@ export function mountSubtitleTranslate(
         attached.set(host, attachRendered(host, line, deps, seeCue));
       }
     }
+    // A player that draws its own captions is already covered, and attaching
+    // the overlay as well prints the line twice. The check has to run every
+    // scan rather than once: YouTube builds its caption container *after* the
+    // video element, so on page load there is no container, the overlay
+    // attaches to the video, and the container arriving a moment later put a
+    // second line on the screen. Measured on youtube.com: two `.oit-subtitle`
+    // nodes for one video.
+    const rendered = RENDERED.some(({ container }) =>
+      doc.querySelector(container),
+    );
     for (const video of Array.from(doc.querySelectorAll('video'))) {
-      if (attached.has(video)) continue;
-      // A player with its own rendered captions is already covered, and
-      // attaching both would print the line twice.
-      if (RENDERED.some(({ container }) => doc.querySelector(container))) {
+      if (rendered) {
+        detach(video);
         continue;
       }
+      if (attached.has(video)) continue;
       attached.set(video, attachTextTrack(video, deps, seeCue));
     }
     for (const element of Array.from(attached.keys())) {
@@ -409,7 +420,7 @@ export function mountSubtitleTranslate(
       if (sawCue || told || !deps.enabled) return;
       told = true;
       deps.notify?.(
-        'OpenRead translates subtitles, but this video has none showing. Turn captions on in the player.',
+        'OpenRead has nothing to translate here — turn the video’s own captions on (CC).',
       );
     }, NO_CAPTIONS_AFTER_MS);
   };
