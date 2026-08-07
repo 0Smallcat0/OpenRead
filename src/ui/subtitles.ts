@@ -86,6 +86,16 @@ export interface SubtitleDeps {
 /** How long a video plays with no cue before that is worth mentioning. */
 export const NO_CAPTIONS_AFTER_MS = 8000;
 
+/**
+ * How long to wait before trying a failed cue again.
+ *
+ * Short, because a caption is on screen for a couple of seconds and a retry
+ * that lands after it has gone is worth nothing. Once only: a cue that fails
+ * twice is not going to work on the third attempt either, and a caption is not
+ * worth spending a loop on.
+ */
+export const RETRY_AFTER_MS = 700;
+
 function ensureStyle(doc: Document): void {
   if (doc.getElementById(STYLE_ID)) return;
   const style = doc.createElement('style');
@@ -146,6 +156,7 @@ class CueTranslator {
   private readonly cache = new CueCache();
   private controller: AbortController | null = null;
   private showing = '';
+  private timer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly deps: SubtitleDeps,
@@ -155,17 +166,25 @@ class CueTranslator {
   stop(): void {
     this.controller?.abort();
     this.controller = null;
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
     this.showing = '';
     this.write('');
   }
 
-  offer(raw: string): void {
+  offer(raw: string, retried = false): void {
     const cue = normaliseCue(raw);
     if (cue === this.showing) return;
     this.showing = cue;
 
     this.controller?.abort();
     this.controller = null;
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
 
     if (!cue || !isTranslatableCue(cue)) {
       this.write('');
@@ -197,15 +216,26 @@ class CueTranslator {
         if (this.showing === cue) this.write(trimmed);
       })
       .catch(() => {
-        // One cue of a film, and nothing useful to say about it in the two
-        // seconds it would have been on screen for. But the cue must not stay
-        // claimed: `showing` is what stops a repaint costing another round
-        // trip, and leaving a failed cue in it means every repaint of that
-        // caption is skipped too. Observed on YouTube — the service worker was
-        // still starting when the first caption arrived, that one request
-        // rejected, and the line then stayed blank for as long as the sentence
-        // was on screen, coming right only when the speaker moved on.
-        if (this.showing === cue) this.showing = '';
+        // Try once more, on a timer.
+        //
+        // The first version released the cue and waited for the next repaint,
+        // on the assumption that a player rewrites its caption many times a
+        // second. Measured on YouTube: zero mutations in twenty seconds while
+        // one caption was on screen. There is no next repaint, so a released
+        // cue was never offered again and the line stayed blank until the
+        // speaker moved on.
+        //
+        // Which matters most for the first caption of a video, where the
+        // failure is a cold service worker rather than anything about the
+        // text — reported twice as the feature simply not working, on a page
+        // where it then worked perfectly from the second sentence onward.
+        if (this.showing !== cue || retried) return;
+        this.timer = setTimeout(() => {
+          if (this.showing === cue) {
+            this.showing = '';
+            this.offer(cue, true);
+          }
+        }, RETRY_AFTER_MS);
       });
   }
 }
