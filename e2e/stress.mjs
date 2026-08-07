@@ -29,15 +29,20 @@
  */
 import puppeteer from 'puppeteer-core';
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { mkdtempSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const CHROME =
   process.env.OPENREAD_CHROME ??
   'C:/Program Files/Google/Chrome/Application/chrome.exe';
+// A throwaway profile by default, like the other harnesses. This hardcoded one
+// developer's directory for a while, which meant it could not run anywhere else
+// and that two runs shared state — a stress harness is the last place a run
+// should be able to pass on what the previous one left behind.
 const PROFILE =
-  process.env.OPENREAD_PROFILE ??
-  'C:/Users/ADMINI~1/AppData/Local/Temp/claude/D--OpenRead/e2e-profile';
+  process.env.OPENREAD_PROFILE ?? mkdtempSync(join(tmpdir(), 'openread-stress-'));
 const PORT = 9360;
 const EXTENSION = fileURLToPath(
   new URL('../.output/chrome-mv3', import.meta.url),

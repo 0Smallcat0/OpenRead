@@ -803,14 +803,24 @@ try {
       };
     });
 
+  // Generous, and it says how long it took. On a fresh profile the first
+  // paragraph waits for a language pack, and 120 s of that looked exactly like
+  // a hang — which is also what it looked like to a reader, until this path
+  // started reporting the download.
   await askPdf();
   let pdfDone = await pdfState();
-  for (let waited = 0; waited < 120000; waited += 2000) {
+  let pdfWaited = 0;
+  for (; pdfWaited < 420000; pdfWaited += 2000) {
     await sleep(2000);
     pdfDone = await pdfState();
     if (pdfDone.badge.startsWith('Done') || pdfDone.badge.startsWith('Nothing')) break;
+    if (pdfWaited % 60000 === 0 && pdfWaited > 0) {
+      console.log(`    ${String(pdfWaited / 1000)}s: ${pdfDone.badge}`);
+    }
   }
-  console.log(`  translated: ${JSON.stringify(pdfDone)}`);
+  console.log(
+    `  translated (${String(Math.round(pdfWaited / 1000))} s): ${JSON.stringify(pdfDone)}`,
+  );
 
   check(pdfDone.pages > 0, 'the PDF viewer translated no pages');
   check(
@@ -832,7 +842,9 @@ try {
   // programmatically proves the text is selectable in principle; it says
   // nothing about whether a drag over this block is intercepted by the viewer
   // underneath it, which is what a reader actually does.
-  const dragBox = await pdf.evaluate(() => {
+  // Guarded: with nothing translated, this used to throw on a null rect and
+  // bury the real failure under "Cannot read properties of null".
+  const dragBox = pdfDone.pages === 0 ? null : await pdf.evaluate(() => {
     const paragraph = document.querySelector('.oit-pdf-translation p');
     if (!paragraph) return null;
     paragraph.scrollIntoView({ block: 'center' });
@@ -844,6 +856,9 @@ try {
       y2: rect.top + rect.height / 2,
     };
   });
+  if (!dragBox) {
+    check(false, 'nothing was translated, so the drag could not be attempted');
+  } else {
   await pdf.evaluate(() => {
     window.getSelection()?.removeAllRanges();
   });
@@ -860,6 +875,7 @@ try {
     dragged.length > 5,
     'dragging across the translation selected nothing, so it cannot be copied',
   );
+  }
 
   // The same control, the same second meaning it has everywhere else.
   await askPdf();

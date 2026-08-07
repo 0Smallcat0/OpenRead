@@ -164,12 +164,13 @@ export default defineUnlistedScript(() => {
       const settings = await loadSettings();
       await togglePdfTranslation(document, {
         targetLang: settings.targetLang,
-        translate: (text, signal) =>
+        translate: (text, signal, onDownloadProgress) =>
           translateViaPort({
             text,
             targetLang: settings.targetLang,
             model: settings.modelId,
             signal,
+            onDownloadProgress,
             // The viewer page is the extension's own document and says it is in
             // English; the paper inside it is whatever the author wrote.
             fromPageLanguage: false,
