@@ -5,6 +5,87 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.20.0] - 2026-08-08
+
+### Added
+
+- **An article inside an iframe is translated too.** Whole-page translation ran
+  on the top frame only, which kept ad iframes from spending the reader's GPU
+  and kept one progress badge on the page — and left embedded documents,
+  comment systems and syndicated posts untranslated with nothing on screen to
+  say why. The test is now what is in the frame rather than where it sits:
+  three translatable blocks, plus a 200×200 floor for tracking pixels. The
+  floor is not the defence and is not meant to be — a 300×600 skyscraper ad
+  clears it, and the block count is what keeps it out.
+
+- **`srcdoc` frames get a content script.** They have no URL of their own to
+  match against, so `<all_urls>` never applied and Chrome injected nothing.
+  Measured on MDN, whose examples are these: seven paragraphs of prose in one
+  of them with nothing there to translate it.
+
+- **The default engine finally has a score.** Every quality number this project
+  published was measured on the Ollama path; Chrome's built-in translator is
+  what almost everyone is served by and nothing in `eval/` mentioned it.
+  `pnpm eval:builtin` runs a real browser with the built extension and drives
+  translations through the extension's own broker, over the same 27 fixtures
+  and the same chrF as the model benchmark. It scores **36.5** against qwen3's
+  46.4 — ten chrF is the price of installing nothing, and a whole segment
+  finishes in 20 ms while qwen3 takes 451 ms to paint its first character. Full
+  report in [`eval/BUILTIN-RESULTS.md`](eval/BUILTIN-RESULTS.md).
+
+  It also found that the one quality layer the default engine has,
+  `toTaiwanVocabulary`, rewrote 1 of 27 segments. The table was built by
+  counting 32 substitutions in one translated article, and that article was
+  software documentation. Both measurements are true; the finding is that the
+  corpus this project scores translation quality on barely covers the domain
+  its one quality layer exists for.
+
+### Fixed
+
+- **A sentence about a piece of code came back without the code in it.** On
+  MDN, "…redefined as `allow="fullscreen"`." became "…重新定義為 。" — a full
+  stop after a space, with the thing the sentence was about silently gone.
+  `code`, `kbd` and `samp` are on the skip list and have been since the start,
+  and that was one decision being read as two: leaving code out of what is
+  _sent_ is right, leaving it out of what is _shown_ is not, and nobody ever
+  chose it. Inline code now goes in as a placeholder and comes back as itself.
+
+- **A paper on arXiv is a PDF.** Routing decided from the address, and an
+  address is a guess: arxiv.org serves every paper from `/pdf/1706.03762`, with
+  no extension anywhere in it, so the best-known source of papers on the
+  internet landed in Chrome's own viewer where this extension can see no text
+  at all. The tab now says what it is rendering, from `document.contentType`,
+  which is not a guess.
+
+- **Switching target language no longer empties the page while a model
+  downloads.** One press cleared the translation that was there, and the first
+  request in the new language is also the one that makes Chrome fetch a
+  language pack — up to two minutes of a bare page with a progress badge on
+  it, which is indistinguishable from broken. The old translation now stays up
+  until the engine can answer, and pressing Stop during the wait keeps it.
+
+- **The language detector downloads a model too, and nobody was told.**
+  `LanguageDetector.availability()` answers `downloadable` on a profile that
+  has never used it and `create()` then does not resolve for minutes. Every
+  request that omits a source language waits on that — the text box, a whole
+  PDF, any page with no `<html lang>` — in complete silence, so the extension
+  looked dead from every surface at once while translation itself was fine.
+  The detector is created once and shared rather than per call, and its
+  download is reported through the same channel the translation pack's is.
+
+### Withdrawn
+
+- **Subtitle translation was built and taken out again before release.** It
+  worked on a player-shaped fixture and produced six different symptoms on a
+  real one — position, size, overflow past the video, the caption shuddering,
+  a blink on every cue, a line over the control bar — because it scraped the
+  rendered caption DOM per cue and tried to place a second line beside it. That
+  is a fight with the player's renderer, and the established tools do not have
+  it: they fetch the whole subtitle track, translate the cue list, and hand the
+  player bilingual cue text so it renders both lines as one of its own
+  captions. Shipping six fixes on the wrong foundation would have produced a
+  seventh. A track-level rewrite starts from an empty file.
+
 ## [2.19.0] - 2026-08-07
 
 ### Added
