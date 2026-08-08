@@ -128,7 +128,7 @@ export function isBuiltinSupported(): boolean {
  *
  * Chrome downloads a model for this one too, separately from any translation
  * pack, and until it arrives every `create()` waits. Per call that meant every
- * subtitle cue, every text box and every PDF paragraph queuing behind its own
+ * text box and every PDF paragraph queuing behind its own
  * copy of the same download — the mistake `sharedTranslator` below exists to
  * document, repeated on the other API.
  *
@@ -146,7 +146,7 @@ export async function detectLanguage(
    * Reported for the same reason the translator reports its own: on a profile
    * that has never used it, `LanguageDetector.availability()` answers
    * `downloadable` and `create()` does not resolve for minutes. Every caller
-   * that omits a source language — subtitles, the text box, a PDF — waited on
+   * that omits a source language — the text box, a PDF — waited on
    * that in complete silence, which looked like the whole extension being
    * dead, because from the outside it was.
    */

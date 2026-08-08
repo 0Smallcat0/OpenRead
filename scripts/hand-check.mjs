@@ -48,20 +48,6 @@ const TABS = [
     what: 'whole page, hover-one-paragraph (hold Alt), select-to-translate',
   },
   {
-    // Auto-generated English captions and no other track — checked in
-    // `ytInitialPlayerResponse`. That matters more than it sounds: the video
-    // this used to point at is 3Blue1Brown's, which ships its own 中文（台灣）
-    // subtitles, so a reader asking for Chinese got the channel's Chinese
-    // captions, nothing for this to do, and no way to tell why. A video with
-    // a translation of its own is the one place this feature has nothing to
-    // offer, and it is a bad place to demonstrate it from.
-    //
-    // Captions still have to be switched on by hand: YouTube drops
-    // `cc_load_policy` on a watch page and uses the profile's own preference.
-    url: 'https://www.youtube.com/watch?v=qz0aGYrrlhU',
-    what: 'subtitles — press the CC button, English captions with no Chinese track',
-  },
-  {
     url: 'https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe',
     what: 'iframes — live samples are real frames with real prose in them',
   },
@@ -129,16 +115,14 @@ if (!workerTarget) {
 }
 const worker = await workerTarget.worker();
 
-// A starting point, not a preference: subtitles on because they are off by
-// default and the point of this run is to look at them, automatic translation
-// off so nothing happens until it is asked for, and a glossary with something
-// in it so the box is not empty when it is opened.
+// A starting point, not a preference: automatic translation off so nothing
+// happens until it is asked for, and a glossary with something in it so the
+// box is not empty when it is opened.
 await worker.evaluate(async () =>
   chrome.storage.sync.set({
     engine: 'builtin',
     targetLang: 'Traditional Chinese',
     inputTargetLang: 'English',
-    translateSubtitles: true,
     hoverTranslate: 'alt',
     autoTranslate: 'off',
     autoTranslateExcept: [],
@@ -170,8 +154,8 @@ console.log(
 
 // The detector has a model of its own, downloaded separately from any
 // translation pack, and every request that omits a source language waits on
-// it: subtitles, the text box, a PDF. On a profile that has never used it,
-// that wait is minutes long and completely silent.
+// it: the text box, a PDF, any page with no declared language. On a profile
+// that has never used it, that wait is minutes long and completely silent.
 const detector = await worker.evaluate(async () => {
   try {
     if (!('LanguageDetector' in self)) return 'no LanguageDetector';
@@ -211,7 +195,7 @@ await browser
   .then((page) =>
     page.goto(`chrome-extension://${id}/popup.html`).catch(() => undefined),
   );
-console.log(`  5. the settings form, as a full tab
+console.log(`  ${String(TABS.length + 1)}. the settings form, as a full tab
      chrome-extension://${id}/popup.html`);
 
 console.log(`
