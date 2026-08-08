@@ -19,7 +19,6 @@ src/
     bcp47.ts              language name → the tag Chrome's translator takes
     auto-translate.ts     whether a page translates itself, and per-site exceptions
     frames.ts             which iframes hold an article rather than an advert
-    cues.ts               subtitle cues: what is new, and not translating it twice
     glossary.ts           terms held out of translation behind a placeholder
     capture.ts            capture → Markdown + obsidian:// URI builders
     enrich.ts             enrich prompt + tolerant small-model JSON salvager
@@ -37,7 +36,6 @@ src/
     fullpage.ts           the live queue: viewport first, then follow the reader
     blocks.ts             what counts as a translatable block, and what is ours
     hover.ts              hold a key, point at one paragraph
-    subtitles.ts          the line a video is speaking, under the one it shows
     input-translate.ts    replace what you typed, keeping the undo stack
     pdf-blocks.ts         lines → paragraphs, by line pitch and column overlap
     pdf-translate.ts      a whole PDF, each page's translation under that page

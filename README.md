@@ -83,11 +83,6 @@ seconds.
   by default. `Ctrl+Z` takes it back.
 - **One selection** — select text, click the floating **文**, or press
   **`Ctrl+Shift+Y`**. Escape closes the panel.
-- **Subtitles, while the video plays** — turn on _Translate subtitles_ in the
-  popup and the line being spoken gets a translation under it, in the player's
-  own caption box, so it moves and goes fullscreen with it. Off by default. A
-  cue is on screen for about two seconds and comes back in about twenty
-  milliseconds, which is the whole reason this can be done on-device at all.
 - **Names it keeps getting wrong** — list them in the popup, one a line.
   `OpenRead` on its own keeps the name as written; `bug = 瑕疵` pins how a term
   is translated. The built-in engine takes no prompt, so the term is held out
@@ -207,7 +202,6 @@ pnpm bench        # live model benchmark (needs Ollama)
 pnpm shoot        # re-shoot every screenshot and the clip on this page
 pnpm e2e:page     # whole-page translation in a real Chrome, end to end
 pnpm e2e:stress   # hostile pages: infinite feeds, route swaps, rapid toggling
-pnpm e2e:youtube  # subtitle translation on real YouTube (needs the network)
 pnpm e2e:egress   # prove the default engine sends nothing, in a real Chrome
 ```
 

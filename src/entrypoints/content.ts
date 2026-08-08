@@ -1,6 +1,5 @@
 import { mountSelectionTranslator } from '../ui/selection';
 import { mountHoverTranslate } from '../ui/hover';
-import { mountSubtitleTranslate } from '../ui/subtitles';
 import { translateActiveInput } from '../ui/input-translate';
 import {
   togglePageTranslation,
@@ -104,37 +103,6 @@ export default defineContentScript({
         translationScale: settings.translationScale,
       },
     });
-
-    // Subtitles, on every frame: an embedded player is an iframe, and the
-    // caption is inside it. Re-mounted rather than reconfigured when the
-    // setting changes, because the mount owns observers on containers that may
-    // not exist yet — a video page builds its player after the navigation.
-    let stopSubtitles: (() => void) | null = null;
-    const remountSubtitles = (settings: Settings): void => {
-      stopSubtitles?.();
-      stopSubtitles = mountSubtitleTranslate(document, {
-        enabled: settings.translateSubtitles,
-        targetLang: settings.targetLang,
-        notify: (message) => {
-          showPageNotice(document, message);
-        },
-        translate: (text: string, signal: AbortSignal) =>
-          translateViaPort({
-            text,
-            targetLang: settings.targetLang,
-            model: settings.modelId,
-            signal,
-            // A subtitle's language is not the page's. YouTube declares the
-            // *interface* language — measured on a machine set to Taiwan,
-            // `<html lang="zh-Hant-TW">` on a video whose captions are
-            // English — so taking it made the engine translate zh-Hant into
-            // zh-Hant, return the caption unchanged, and leave the line blank.
-            // The same mistake the input box made, one surface over.
-            fromPageLanguage: false,
-          }),
-      });
-    };
-    void loadSettings().then(remountSubtitles);
 
     // Point at a paragraph with a key held and get that paragraph. Mounted on
     // every frame, like selection: the unit is one block, and a block inside an
@@ -256,9 +224,6 @@ export default defineContentScript({
     // exactly when this matters.
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== 'sync') return;
-      if ('translateSubtitles' in changes || 'targetLang' in changes) {
-        void loadSettings().then(remountSubtitles);
-      }
       if (
         !('displayMode' in changes) &&
         !('translationStyle' in changes) &&

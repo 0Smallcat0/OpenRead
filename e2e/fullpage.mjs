@@ -206,7 +206,7 @@ try {
     );
 
     // The detector has a model of its own, downloaded separately, and every
-    // request that omits a source language waits on it — subtitles, the text
+    // request that omits a source language waits on it — the text
     // box, a PDF. On a fresh profile that wait is minutes, in silence.
     const detector = await worker.evaluate(async () => {
       try {

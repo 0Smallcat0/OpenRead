@@ -78,7 +78,6 @@ interface Elements {
   hoverTranslate: HTMLSelectElement | null;
   inputLang: HTMLSelectElement | null;
   glossary: HTMLTextAreaElement | null;
-  subtitles: HTMLInputElement | null;
   translationStyle: HTMLSelectElement | null;
   translationScale: HTMLSelectElement | null;
   pack: HTMLElement | null;
@@ -115,7 +114,6 @@ function collect(root: ParentNode): Elements | null {
     root.querySelector<HTMLSelectElement>('#hoverTranslate');
   const inputLang = root.querySelector<HTMLSelectElement>('#inputTargetLang');
   const glossary = root.querySelector<HTMLTextAreaElement>('#glossary');
-  const subtitles = root.querySelector<HTMLInputElement>('#translateSubtitles');
   const translationStyle =
     root.querySelector<HTMLSelectElement>('#translationStyle');
   const translationScale =
@@ -174,7 +172,6 @@ function collect(root: ParentNode): Elements | null {
     hoverTranslate,
     inputLang,
     glossary,
-    subtitles,
     translationStyle,
     translationScale,
     pack,
@@ -469,9 +466,6 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
       hoverTranslate: pick(el.hoverTranslate, DEFAULT_SETTINGS.hoverTranslate),
       inputTargetLang: pick(el.inputLang, DEFAULT_SETTINGS.inputTargetLang),
       glossary: el.glossary ? el.glossary.value : DEFAULT_SETTINGS.glossary,
-      translateSubtitles: el.subtitles
-        ? el.subtitles.checked
-        : DEFAULT_SETTINGS.translateSubtitles,
       obsidianVault: el.vault.value.trim(),
       obsidianFolder: el.folder.value.trim() || DEFAULT_SETTINGS.obsidianFolder,
       enrichOnCapture: el.enrich.checked,
@@ -510,7 +504,6 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     if (el.hoverTranslate) el.hoverTranslate.value = settings.hoverTranslate;
     if (el.inputLang) el.inputLang.value = settings.inputTargetLang;
     if (el.glossary) el.glossary.value = settings.glossary;
-    if (el.subtitles) el.subtitles.checked = settings.translateSubtitles;
     except = [...settings.autoTranslateExcept];
     renderAuto();
     el.vault.value = settings.obsidianVault;
@@ -620,7 +613,6 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     el.hoverTranslate,
     el.inputLang,
     el.glossary,
-    el.subtitles,
   ]) {
     field?.addEventListener('change', () => {
       void persist();
