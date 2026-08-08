@@ -770,17 +770,22 @@ try {
   await page.reload({ waitUntil: 'domcontentloaded' });
   await sleep(1500);
   const typed = '這是一段用中文寫的留言，需要翻成英文再送出。';
-  await page.evaluate((text) => {
+  await page.evaluate(() => {
     const box = document.createElement('textarea');
     box.id = 'compose';
     box.style.width = '400px';
     box.style.height = '80px';
     document.body.replaceChildren(box);
-    box.focus();
-    // Typed rather than assigned, so the undo stack has something in it to
-    // return to — which is the whole property being measured.
-    document.execCommand('insertText', false, text);
-  }, typed);
+  });
+  // Typed with real keystrokes, not `execCommand` from `page.evaluate`.
+  //
+  // `execCommand` called without user activation does not put an entry in
+  // Chrome's undo stack, so the Ctrl+Z below had nothing to return to and the
+  // assertion failed — against a product that undoes correctly, proved by
+  // driving the same flow with real keys. The harness was testing its own
+  // ability to fake typing.
+  await page.focus('#compose');
+  await page.keyboard.type(typed);
   await sleep(300);
 
   const beforeInput = await page.evaluate(
