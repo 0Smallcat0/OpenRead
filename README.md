@@ -9,6 +9,7 @@
 
 ![CI](https://github.com/0Smallcat0/OpenRead/actions/workflows/ci.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+[![Chrome Web Store](https://img.shields.io/chrome-web-store/v/mopclgoefogojkfmigfjpbmnnoiodnmb?label=chrome%20web%20store)](https://chromewebstore.google.com/detail/mopclgoefogojkfmigfjpbmnnoiodnmb)
 [![Download](https://img.shields.io/github/v/release/0Smallcat0/OpenRead?label=download)](https://github.com/0Smallcat0/OpenRead/releases/latest)
 
 ## Why
@@ -29,11 +30,15 @@
 
 ## Install
 
-[**⬇ Download the latest release**](https://github.com/0Smallcat0/OpenRead/releases/latest),
+[**⬇ Add to Chrome from the Chrome Web Store**](https://chromewebstore.google.com/detail/mopclgoefogojkfmigfjpbmnnoiodnmb).
+One click, and it updates itself.
+
+If you would rather not install from the store — or you are on Firefox —
+[download the latest release](https://github.com/0Smallcat0/OpenRead/releases/latest),
 unzip it, open `chrome://extensions`, turn on **Developer mode**, click
 **Load unpacked**, and pick the unzipped folder.
 
-That is the whole setup. OpenRead uses Chrome's own on-device translator, which
+Either way, that is the whole setup. OpenRead uses Chrome's own on-device translator, which
 Chrome downloads the first time you translate — a minute or two, with a
 progress indicator, once per language pair. After that a page takes about two
 seconds.

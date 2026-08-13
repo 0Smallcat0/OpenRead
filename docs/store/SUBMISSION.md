@@ -1,14 +1,26 @@
 # Chrome Web Store submission guide
 
+**The listing is live.** Item id `mopclgoefogojkfmigfjpbmnnoiodnmb`, public since
+2026-08-11.
+
+| | |
+| --- | --- |
+| Public page | <https://chromewebstore.google.com/detail/mopclgoefogojkfmigfjpbmnnoiodnmb> |
+| Console item | <https://chrome.google.com/webstore/devconsole/> → the item, or append the item id to the item URL once inside |
+
+Sections 1 and 2 below are the one-time setup and are done. For a new version,
+go straight to [section 4](#4-after-approval).
+
 > **Everything in this guide is ready except the parts only you can do.** The
-> package builds, the listing copy and the four screenshots are current as of
-> 2.18.1, and the privacy answers are drafted. What remains is a one-time **$5
-> developer registration**, paid with your own card, and the upload from your
-> own account — account creation and payment are yours to perform, not
-> something to hand to a tool. Budget about 20 minutes plus review time.
+> package builds, the listing copy and the four screenshots are current, and the
+> privacy answers are drafted. The one-time **$5 developer registration** is
+> paid and the item exists. What remains for each release is the upload itself,
+> from your own account — signing in and clicking **Submit** are yours to
+> perform, not something to hand to a tool. Budget about five minutes plus
+> review time.
 
 Everything below is prepared in this repo; the only steps that need a human are
-the developer account and the final clicks.
+the final clicks.
 
 ## 0. Build the package
 
@@ -51,11 +63,20 @@ Click **Submit for review**. Expect a longer-than-average review because the
 extension requests `<all_urls>` host access — the justifications in the privacy
 tab address exactly that. Typical turnaround is a few days.
 
-## 4. After approval
+## 4. Shipping a new version
 
-- Put the store link in the README badge row and in the resume bullets.
-- Subsequent releases: bump `version` in `package.json`, `pnpm zip`, upload the
-  new zip on the item's **Package** tab, resubmit.
+1. Bump `version` in `package.json` and run `pnpm zip`.
+2. Open the item in the console, go to the **Package** tab, and
+   **Upload new package** — `.output/openread-<version>-chrome.zip`.
+   The Store listing tab has no upload control; see the note in section 2.
+3. Re-read the listing copy only if the product changed shape. Re-shoot the
+   screenshots if the UI did.
+4. **Submit for review.** The live version stays up and serves users unchanged
+   until the new one is approved — a review in flight costs nothing.
+5. Do not upload a new package while a review is pending. Wait for the verdict.
+
+The store link is already in the README badge row and the Install section.
+It still needs to go into the resume bullets.
 
 ## Gotchas
 
