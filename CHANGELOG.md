@@ -70,7 +70,7 @@ left the first five minutes after a Web Store install untested.
   it.** `declarativeNetRequest` does not exist in Firefox's MV2, which is the
   build Firefox gets — so the call that installs the Origin-strip rule threw at
   start-up, `originRuleReady` became a rejected promise, and every request
-  begins by awaiting it *outside* its try. The rejection escaped the handler
+  begins by awaiting it _outside_ its try. The rejection escaped the handler
   entirely: nothing was posted back to the port, so a translation sat there
   running forever with no error to show. Firefox's only engine is Ollama, so
   that silence was the whole product, since 2.5.0. Now guarded, and the
@@ -79,7 +79,7 @@ left the first five minutes after a Web Store install untested.
   transcript if the guard is removed.
 
 - **A slow PDF translated its first page twice.** A page is marked translated
-  when it *finishes*, and the queue refills from "every drawn page that is not
+  when it _finishes_, and the queue refills from "every drawn page that is not
   marked" — so a page still being translated looked to every refill like a page
   nobody had taken, and a second worker took it. The window is milliseconds on
   a warm profile, which is why four releases of harness runs never saw it, and
