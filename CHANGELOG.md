@@ -59,12 +59,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-Six ways this extension could look broken on a computer it had just been
+Seven ways this extension could look broken on a computer it had just been
 installed on. All four were found by `pnpm e2e:first-run`, a new harness that
 loads the build into a profile that has never translated anything, and reports
 what Chrome offered, what the popup said, and what pressing the button
 produced. Every other harness here deliberately reuses a warm profile, which
 left the first five minutes after a Web Store install untested.
+
+- **The Firefox build could not translate anything, and said nothing about
+  it.** `declarativeNetRequest` does not exist in Firefox's MV2, which is the
+  build Firefox gets — so the call that installs the Origin-strip rule threw at
+  start-up, `originRuleReady` became a rejected promise, and every request
+  begins by awaiting it *outside* its try. The rejection escaped the handler
+  entirely: nothing was posted back to the port, so a translation sat there
+  running forever with no error to show. Firefox's only engine is Ollama, so
+  that silence was the whole product, since 2.5.0. Now guarded, and the
+  permission is no longer asked for on Firefox — it bought an install warning
+  for an API the build cannot use. Held by a test that returns an empty
+  transcript if the guard is removed.
 
 - **A slow PDF translated its first page twice.** A page is marked translated
   when it *finishes*, and the queue refills from "every drawn page that is not

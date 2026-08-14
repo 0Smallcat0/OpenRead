@@ -138,12 +138,35 @@ export default defineBackground(() => {
    * have since changed.
    */
   async function applyOriginStripRule(): Promise<void> {
-    const { baseUrl } = await loadSettings();
-    const rule = buildOriginStripRule(baseUrl);
-    await chrome.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: [ORIGIN_STRIP_RULE_ID],
-      addRules: rule ? [rule] : [],
-    });
+    // Guarded, and not for tidiness. `declarativeNetRequest` does not exist in
+    // Firefox's MV2, which is the build Firefox gets — so this threw at
+    // startup, `originRuleReady` became a rejected promise, and every request
+    // began with `await originRuleReady` outside a try. The rejection escaped
+    // the handler entirely: nothing was posted back to the port, so the panel
+    // sat there translating forever with no error to show. On Firefox the only
+    // engine is Ollama, so that is the whole product, dead and silent.
+    //
+    // Failing to install the rule is survivable on its own terms too: it
+    // removes the OLLAMA_ORIGINS setup step, and without it a user is back to
+    // the setup step rather than out of options. That is worth a warning in
+    // the console and nothing more.
+    const rules = chrome.declarativeNetRequest as
+      | typeof chrome.declarativeNetRequest
+      | undefined;
+    if (typeof rules?.updateSessionRules !== 'function') return;
+    try {
+      const { baseUrl } = await loadSettings();
+      const rule = buildOriginStripRule(baseUrl);
+      await rules.updateSessionRules({
+        removeRuleIds: [ORIGIN_STRIP_RULE_ID],
+        addRules: rule ? [rule] : [],
+      });
+    } catch (error) {
+      console.warn(
+        'OpenRead could not install the Origin-strip rule; Ollama may need OLLAMA_ORIGINS.',
+        error,
+      );
+    }
   }
 
   /**

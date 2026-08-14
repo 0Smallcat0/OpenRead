@@ -708,6 +708,39 @@ describe('one-shot handlers', () => {
   });
 });
 
+describe('a browser with no declarativeNetRequest', () => {
+  it('still translates, instead of hanging with nothing said', async () => {
+    // Firefox gets the MV2 build, and MV2 has no such API. This threw at
+    // startup, left `originRuleReady` a rejected promise, and the rejection
+    // escaped the request handler — `await originRuleReady` sits outside its
+    // try — so the port was never answered and the panel translated forever
+    // with no error to show. On Firefox the only engine is Ollama, so that
+    // silence was the entire product.
+    const stub = globalThis.chrome as unknown as Record<string, unknown>;
+    delete stub.declarativeNetRequest;
+    // Re-run the worker's start-up, which is where the rule is installed.
+    registered.onStartup();
+    await settle();
+
+    mocks.translateStream.mockImplementation(
+      async (params: { onChunk: (c: string) => void }) => {
+        params.onChunk('你好');
+      },
+    );
+    const port = new FakePort('stream-translate');
+    registered.onConnect(port);
+    port.send({
+      type: 'START_STREAM',
+      text: 'Hello',
+      targetLang: 'Traditional Chinese',
+      model: 'qwen3:latest',
+    });
+    await settle();
+
+    expect(port.posted).toContainEqual({ status: 'done' });
+  });
+});
+
 describe('the Origin-strip rule', () => {
   /** The rule the worker last handed to declarativeNetRequest. */
   function lastRule(): {
