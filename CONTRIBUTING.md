@@ -18,8 +18,7 @@ pnpm install
 Run the extension in dev mode with hot reload:
 
 ```sh
-pnpm dev           # Chrome
-pnpm dev:firefox   # Firefox
+pnpm dev
 ```
 
 ## Quality gates

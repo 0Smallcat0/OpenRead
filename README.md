@@ -36,10 +36,11 @@
 [**⬇ Add to Chrome from the Chrome Web Store**](https://chromewebstore.google.com/detail/mopclgoefogojkfmigfjpbmnnoiodnmb).
 One click, and it updates itself.
 
-If you would rather not install from the store — or you are on Firefox —
+If you would rather not install from the store,
 [download the latest release](https://github.com/0Smallcat0/OpenRead/releases/latest),
 unzip it, open `chrome://extensions`, turn on **Developer mode**, click
-**Load unpacked**, and pick the unzipped folder.
+**Load unpacked**, and pick the unzipped folder. The same package works in
+Edge, from `edge://extensions`.
 
 Either way, that is the whole setup. OpenRead uses Chrome's own on-device translator, which
 Chrome downloads the first time you translate — a minute or two, with a
@@ -53,13 +54,15 @@ seconds.
 ### What it needs, and where it stops
 
 - **Chrome 138 or later, on desktop.** The built-in translator is Chrome's, not
-  this extension's. Firefox has no equivalent API, so the Firefox build runs on
-  the Ollama engine only. **Edge works** — measured on Edge 151, where the
-  built-in translator is there and a cold first translation takes about twenty
-  seconds — with one difference: Edge has already claimed the three suggested
-  shortcuts for itself, so it registers them unbound. Everything is still
-  reachable from the right-click menu and the popup, and the keys can be
-  assigned by hand at `edge://extensions/shortcuts`.
+  this extension's, so a browser without it has nothing to run on. **Edge
+  works** — measured on Edge 151, where the translator is there and a cold
+  first translation takes about twenty seconds — with one difference: Edge has
+  already claimed the three suggested shortcuts for itself, so it registers
+  them unbound. Everything is still reachable from the right-click menu and the
+  popup, and the keys can be assigned by hand at `edge://extensions/shortcuts`.
+  **Firefox is not supported**, and the honest reason is that it has no
+  equivalent API: the only engine left there is Ollama, which means a server
+  and a five-gigabyte model — the opposite of what this is for.
 - **Thirty-nine target languages**, every one probed against a real Chrome
   rather than taken from documentation. The source language is whatever the
   page is in — that side is not a list.

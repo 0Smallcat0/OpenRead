@@ -9,10 +9,8 @@
   },
   "scripts": {
     "dev": "wxt",
-    "dev:firefox": "wxt -b firefox",
     "build": "wxt build",
     "build:cli": "node scripts/build-cli.mjs",
-    "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "compile": "tsc --noEmit",
     "test": "vitest run",

@@ -710,12 +710,14 @@ describe('one-shot handlers', () => {
 
 describe('a browser with no declarativeNetRequest', () => {
   it('still translates, instead of hanging with nothing said', async () => {
-    // Firefox gets the MV2 build, and MV2 has no such API. This threw at
-    // startup, left `originRuleReady` a rejected promise, and the rejection
-    // escaped the request handler — `await originRuleReady` sits outside its
-    // try — so the port was never answered and the panel translated forever
-    // with no error to show. On Firefox the only engine is Ollama, so that
-    // silence was the entire product.
+    // How the Firefox build managed to translate nothing at all from 2.5.0 to
+    // 2.21.0 with no report: MV2 has no such API, so the start-up call threw,
+    // `originRuleReady` stayed a rejected promise, and the rejection escaped
+    // the request handler — `await originRuleReady` sits outside its try — so
+    // the port was never answered and the panel translated forever in silence.
+    // Firefox is no longer a target. The test stays because the failure shape
+    // is not Firefox-specific: a quota error or a rejected rule on Chrome
+    // reaches the port the same way, which is to say not at all.
     const stub = globalThis.chrome as unknown as Record<string, unknown>;
     delete stub.declarativeNetRequest;
     // Re-run the worker's start-up, which is where the rule is installed.

@@ -5,6 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- **The Firefox build.** It had never been a product. Nothing published it —
+  the release workflow builds and uploads the Chrome zip and only that, so no
+  Firefox package has ever existed outside a developer's machine. The one
+  route the README offered handed a Firefox user the Chrome MV3 package and
+  told them to open `chrome://extensions`, which is not a Firefox address. And
+  from 2.5.0 until 2.21.0 the build could not translate anything at all, which
+  fifteen releases of nobody reporting is the clearest evidence available that
+  nobody had it.
+
+  The reason it could never have been good is simpler than any of that:
+  Firefox has no built-in translator, so the only engine there is Ollama — a
+  server and a five-gigabyte model. This project exists because the paid
+  alternative charges money and its whole premise is that you install nothing.
+  "Free, once you install five gigabytes" is a different product.
+
+  Gone: `pnpm dev:firefox`, `pnpm build:firefox`, the per-browser branch in
+  `wxt.config.ts`, and the README's claim. The guard in `applyOriginStripRule`
+  **stays** — it was added for Firefox's missing `declarativeNetRequest`, but
+  the failure it prevents is not Firefox-specific: any rejection there escapes
+  the request handler and leaves the port unanswered, which on Chrome a quota
+  error or a rejected rule would do just as well.
+
 ## [2.21.0] - 2026-08-14
 
 ### Added
