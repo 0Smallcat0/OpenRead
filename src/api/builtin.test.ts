@@ -6,13 +6,14 @@
  * requests this module refuses and how, because every refusal is a fallback to
  * Ollama and every silent wrong answer is a page full of confident nonsense.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   translateBuiltin,
   detectLanguage,
   isBuiltinSupported,
   resetTranslatorCache,
   BuiltinUnavailableError,
+  DOWNLOAD_STALL_MS,
 } from './builtin';
 
 interface Stub {
@@ -505,5 +506,101 @@ describe('zh is two scripts wearing one code', () => {
     });
     expect(out).toBe('A purely peer-to-peer version of electronic cash.');
     expect(created).toHaveLength(0);
+  });
+});
+
+describe('a language-pack download that never moves', () => {
+  it('stops waiting and says what to check', async () => {
+    // Reported from a fresh install on a fresh Chrome: the badge read
+    // "Downloading language pack…" and stayed there. There was no timeout
+    // anywhere on this path and `Translator.create()` has none of its own, so
+    // a download the component updater never starts — no disk space, a
+    // metered connection, a network that blocks it — left the reader watching
+    // a spinner for as long as the tab was open.
+    const global = globalThis as unknown as Record<string, unknown>;
+    global.Translator = {
+      availability: () => Promise.resolve('downloadable'),
+      // Never settles, which is the whole failure.
+      create: () => new Promise(() => undefined),
+    };
+
+    vi.useFakeTimers();
+    try {
+      const run = translateBuiltin({
+        text: 'A paragraph waiting on a language pack that is not coming.',
+        targetLang: 'Traditional Chinese',
+        sourceLang: 'en',
+        onChunk: () => undefined,
+      });
+      const settled = Promise.all([
+        expect(run).rejects.toThrow(BuiltinUnavailableError),
+        // The class alone would also match "Chrome has no en → zh-Hant
+        // language pack", which is a different problem with a different fix.
+        expect(run).rejects.toThrow(/22 GB|metered|on-device-internals/),
+      ]);
+      // The availability check is a promise of its own, so the watchdog is not
+      // armed until the microtask queue has drained.
+      await vi.advanceTimersByTimeAsync(DOWNLOAD_STALL_MS + 1000);
+      await settled;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('waits as long as the download keeps moving', async () => {
+    // The measured worst case is 81 seconds with exactly two progress events,
+    // so a total timeout would cancel real downloads. This one measures
+    // silence: every event resets it.
+    const global = globalThis as unknown as Record<string, unknown>;
+    // A holder rather than a bare `let`: TypeScript cannot see the assignment
+    // that happens inside the monitor callback and narrows the variable to
+    // `null` at the call site below.
+    const bus: { report: ((loaded: number) => void) | null } = { report: null };
+    global.Translator = {
+      availability: () => Promise.resolve('downloadable'),
+      create: (options: {
+        monitor?: (m: {
+          addEventListener: (
+            type: string,
+            listener: (event: { loaded: number }) => void,
+          ) => void;
+        }) => void;
+      }) => {
+        options.monitor?.({
+          addEventListener: (_type, listener) => {
+            bus.report = (loaded) => {
+              listener({ loaded });
+            };
+          },
+        });
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            resolve({ translate: (input: string) => Promise.resolve(input) });
+          }, DOWNLOAD_STALL_MS * 3);
+        });
+      },
+    };
+
+    vi.useFakeTimers();
+    try {
+      const chunks: string[] = [];
+      const run = translateBuiltin({
+        text: 'A paragraph waiting on a download that is slow but alive.',
+        targetLang: 'Traditional Chinese',
+        sourceLang: 'en',
+        onChunk: (chunk) => chunks.push(chunk),
+      });
+      // Three quiet stretches, each just short of the deadline, each ended by
+      // a progress event. A total timeout would have given up during the first.
+      for (let i = 0; i < 3; i++) {
+        await vi.advanceTimersByTimeAsync(DOWNLOAD_STALL_MS - 1000);
+        bus.report?.(0.25 * (i + 1));
+      }
+      await vi.advanceTimersByTimeAsync(DOWNLOAD_STALL_MS);
+      await run;
+      expect(chunks.join('')).toContain('slow but alive');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

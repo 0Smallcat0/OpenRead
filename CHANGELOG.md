@@ -59,12 +59,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-Four ways this extension could look broken on a computer it had just been
+Five ways this extension could look broken on a computer it had just been
 installed on. All four were found by `pnpm e2e:first-run`, a new harness that
 loads the build into a profile that has never translated anything, and reports
 what Chrome offered, what the popup said, and what pressing the button
 produced. Every other harness here deliberately reuses a warm profile, which
 left the first five minutes after a Web Store install untested.
+
+- **A language-pack download that never started waited forever.** There was no
+  timeout anywhere on the built-in engine's path, and `Translator.create()` has
+  none of its own, so a download Chrome's component updater never gets going —
+  too little free disk space, a connection Chrome treats as metered, a network
+  that blocks the updater — left the badge reading _"Downloading language
+  pack…"_ for as long as the tab stayed open. Reported from a fresh install on
+  a freshly downloaded Chrome, which is exactly where it bites. Three minutes
+  of **no progress at all** now ends the attempt and says what to check. It
+  measures silence rather than total time: a real download can legitimately say
+  nothing for 81 seconds — measured, on `en`→`ko`, which reported exactly two
+  progress events for the whole fetch — so a total timeout would cancel working
+  downloads to catch dead ones.
 
 - **The one message that explained everything erased itself after 2.5
   seconds.** On a browser with no built-in translator and no Ollama running,
