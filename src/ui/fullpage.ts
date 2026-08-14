@@ -476,13 +476,28 @@ function ensureStyle(doc: Document): void {
 export function showPageNotice(doc: Document, message: string): void {
   ensureStyle(doc);
   const progress = mountProgress(doc, () => undefined);
-  progress.finish(message);
+  // Kept, like every other message that reports something not working. Each
+  // one of these is the answer to "I pressed it and nothing happened".
+  progress.finish(message, true);
 }
 
 export interface Progress {
   update: (done: number, total: number) => void;
   downloading: (loaded: number) => void;
-  finish: (message: string) => void;
+  /**
+   * The last thing the badge says.
+   *
+   * `keep` leaves it on screen with a Dismiss button instead of taking it away
+   * after a couple of seconds. Not a detail: on a browser with no built-in
+   * translator and no Ollama, this extension diagnoses itself correctly — "This
+   * browser has no built-in translator (Chrome 138+ does). OpenRead fell back
+   * to Ollama, which also failed" — and then erased that sentence 2.5 seconds
+   * later, along with every failure marker, leaving a page that looked
+   * untouched and a user with nothing to go on. Measured in `e2e:first-run`:
+   * the whole run started, failed, explained itself and cleaned up inside six
+   * seconds. A message nobody can finish reading is not a message.
+   */
+  finish: (message: string, keep?: boolean) => void;
 }
 
 /**
@@ -524,7 +539,13 @@ function mountProgress(doc: Document, onStop: () => void): Progress {
   const stop = doc.createElement('button');
   stop.type = 'button';
   stop.textContent = 'Stop';
-  stop.addEventListener('click', onStop);
+  // Indirected through a variable because the button changes job: while a run
+  // is going it stops the run, and once one has failed it takes the message
+  // away. Rebinding a listener is fiddlier than reassigning what it calls.
+  let press = onStop;
+  stop.addEventListener('click', () => {
+    press();
+  });
   badge.append(label, stop);
   (doc.body ?? doc.documentElement).appendChild(badge);
 
@@ -547,10 +568,20 @@ function mountProgress(doc: Document, onStop: () => void): Progress {
           ? `Downloading language pack ${String(percent)}%`
           : 'Downloading language pack…';
     },
-    finish: (message) => {
+    finish: (message, keep = false) => {
       label.textContent = message;
-      stop.remove();
-      window.setTimeout(() => badge.remove(), 2500);
+      if (!keep) {
+        stop.remove();
+        window.setTimeout(() => badge.remove(), 2500);
+        return;
+      }
+      // Stays until the reader takes it away, or until the next run replaces
+      // the badge. Long messages are the ones worth keeping, and they are also
+      // the ones 2.5 seconds is not enough to read.
+      stop.textContent = 'Dismiss';
+      press = () => {
+        badge.remove();
+      };
     },
   };
 }
@@ -879,7 +910,10 @@ export async function translatePage(
   if (blocks.length === 0) {
     if (!deps.unprompted) {
       const progress = progressFor(root, deps, stopPageTranslation);
-      progress.finish('Nothing to translate on this page');
+      // Kept: a press that produced nothing is the case where a reader most
+      // needs to be told it was a press that produced nothing, rather than a
+      // press that did not register.
+      progress.finish('Nothing to translate on this page', true);
     }
     // Still worth watching: on an app that renders after load, "nothing to
     // translate" means "nothing yet", and that is the case where pressing the
@@ -1115,6 +1149,11 @@ async function drainQueue(
       firstError
         ? `Gave up after ${String(GIVE_UP_AFTER)} failures — ${firstError}`
         : `Gave up after ${String(GIVE_UP_AFTER)} failures`,
+      // Kept. This message, and the failure markers cleared just above it, are
+      // the only two things on screen that say anything went wrong; taking
+      // both away leaves a page that looks exactly like one nobody pressed the
+      // button on.
+      true,
     );
     return { translated, failed, unchanged, stopped: false };
   }
@@ -1131,6 +1170,10 @@ async function drainQueue(
         : `Done — ${String(translated)} translated`;
   progress.finish(
     failed > 0 && firstError ? `${summary} — ${firstError}` : summary,
+    // A run that finished with failures is carrying a diagnosis, and the
+    // reader has to be able to read it. A clean "Done — 34 translated" is a
+    // receipt for something they can already see, and takes itself away.
+    failed > 0,
   );
 
   return { translated, failed, unchanged, stopped };

@@ -17,14 +17,26 @@ async function platformOs(): Promise<PlatformOs> {
   return 'other';
 }
 
-/** Hand the request to the tab the user is looking at. */
+/**
+ * Hand the request to the tab the user is looking at.
+ *
+ * Rejects when nothing received it. This used to swallow the failure with the
+ * comment "nothing to report — the popup is closing either way", and the popup
+ * did close either way: on a tab that predates the install, or a page Chrome
+ * forbids, pressing the button made the window vanish and changed nothing else.
+ * The caller now has something to say instead.
+ */
 async function translateActivePage(): Promise<void> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab?.id === undefined) return;
+  if (tab?.id === undefined) throw new Error('No tab to translate.');
   const message: TranslatePageMessage = { type: 'TRANSLATE_PAGE' };
-  // Pages the content script cannot run on (chrome://, the Web Store) have no
-  // receiver. Nothing to report — the popup is closing either way.
-  await chrome.tabs.sendMessage(tab.id, message).catch(() => undefined);
+  await chrome.tabs.sendMessage(tab.id, message);
+}
+
+/** The address of the tab the popup was opened over, or null. */
+async function activeUrl(): Promise<string | null> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tab?.url ?? null;
 }
 
 /**
@@ -83,6 +95,7 @@ mountPopup(document, {
   writeClipboard: (text) => navigator.clipboard.writeText(text),
   translateActivePage,
   activeHost,
+  activeUrl,
   pageLanguage,
   // Straight from this document rather than through the background: the popup
   // is an extension page, `Translator` is there, and Chrome's gate on starting

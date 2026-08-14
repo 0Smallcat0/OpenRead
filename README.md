@@ -219,6 +219,7 @@ pnpm e2e:page     # whole-page translation in a real Chrome, end to end
 pnpm e2e:stress   # hostile pages: infinite feeds, route swaps, rapid toggling
 pnpm e2e:egress   # prove the default engine sends nothing, in a real Chrome
 pnpm e2e:epub     # a real .epub opened, read and translated in a real Chrome
+pnpm e2e:first-run # what a brand-new install does on a brand-new profile
 ```
 
 **[How it is built →](docs/ENGINEERING.md)** — the reliability layer, the

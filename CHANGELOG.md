@@ -57,6 +57,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and one 108,000-character chapter whose 391 blocks the viewport-first queue
   translates as the reader reaches them.
 
+### Fixed
+
+Four ways this extension could look broken on a computer it had just been
+installed on. All four were found by `pnpm e2e:first-run`, a new harness that
+loads the build into a profile that has never translated anything, and reports
+what Chrome offered, what the popup said, and what pressing the button
+produced. Every other harness here deliberately reuses a warm profile, which
+left the first five minutes after a Web Store install untested.
+
+- **The one message that explained everything erased itself after 2.5
+  seconds.** On a browser with no built-in translator and no Ollama running,
+  OpenRead diagnoses itself correctly — _"This browser has no built-in
+  translator (Chrome 138+ does). OpenRead fell back to Ollama, which also
+  failed"_ — and then took that sentence off the screen, along with every
+  failure marker, leaving a page that looked exactly like one nobody had
+  pressed the button on. Traced in the harness: started, failed, explained
+  itself and cleaned up inside six seconds. A finish message that reports a
+  failure now stays until dismissed; a clean `Done — 34 translated` still takes
+  itself away, because it reports something the reader can already see.
+
+- **The popup said everything was fine on a browser that could not translate a
+  word.** `packAvailability` answered `null` both for "this browser has no
+  translator" and for "could not ask", and the popup answered `null` by hiding
+  the whole banner, with a comment reading _"the engine note covers that"_. The
+  engine note is a fixed sentence saying there is nothing to install. The two
+  cases are now told apart, and the first one says: _this browser has no
+  built-in translator, so nothing here will work until you update to Chrome 138
+  or later — or switch the translator to Ollama_.
+
+- **On the Chrome Web Store page, pressing translate did nothing and said
+  nothing.** Chrome forbids every extension from running there — which is a
+  problem because the Web Store listing is the page every new user is looking
+  at the moment they install. The popup now names the restriction before the
+  press and disables the button, rather than letting it be delivered to nobody.
+
+- **A tab that was already open when the extension was installed has no content
+  script in it**, so the button closed the popup and changed nothing. That
+  failure was explicitly swallowed, with the comment _"nothing to report — the
+  popup is closing either way"_. It now stays open and says to reload the page.
+  A page whose address Chrome will not even show the extension gets a different
+  sentence, because "reload the page" is advice that cannot work there.
+
 ### Security
 
 - **A chapter is treated as what it is: XHTML written by someone else, being

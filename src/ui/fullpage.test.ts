@@ -645,8 +645,15 @@ describe('showPageNotice', () => {
     showPageNotice(document, 'Not available here.');
     const badge = document.getElementById(PROGRESS_ID);
     expect(badge?.textContent).toContain('Not available here.');
-    // Nothing to stop, so no Stop button.
-    expect(badge?.querySelector('button')).toBeNull();
+    // There is nothing to stop, so the button is the way out of the message
+    // rather than out of a run. It used to have no button at all, because the
+    // notice took itself off the screen after two and a half seconds — which
+    // is the same reason a reader who pressed a button and saw nothing had
+    // nothing to go on.
+    const button = badge?.querySelector('button');
+    expect(button?.textContent).toBe('Dismiss');
+    button?.dispatchEvent(new Event('click'));
+    expect(document.getElementById(PROGRESS_ID)).toBeNull();
   });
 
   it('replaces an earlier notice instead of stacking them', () => {
@@ -792,6 +799,55 @@ describe('a run that is going nowhere', () => {
     const badge = document.getElementById(PROGRESS_ID)?.textContent ?? '';
     expect(badge).toContain('Gave up');
     expect(badge).toContain("Can't reach Ollama");
+  });
+
+  it('leaves the reason on screen instead of taking it away', async () => {
+    // The test above reads the badge the instant the run ends, so it passed
+    // for a badge that then deleted itself 2.5 seconds later — which is what
+    // it did. On a browser with no built-in translator and no Ollama, this
+    // extension diagnoses itself correctly and then erased the diagnosis,
+    // along with every failure marker, leaving a page that looked exactly like
+    // one nobody had pressed the button on. Seen end to end in
+    // `e2e:first-run`: started, failed, explained itself and cleaned up inside
+    // six seconds.
+    vi.useFakeTimers();
+    try {
+      document.body.innerHTML = PAGE_OF_TEN;
+      await translatePage(
+        document,
+        deps({
+          translate: () =>
+            Promise.reject(new Error('This browser has no built-in translator')),
+        }),
+      );
+      vi.advanceTimersByTime(60_000);
+
+      const badge = document.getElementById(PROGRESS_ID);
+      expect(badge?.textContent).toContain('no built-in translator');
+
+      // And it can be got rid of, which is the other half of keeping it.
+      badge?.querySelector('button')?.dispatchEvent(new Event('click'));
+      expect(document.getElementById(PROGRESS_ID)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('takes a clean receipt away by itself', async () => {
+    // The counterpart. "Done — 10 translated" reports something the reader can
+    // already see on the page, so it must not need dismissing.
+    vi.useFakeTimers();
+    try {
+      document.body.innerHTML = PAGE_OF_TEN;
+      await translatePage(document, deps({}));
+      expect(document.getElementById(PROGRESS_ID)?.textContent).toContain(
+        'Done',
+      );
+      vi.advanceTimersByTime(3000);
+      expect(document.getElementById(PROGRESS_ID)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('is not reported as the user having stopped it', async () => {

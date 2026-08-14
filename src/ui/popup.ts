@@ -23,8 +23,9 @@ import {
   type Engine,
 } from '../settings';
 import { isExcepted, type AutoTranslate } from '../core/auto-translate';
+import { describeRestrictedPage } from '../core/restricted';
 import { toBcp47 } from '../core/bcp47';
-import type { PackAvailability } from '../api/builtin';
+import type { PackReport } from '../api/builtin';
 import {
   describeConnection,
   type ConnectionProbe,
@@ -36,8 +37,22 @@ export interface PopupDeps {
   /** Which OS to tailor the OLLAMA_ORIGINS fix command for. */
   platformOs: () => Promise<PlatformOs>;
   writeClipboard: (text: string) => Promise<void>;
-  /** Ask the active tab to translate (or untranslate) itself. */
+  /**
+   * Ask the active tab to translate (or untranslate) itself.
+   *
+   * Rejects when the message reached nobody. That used to be swallowed and the
+   * popup closed anyway, which is the whole of what a user sees when the tab
+   * predates the install: a button that closes the window and changes nothing.
+   */
   translateActivePage: () => Promise<void>;
+  /**
+   * Full URL of the tab the popup was opened over, or null.
+   *
+   * The host alone cannot answer this: `chrome://extensions` and the Web Store
+   * are pages Chrome forbids every extension from touching, and the first is
+   * not a host at all while the second is an ordinary-looking https one.
+   */
+  activeUrl: () => Promise<string | null>;
   /**
    * Hostname of the tab the popup was opened over, or null when there is not
    * one — `chrome://` pages, the Web Store, a blank tab. The per-site exception
@@ -55,7 +70,7 @@ export interface PopupDeps {
   packAvailability: (
     source: string,
     target: string,
-  ) => Promise<PackAvailability | null>;
+  ) => Promise<PackReport | null>;
   /** Fetch it. Called from the click, which is what satisfies Chrome's gate. */
   downloadPack: (
     source: string,
@@ -88,6 +103,7 @@ interface Elements {
   siteExceptRow: HTMLElement | null;
   siteExcept: HTMLInputElement | null;
   siteExceptLabel: HTMLElement | null;
+  pageNote: HTMLElement | null;
   vault: HTMLInputElement;
   folder: HTMLInputElement;
   enrich: HTMLInputElement;
@@ -126,6 +142,7 @@ function collect(root: ParentNode): Elements | null {
   const siteExceptRow = root.querySelector<HTMLElement>('#siteExceptRow');
   const siteExcept = root.querySelector<HTMLInputElement>('#siteExcept');
   const siteExceptLabel = root.querySelector<HTMLElement>('#siteExceptLabel');
+  const pageNote = root.querySelector<HTMLElement>('#pageNote');
   const vault = root.querySelector<HTMLInputElement>('#obsidianVault');
   const folder = root.querySelector<HTMLInputElement>('#obsidianFolder');
   const enrich = root.querySelector<HTMLInputElement>('#enrichOnCapture');
@@ -182,6 +199,7 @@ function collect(root: ParentNode): Elements | null {
     siteExceptRow,
     siteExcept,
     siteExceptLabel,
+    pageNote,
     vault,
     folder,
     enrich,
@@ -352,9 +370,25 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
             'warn',
           );
           break;
+        case 'no-api':
+          // This browser has no built-in translator at all, and this line is
+          // the only place a reader will be told before they press the button
+          // and watch nothing happen. It used to hide the banner instead, on
+          // the grounds that "the engine note covers that" — the engine note
+          // is a fixed sentence saying there is nothing to install, so the
+          // popup reported that all was well on a browser that could not
+          // translate a word. Reproduced in `e2e:first-run`.
+          setPackNote(
+            'This browser has no built-in translator, so nothing here will ' +
+              'work until you update to Chrome 138 or later — or switch the ' +
+              'translator above to Ollama.',
+            'warn',
+          );
+          break;
         default:
-          // No built-in translator in this browser at all. The engine note
-          // covers that; a second line about packs would only confuse.
+          // Could not ask: an unknown language code, a malformed tag. Not
+          // knowing is not the same as bad news, and a warning about a
+          // question that was never put would be inventing one.
           hidePack();
       }
     });
@@ -631,6 +665,63 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     void persist();
   });
 
+  /** Say something about the tab the popup was opened over, or nothing. */
+  const setPageNote = (message: string | null): void => {
+    if (!el.pageNote) return;
+    el.pageNote.textContent = message ?? '';
+    el.pageNote.hidden = message === null;
+  };
+  setPageNote(null);
+
+  /**
+   * Whether the page in front of the user is one Chrome forbids.
+   *
+   * Asked and answered before the press, because after it there is nothing to
+   * see: the message goes to a tab with no content script in it, the page does
+   * not change, and the popup closes. `core/restricted.ts` has the list and
+   * why the store listing is the one that matters most.
+   */
+  /**
+   * What the address bar says, once it has been asked. `undefined` until then.
+   *
+   * Kept because the answer changes what an undelivered message means. Chrome
+   * hands an extension a tab's URL only where it has permission, and it has
+   * none on its own pages — measured: a `chrome://extensions` tab reports a
+   * URL of `null`, while the Web Store listing reports its address in full.
+   * So a null URL is itself the evidence that this is a page no extension may
+   * touch, and a real URL plus a failed delivery is a tab that predates the
+   * install.
+   */
+  let pageUrl: string | null | undefined;
+
+  void deps.activeUrl().then((url) => {
+    pageUrl = url;
+    const reason = describeRestrictedPage(url);
+    if (!reason) return;
+    setPageNote(reason);
+    el.translatePage.disabled = true;
+  });
+
+  /** Why the press did nothing, in the words the evidence supports. */
+  const undeliveredReason = (): string => {
+    if (pageUrl === null) {
+      return (
+        'Chrome does not allow any extension to see or change this page, so ' +
+        'OpenRead cannot translate it. Try it on an ordinary web page.'
+      );
+    }
+    if (pageUrl === undefined) {
+      return (
+        'OpenRead could not reach this page. Reload it and press again — and ' +
+        "if it is one of Chrome's own pages, no extension can run there."
+      );
+    }
+    return (
+      'This tab was already open when OpenRead was installed, so it has not ' +
+      'been set up yet. Reload the page and press again.'
+    );
+  };
+
   el.translatePage.addEventListener('click', () => {
     // Closing immediately is the honest signal that the work moved to the
     // page: the progress badge lives there, and a popup left open would
@@ -639,9 +730,20 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     // Persisted first, so the page is translated with what the popup is
     // showing rather than with what was last saved.
     void persist().finally(() => {
-      void deps.translateActivePage().finally(() => {
-        window.close();
-      });
+      void deps.translateActivePage().then(
+        () => {
+          window.close();
+        },
+        // The message reached nobody. Chrome injects a content script when a
+        // page loads, so every tab that was already open when the extension
+        // was installed has none — which is every tab a user has at the moment
+        // they install from the Web Store. Closing the popup anyway, which is
+        // what this used to do, is a button that makes the window disappear
+        // and nothing else happen.
+        () => {
+          setPageNote(undeliveredReason());
+        },
+      );
     });
   });
 

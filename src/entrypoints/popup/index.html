@@ -274,6 +274,11 @@
     <button id="translatePage" type="button" class="primary-action">
       Translate this page
     </button>
+    <!-- Why the button above will not do anything here, when it will not.
+         Chrome forbids extensions on its own pages and on the extension store,
+         and a tab that predates the install has no content script in it — all
+         three used to be answered by the popup closing and nothing else. -->
+    <p id="pageNote" class="hint" role="status" aria-live="polite" hidden></p>
     <!-- The only way into the EPUB reader that always works. Chrome has no
          EPUB viewer, so it answers most .epub links by downloading the file
          rather than by navigating to it, and a download is not a tab the
