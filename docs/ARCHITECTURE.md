@@ -25,6 +25,7 @@ src/
     diagnostics.ts        connection probe verdicts + engine-failure wording
     dnr-rule.ts           the Origin-strip rule, so Ollama needs no OLLAMA_ORIGINS
     zip.ts                zip container + DecompressionStream, no dependency
+    restricted.ts         pages Chrome forbids every extension from touching
     types.ts              shared domain types
   api/
     builtin.ts            Chrome's on-device translator: pairs, packs, retry
@@ -52,11 +53,24 @@ src/
     pdf-viewer.ts         mounts the same translator inside the PDF.js viewer
     epub-reader/          the EPUB reader page (index.html + main.ts)
     popup/                settings UI (index.html + main.ts)
+  node/                 the same pipeline off the browser
+    cli.ts                `npx openread` — stdin/argv in, translation out
+    config.ts             where the CLI reads its defaults from
+    mcp.ts                the MCP server, so an agent can read a page locally
 scripts/
   gen-zh-markers.ts       derives the script-marker sets from the OpenCC dictionaries
 tests/
   background.test.ts      the one test that cannot sit beside its module: WXT
                           treats every file under src/entrypoints/ as an entrypoint
+  commands.test.ts        the manifest's shortcuts, against keys Chrome has claimed
+  epub-fixture.ts         zip and EPUB archives built in memory; not `*.test.ts`,
+                          so it is neither collected as a suite nor shipped
+e2e/                    real browser, real engine — none of these run in CI
+  fullpage.mjs            whole-page, hover, input box, glossary, PDF, shortcuts
+  stress.mjs              hostile pages: infinite feeds, route swaps, dead server
+  no-egress.mjs           proves the default engine sends nothing, by recording
+  epub.mjs                a real .epub, with the archive built by Node's own zlib
+  first-run.mjs           what a brand-new install does on a brand-new profile
 public/
   pdfjs/                  vendored PDF.js viewer (worker path fixed to .mjs)
 eval/
