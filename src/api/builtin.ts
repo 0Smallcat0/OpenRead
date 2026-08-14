@@ -251,11 +251,28 @@ export type PackAvailability =
   'unavailable' | 'downloadable' | 'downloading' | 'available';
 
 /**
+ * What `packAvailability` can answer, including the two things Chrome's own
+ * vocabulary has no word for.
+ *
+ * `no-api` is the browser having no built-in translator at all, which is a
+ * different thing from `unavailable` — that one means this Chrome has the
+ * translator and will not do this particular pair. Told apart because the
+ * remedies are opposite: update the browser, versus pick another language or
+ * engine. `null` is "could not ask", which is neither.
+ */
+export type PackReport = PackAvailability | 'no-api';
+
+/**
  * Has Chrome downloaded the model for this language pair yet?
  *
- * Null when the browser has no built-in translator at all, which is a different
- * answer from `unavailable` — that one means this Chrome has it and will not
- * do this pair.
+ * `no-api` when the browser has no built-in translator at all. That used to be
+ * `null`, and the popup answered `null` by hiding the whole banner on the
+ * grounds that the engine note covered it — which it does not. The engine note
+ * is a fixed sentence reading "Nothing to install", so on a browser that
+ * cannot translate at all the popup reported that everything was fine, and the
+ * only correct diagnosis this extension produces appeared on the page for two
+ * and a half seconds after the reader had already pressed the button and
+ * waited. Found by `e2e:first-run` with the API disabled.
  *
  * Exists so the popup can say so *before* the first translation rather than
  * after it. The download is once per pair per profile and takes 30 s to two
@@ -265,9 +282,9 @@ export type PackAvailability =
 export async function packAvailability(
   sourceLanguage: string,
   targetLanguage: string,
-): Promise<PackAvailability | null> {
+): Promise<PackReport | null> {
   const translators = factory();
-  if (!translators) return null;
+  if (!translators) return 'no-api';
   const source = normaliseLang(sourceLanguage);
   if (!source) return null;
   try {

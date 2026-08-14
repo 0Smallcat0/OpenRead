@@ -7,11 +7,14 @@
  * rather than a server someone has to misconfigure by hand.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { mountPopup, type PopupDeps } from './popup';
 import type { ConnectionProbe } from '../core/diagnostics';
 
 const MARKUP = `
   <button id="translatePage" type="button">Translate this page</button>
+  <p id="pageNote" hidden></p>
   <form id="settingsForm">
     <select id="engine">
       <option value="builtin">builtin</option>
@@ -73,7 +76,12 @@ const MARKUP = `
 
 let stored: Record<string, unknown>;
 let packState:
-  'unavailable' | 'downloadable' | 'downloading' | 'available' | null;
+  | 'unavailable'
+  | 'downloadable'
+  | 'downloading'
+  | 'available'
+  | 'no-api'
+  | null;
 let downloads: number;
 let probe: ReturnType<typeof vi.fn>;
 let written: string[];
@@ -98,6 +106,7 @@ function deps(overrides: Partial<PopupDeps> = {}): PopupDeps {
     probe: probe as unknown as PopupDeps['probe'],
     platformOs: () => Promise.resolve('mac'),
     activeHost: () => Promise.resolve('example.com'),
+    activeUrl: () => Promise.resolve('https://example.com/article'),
     pageLanguage: () => Promise.resolve('en'),
     packAvailability: () => Promise.resolve(packState),
     downloadPack: (_source, _target, onProgress) => {
@@ -210,6 +219,80 @@ describe('mountPopup', () => {
     // Closing is the honest signal that the work moved to the page, where the
     // progress badge lives — in the corner an open popup would cover.
     expect(window.close).toHaveBeenCalled();
+  });
+
+  it('says so on a page Chrome will not let it run on', async () => {
+    // The first page anyone sees with this installed is the Web Store listing
+    // they installed it from, and Chrome forbids every extension there. The
+    // button used to be delivered to nobody, the page did not change, and the
+    // popup closed — which is exactly what a broken extension looks like.
+    mountPopup(
+      document,
+      deps({
+        activeUrl: () =>
+          Promise.resolve('https://chromewebstore.google.com/detail/abc'),
+      }),
+    );
+    await settle();
+
+    expect($('pageNote').hidden).toBe(false);
+    expect($('pageNote').textContent).toMatch(/extension store/);
+    expect(($('translatePage') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('says nothing about an ordinary page', async () => {
+    mountPopup(document, deps());
+    await settle();
+    expect($('pageNote').hidden).toBe(true);
+    expect(($('translatePage') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('tells the user to reload when the message reached nobody', async () => {
+    // Chrome injects a content script as a page loads, so every tab that was
+    // already open when the extension was installed has none — which is every
+    // tab a user has at the moment they install. This used to be swallowed and
+    // the popup closed anyway.
+    // `vi.spyOn` on an already-spied method hands back the same mock, calls and
+    // all, so the count carries over from the test that asserts the popup does
+    // close. Cleared here rather than trusted.
+    vi.mocked(window.close).mockClear();
+    mountPopup(
+      document,
+      deps({
+        translateActivePage: () =>
+          Promise.reject(new Error('Receiving end does not exist.')),
+      }),
+    );
+    await settle();
+    $('translatePage').dispatchEvent(new Event('click'));
+    await settle();
+
+    expect($('pageNote').textContent).toMatch(/Reload the page/);
+    // And it stays open to be read, rather than closing on a message nobody
+    // has seen yet.
+    expect(window.close).not.toHaveBeenCalled();
+  });
+
+  it("blames Chrome, not the tab, on a page whose address it cannot even see", async () => {
+    // Measured: a `chrome://extensions` tab reports a URL of null to an
+    // extension with `<all_urls>`, while the Web Store listing reports its
+    // address in full. So a null address is itself the evidence — and telling
+    // this user to reload the page would be advice that cannot work.
+    vi.mocked(window.close).mockClear();
+    mountPopup(
+      document,
+      deps({
+        activeUrl: () => Promise.resolve(null),
+        translateActivePage: () =>
+          Promise.reject(new Error('Receiving end does not exist.')),
+      }),
+    );
+    await settle();
+    $('translatePage').dispatchEvent(new Event('click'));
+    await settle();
+
+    expect($('pageNote').textContent).toMatch(/does not allow any extension/);
+    expect($('pageNote').textContent).not.toMatch(/already open/);
   });
 
   it('hides the fix row when there is nothing to fix', async () => {
@@ -699,7 +782,26 @@ describe('the language pack, before it is needed', () => {
     expect($('pack').hasAttribute('hidden')).toBe(true);
   });
 
-  it('says nothing in a browser that has no built-in translator', async () => {
+  it('warns when the browser has no built-in translator at all', async () => {
+    // The popup used to hide this banner in that case, with a comment saying
+    // the engine note covered it. The engine note is a fixed sentence reading
+    // "Nothing to install — Chrome downloads the language pack the first time
+    // you use it", so on a browser that cannot translate a word the popup
+    // reported that everything was fine, and the reader's only other clue was
+    // an on-page message that erased itself after 2.5 seconds. Reproduced in
+    // `e2e:first-run` with the API switched off.
+    packState = 'no-api';
+    await open();
+
+    expect($('pack').hasAttribute('hidden')).toBe(false);
+    expect($('packNote').textContent).toMatch(/no built-in translator/i);
+    expect($('packNote').textContent).toMatch(/Chrome 138|Ollama/);
+  });
+
+  it('says nothing when it could not ask about the pair', async () => {
+    // Null is "no answer" — an unknown language code, a malformed tag. Not
+    // knowing is not the same as bad news, and this case is why the one above
+    // needed a value of its own.
     packState = null;
     await open();
 
@@ -733,5 +835,23 @@ describe('the language pack, before it is needed', () => {
     });
 
     expect(pairs).toContain('ja->zh-Hant');
+  });
+});
+
+/**
+ * The markup above is hand-written, and every test in this file passes against
+ * it whether or not the shipped page still has the same ids. That is not
+ * hypothetical: `#pageNote` and `#openEpub` are both optional in `collect`, so
+ * a page missing either would mount cleanly, do nothing, and fail no test.
+ */
+describe('the popup page and this file agree', () => {
+  it('ships every id the tests above pretend it has', () => {
+    const page = readFileSync(
+      resolve(process.cwd(), 'src/entrypoints/popup/index.html'),
+      'utf8',
+    );
+    const ids = [...MARKUP.matchAll(/id="([^"]+)"/g)].map((match) => match[1]);
+    const missing = ids.filter((id) => !page.includes(`id="${String(id)}"`));
+    expect(missing).toEqual([]);
   });
 });
