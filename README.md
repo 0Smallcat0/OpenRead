@@ -103,13 +103,13 @@ seconds.
   `OpenRead` on its own keeps the name as written; `bug = 瑕疵` pins how a term
   is translated. The built-in engine takes no prompt, so the term is held out
   of the sentence and put back after.
-- **A whole PDF** — open any `.pdf` and press translate. Each page's
-  translation is placed under the page itself, so the layout, the figures and
-  the equations stay exactly as the author set them.
-- **PDFs** — open any `.pdf` and it lands in the bundled viewer. For a PDF
-  already on your disk, turn on **Allow access to file URLs** in
-  `chrome://extensions` → **Details** first; Chrome withholds `file://` from
-  every extension until you do.
+- **A paper** — open any `.pdf` and it lands in the bundled viewer, where
+  selecting text works exactly as it does on a web page. Press translate and
+  each page's translation is placed under the page itself, so the layout, the
+  figures and the equations stay as the author set them. For a PDF already on
+  your disk, turn on **Allow access to file URLs** in `chrome://extensions` →
+  **Details** first; Chrome withholds `file://` from every extension until you
+  do.
 - **A book** — press **Open an EPUB…** in the popup, then choose the file or
   drop it onto the page. Contents down the side, Next and Previous in the
   toolbar, and your place kept per book, so closing the tab is not losing it.
@@ -218,7 +218,7 @@ all, since that is the easy way to send nothing and prove nothing.
 ```bash
 pnpm install
 pnpm build        # -> .output/chrome-mv3, load it unpacked
-pnpm test         # 728 unit tests
+pnpm test         # 748 unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
 pnpm eval:builtin # score the default engine in a real Chrome -> eval/BUILTIN-RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)
