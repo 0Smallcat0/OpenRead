@@ -124,6 +124,12 @@ left the first five minutes after a Web Store install untested.
   A page whose address Chrome will not even show the extension gets a different
   sentence, because "reload the page" is advice that cannot work there.
 
+- **A copy-protected book opened, and rendered a page of mojibake.** A DRM
+  EPUB is a well-formed EPUB whose chapters are ciphertext, so every check
+  passed and the reader painted the encrypted bytes. Most books bought from a
+  shop are like this. It now says so — which is the whole of what can be done,
+  since the key is not in the file.
+
 ### Security
 
 - **A chapter is treated as what it is: XHTML written by someone else, being

@@ -28,6 +28,9 @@ import {
 /** Where every EPUB says to start looking. Fixed by the specification. */
 const CONTAINER_PATH = 'META-INF/container.xml';
 
+/** Present when a book's resources are encrypted — that is, when it has DRM. */
+const ENCRYPTION_PATH = 'META-INF/encryption.xml';
+
 /** The media type of an EPUB 2 navigation document. */
 const NCX_MEDIA_TYPE = 'application/x-dtbncx+xml';
 
@@ -356,6 +359,17 @@ export async function openEpub(bytes: Uint8Array): Promise<OpenBook> {
   if (!files.has(CONTAINER_PATH)) {
     throw new EpubError(
       'This is a zip file, but not an EPUB: it has no META-INF/container.xml.',
+    );
+  }
+
+  // A copy-protected book is a well-formed EPUB whose chapters are ciphertext,
+  // so every check below passes and the reader renders a page of mojibake with
+  // nothing to say why. Books bought from most shops are like this. Saying so
+  // is the whole of what can be done about it: the key is not in the file.
+  if (files.has(ENCRYPTION_PATH)) {
+    throw new EpubError(
+      'This EPUB is copy-protected (DRM), so its text cannot be read by ' +
+        'anything but the shop that sold it. A DRM-free EPUB will open here.',
     );
   }
 
