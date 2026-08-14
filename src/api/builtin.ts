@@ -373,6 +373,80 @@ function untilAborted<T>(
   });
 }
 
+/**
+ * How long Chrome's language-pack download may make no progress at all before
+ * this stops waiting for it.
+ *
+ * There is no timeout anywhere else on this path, and `Translator.create()`
+ * does not have one either: a download that never starts leaves the badge
+ * reading "Downloading language pack…" for as long as the tab is open, with
+ * nothing to press but Stop and nothing said about why. Reported from a fresh
+ * install on a fresh Chrome, which is exactly where it bites — the pack is
+ * fetched by Chrome's component updater, and free disk space, a connection
+ * Chrome considers metered, or a network that blocks the updater will each
+ * leave it sitting at zero indefinitely.
+ *
+ * Three minutes, and it measures *silence* rather than total time. The
+ * progress monitor's granularity cannot be relied on — measured at 479 events
+ * for `en`→`zh-Hant` and exactly two, 0 then 1, for `en`→`ko`, which took 81
+ * seconds — so a real download can legitimately say nothing for well over a
+ * minute. Twice the longest silence ever measured, so a slow download is never
+ * mistaken for a dead one.
+ */
+export const DOWNLOAD_STALL_MS = 180_000;
+
+/** What the reader is told when it has not moved. */
+export const STALLED_MESSAGE =
+  "Chrome's language-pack download has not moved for three minutes. It needs " +
+  'over 22 GB of free disk space and a connection Chrome does not treat as ' +
+  'metered; chrome://on-device-internals shows what it is doing.';
+
+/**
+ * A deadline that only fires when nothing has happened.
+ *
+ * Not a total timeout: a first download legitimately takes minutes, and
+ * cancelling a working one would trade a stall nobody can escape for a failure
+ * nobody deserves.
+ */
+function stallWatchdog(ms: number): {
+  progress: () => void;
+  guard: <T>(promise: Promise<T>) => Promise<T>;
+} {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let fail: ((error: Error) => void) | null = null;
+
+  const arm = (): void => {
+    if (timer !== null) clearTimeout(timer);
+    timer = setTimeout(() => {
+      fail?.(new BuiltinUnavailableError(STALLED_MESSAGE));
+    }, ms);
+  };
+
+  return {
+    progress: arm,
+    guard: <T,>(promise: Promise<T>): Promise<T> =>
+      new Promise<T>((resolve, reject) => {
+        fail = reject;
+        arm();
+        const settle = (): void => {
+          if (timer !== null) clearTimeout(timer);
+          timer = null;
+          fail = null;
+        };
+        promise.then(
+          (value) => {
+            settle();
+            resolve(value);
+          },
+          (error: unknown) => {
+            settle();
+            reject(error as Error);
+          },
+        );
+      }),
+  };
+}
+
 /** Thrown when the built-in engine cannot serve a request, so a caller falls back. */
 export class BuiltinUnavailableError extends Error {
   constructor(message: string) {
@@ -473,18 +547,23 @@ export async function translateBuiltin({
     );
   }
 
-  const monitor = onDownloadProgress
-    ? (m: DownloadMonitor) => {
-        m.addEventListener('downloadprogress', (event) => {
-          onDownloadProgress(event.loaded);
-        });
-      }
-    : undefined;
+  // Attached whether or not anyone asked for progress: the caller's callback is
+  // optional, and the watchdog below is not. A translation started without a
+  // badge to update can stall just as easily as one with.
+  const stall = stallWatchdog(DOWNLOAD_STALL_MS);
+  const monitor = (m: DownloadMonitor) => {
+    m.addEventListener('downloadprogress', (event) => {
+      stall.progress();
+      onDownloadProgress?.(event.loaded);
+    });
+  };
 
   const instance = (): Promise<TranslatorInstance> =>
-    untilAborted(
-      sharedTranslator(translators, sourceLanguage, targetLanguage, monitor),
-      signal,
+    stall.guard(
+      untilAborted(
+        sharedTranslator(translators, sourceLanguage, targetLanguage, monitor),
+        signal,
+      ),
     );
 
   const translator = await instance();
