@@ -1,7 +1,7 @@
 # OpenRead
 
-> **Read the web and your PDFs in your own language, without sending a word of
-> it to anyone.** No account, no API key, no cloud.
+> **Read the web, your PDFs and your books in your own language, without
+> sending a word of it to anyone.** No account, no API key, no cloud.
 
 ![Selecting a paragraph on Wikipedia and translating it into Traditional Chinese in place, with buttons to save it to Obsidian or copy it](docs/screenshots/demo.gif)
 
@@ -23,6 +23,9 @@
 - **PDFs too.** Papers and specs open in a bundled viewer where selecting text
   works the same as on a web page — and a whole paper translates page by page,
   with the layout left alone.
+- **And EPUBs.** A book opens in a reader of its own, with its contents, its
+  pictures and your place in it kept. Ask for a translation once and it follows
+  you from chapter to chapter.
 - **Traditional Chinese that reads like Taiwan.** Most tools translate into
   Simplified and convert character by character, which produces `界面`, `公裡`,
   `數據庫` where a Taiwanese reader expects `介面`, `公里`, `資料庫`. OpenRead
@@ -99,6 +102,13 @@ seconds.
   already on your disk, turn on **Allow access to file URLs** in
   `chrome://extensions` → **Details** first; Chrome withholds `file://` from
   every extension until you do.
+- **A book** — press **Open an EPUB…** in the popup, then choose the file or
+  drop it onto the page. Contents down the side, Next and Previous in the
+  toolbar, and your place kept per book, so closing the tab is not losing it.
+  Press **Translate** once and every chapter after it arrives translated. The
+  book is read out of the file in your hands: nothing is uploaded, and nothing
+  inside it is fetched from anywhere — a picture comes from the archive, and a
+  chapter that points at a remote image simply does not get one.
 
 | The whole page, bilingual                                                                                                                                                     | A paper, in the bundled PDF viewer                                                                      |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -200,7 +210,7 @@ all, since that is the easy way to send nothing and prove nothing.
 ```bash
 pnpm install
 pnpm build        # -> .output/chrome-mv3, load it unpacked
-pnpm test         # 630 unit tests
+pnpm test         # 728 unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
 pnpm eval:builtin # score the default engine in a real Chrome -> eval/BUILTIN-RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)
@@ -208,6 +218,7 @@ pnpm shoot        # re-shoot every screenshot and the clip on this page
 pnpm e2e:page     # whole-page translation in a real Chrome, end to end
 pnpm e2e:stress   # hostile pages: infinite feeds, route swaps, rapid toggling
 pnpm e2e:egress   # prove the default engine sends nothing, in a real Chrome
+pnpm e2e:epub     # a real .epub opened, read and translated in a real Chrome
 ```
 
 **[How it is built →](docs/ENGINEERING.md)** — the reliability layer, the

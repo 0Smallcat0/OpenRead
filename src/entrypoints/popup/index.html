@@ -253,6 +253,11 @@
         margin-top: 0;
         margin-bottom: 4px;
       }
+      .secondary-action {
+        margin-top: 0;
+        margin-bottom: 4px;
+        font-weight: 400;
+      }
       #copyFix {
         flex: 0 0 auto;
         width: auto;
@@ -268,6 +273,13 @@
          opened far more often to translate a page than to change a model. -->
     <button id="translatePage" type="button" class="primary-action">
       Translate this page
+    </button>
+    <!-- The only way into the EPUB reader that always works. Chrome has no
+         EPUB viewer, so it answers most .epub links by downloading the file
+         rather than by navigating to it, and a download is not a tab the
+         background can redirect. -->
+    <button id="openEpub" type="button" class="secondary-action">
+      Open an EPUB…
     </button>
     <form id="settingsForm">
       <label for="engine">Translator</label>

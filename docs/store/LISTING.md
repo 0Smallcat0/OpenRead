@@ -24,8 +24,8 @@ option if desired.
 
 ## Short description (≤ 132 chars)
 
-- **zh-TW:** `整頁雙語翻譯網頁與 PDF，譯文附在原文下方。全程在你的電腦上完成，免帳號、免金鑰、零追蹤，裝好就能用。`
-- **EN:** `Bilingual whole-page translation for web pages and PDFs, entirely on your own machine. No account, no API key, no setup.`
+- **zh-TW:** `整頁雙語翻譯網頁、PDF 與 EPUB，譯文附在原文下方。全程在你的電腦上完成，免帳號、免金鑰、零追蹤，裝好就能用。`
+- **EN:** `Bilingual whole-page translation for web pages, PDFs and EPUBs, entirely on your own machine. No account, no API key, no setup.`
 
 ## Detailed description
 
