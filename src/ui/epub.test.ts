@@ -372,6 +372,22 @@ describe('openEpub', () => {
     expect(book.toc).toEqual([]);
   });
 
+  it('names DRM rather than rendering ciphertext as a chapter', async () => {
+    // A copy-protected book is a well-formed EPUB whose chapters are
+    // encrypted, so every other check passes and the reader paints a page of
+    // mojibake. Most books bought from a shop are like this, and the key is
+    // not in the file — saying so is the whole of what can be done.
+    const bytes = await buildEpub({
+      extra: [
+        {
+          name: 'META-INF/encryption.xml',
+          body: '<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container"/>',
+        },
+      ],
+    });
+    await expect(openEpub(bytes)).rejects.toThrow(/copy-protected|DRM/);
+  });
+
   it('tells a zip that is not an EPUB from a file that is not a zip', async () => {
     const notAnEpub = await buildZip([{ name: 'notes.txt', body: 'hello' }]);
     await expect(openEpub(notAnEpub)).rejects.toThrow(/not an EPUB/);
