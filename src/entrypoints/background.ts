@@ -6,6 +6,7 @@
  *   previous request, and a disconnect aborts in-flight work. The Ollama base
  *   URL is loaded from storage here; inference runs on the user's machine.
  * - PDF routing: `.pdf` navigations are redirected into the bundled viewer.
+ * - EPUB routing: `.epub` navigations are redirected into the reader page.
  */
 import { translateStream, enrichText } from '../api/ollama';
 import { loadSettings } from '../settings';
@@ -65,10 +66,43 @@ export default defineBackground(() => {
     });
   }
 
-  // Auto-redirect PDF navigations into the vendored PDF.js viewer.
+  const readerUrl = chrome.runtime.getURL('epub-reader.html');
+
+  function isEpubUrl(url: string): boolean {
+    try {
+      return new URL(url).pathname.toLowerCase().endsWith('.epub');
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Send one tab into the EPUB reader.
+   *
+   * Best-effort, and unlike the PDF route it is not the main way in. Chrome
+   * has no EPUB viewer, so it answers most `.epub` links by downloading the
+   * file rather than by navigating to it — and a download never becomes a tab
+   * for this to catch. The routes that always work are the popup's button and
+   * dropping the file onto the reader, which is also why the reader opens with
+   * a page that says so.
+   */
+  async function routeToReader(tabId: number, url: string): Promise<void> {
+    if (!isEpubUrl(url) || url.startsWith(readerUrl)) return;
+    if (url.startsWith('file://')) {
+      const allowed = await chrome.extension.isAllowedFileSchemeAccess();
+      if (!allowed) return;
+    }
+    await chrome.tabs.update(tabId, {
+      url: `${readerUrl}?file=${encodeURIComponent(url)}`,
+    });
+  }
+
+  // Auto-redirect PDF navigations into the vendored PDF.js viewer, and EPUB
+  // navigations into the reader.
   chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status !== 'loading' || !tab.url) return;
     void routeToViewer(tabId, tab.url);
+    void routeToReader(tabId, tab.url).catch(() => undefined);
   });
 
   /**

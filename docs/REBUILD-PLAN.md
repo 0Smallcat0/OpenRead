@@ -55,7 +55,8 @@ src/
     background.ts   service worker (stream broker + PDF redirect) [DONE]
     content.ts      mounts selection UI on web pages             [DONE]
     popup/          settings UI (index.html + main.ts)           [DONE]
-    pdf-viewer.ts   unlisted script: selection UI on PDF.js viewer [TODO]
+    pdf-viewer.ts   unlisted script: selection UI on PDF.js viewer [DONE]
+    epub-reader/    the EPUB reader page (index.html + main.ts)     [DONE]
 public/
   pdfjs/            vendored PDF.js viewer + injected translation layer
 eval/

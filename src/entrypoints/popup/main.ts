@@ -62,6 +62,21 @@ async function pageLanguage(): Promise<string | null> {
   return reply?.lang ?? null;
 }
 
+/**
+ * The way into the EPUB reader.
+ *
+ * Wired here rather than in `ui/popup.ts` because opening a tab is a Chrome
+ * action and nothing about it is a setting — the popup's logic module has no
+ * business knowing this page exists.
+ */
+document.getElementById('openEpub')?.addEventListener('click', () => {
+  void chrome.tabs
+    .create({ url: chrome.runtime.getURL('epub-reader.html') })
+    .finally(() => {
+      window.close();
+    });
+});
+
 mountPopup(document, {
   probe: probeOllama,
   platformOs,

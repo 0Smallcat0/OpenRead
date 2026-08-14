@@ -5,6 +5,70 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **EPUBs open in a reader of their own.** An `.epub` is a zip of XHTML, so a
+  book is now read the same way a web page is: chapter in the document, the
+  translation under each paragraph, selection and the hover key working
+  unchanged. Open one from the popup's **Open an EPUB…**, or drop the file onto
+  the reader. Contents, Next and Previous, and the reading position remembered
+  per book — keyed on the publisher's identifier, so the same book opened from
+  a different folder is still the same book.
+
+  Ask for a translation once and it follows you through the book. A chapter
+  break is not a decision, and a reader who had to press the button again at
+  every one would be pressing it dozens of times.
+
+  Deliberately not paginated. Every other browser EPUB reader reflows the text
+  into columns, and that means owning the layout — which cannot survive
+  whole-page translation, since inserting a line under every paragraph changes
+  the height of the chapter as it is translated. A paginator would re-break the
+  whole book underneath the reader's eyes each time a translation landed; a
+  scrolling document simply grows. That one choice is why `ui/blocks.ts`,
+  `ui/fullpage.ts` and `ui/selection.ts` all work here with no reader-specific
+  code at all.
+
+- **A zip reader, with no dependency added.** `core/zip.ts` parses the archive
+  and hands the compressed bytes to `DecompressionStream('deflate-raw')` —
+  which is the same inflate a zip library bundles, already in the browser. What
+  a library would have added is the container format: an
+  end-of-central-directory record, a table of file headers, and the arithmetic
+  to find where each entry begins. That is fully specified, it is unit tested
+  against archives built in the test, and it is a better trade than another
+  dependency inside a Chrome Web Store package. The central directory is read
+  rather than the local headers, because a streaming producer writes zeroes
+  into the local header's size fields and a reader that trusts them hands back
+  an empty chapter.
+
+- **`pnpm e2e:epub` — the reader, in a real Chrome, on a real archive.** jsdom
+  has no `DecompressionStream` behind a real zip, no `URL.createObjectURL`, no
+  layout for an image to have a size in, and no network stack to prove nothing
+  was fetched over it. The harness builds the book with Node's own `zlib`, so
+  the producing side is a genuinely independent implementation, then asserts
+  the chapters, a nested table of contents, an image rendered from inside the
+  archive, a link the book drew, the remembered position, a bilingual
+  translation from the real engine, that it follows into the next chapter — and
+  that reading a whole book made **no network request of any kind**.
+
+  Checked by hand against Project Gutenberg's Moby-Dick (812 KB, EPUB 3): opens
+  in 21 ms, 146 contents entries, an SVG cover resolved through `xlink:href`,
+  and one 108,000-character chapter whose 391 blocks the viewport-first queue
+  translates as the reader reaches them.
+
+### Security
+
+- **A chapter is treated as what it is: XHTML written by someone else, being
+  rendered on an extension page.** Script elements, `on…` handlers and
+  `javascript:` URLs are removed, on top of the page's content security policy
+  rather than instead of it. Remote references — an image, a stylesheet, a
+  `background-image: url(…)` in an inline style — are dropped rather than
+  fetched, because a remote resource in a book is a request the reader did not
+  make and a note to the publisher about which page they are on. The
+  specification requires everything a book needs to be inside the archive, so
+  nothing legitimate is lost.
+
 ## [2.20.0] - 2026-08-08
 
 ### Added
