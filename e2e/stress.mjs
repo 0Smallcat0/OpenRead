@@ -168,15 +168,36 @@ try {
     });
   };
 
-  const press = () =>
-    worker.evaluate(async () => {
-      const [tab] = await chrome.tabs.query({
-        active: true,
-        currentWindow: true,
-      });
-      if (tab?.id !== undefined)
-        await chrome.tabs.sendMessage(tab.id, { type: 'TRANSLATE_PAGE' });
-    });
+  /**
+   * Press the button, once there is something on the other end to press it at.
+   *
+   * Chrome injects a content script at `document_end`, and S4 deliberately
+   * presses within a fraction of a second of `domcontentloaded` so the press
+   * lands *during* the automatic pass rather than after it. On a busy machine
+   * the script is not there yet, and `sendMessage` rejects with "Receiving end
+   * does not exist" — which took the whole harness down with it, reported as a
+   * product failure. Retrying until the receiver appears keeps the intent (the
+   * press is still the first thing that happens after the pass begins) without
+   * racing the injection.
+   */
+  const press = async () => {
+    for (let attempt = 0; attempt < 60; attempt++) {
+      try {
+        return await worker.evaluate(async () => {
+          const [tab] = await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+          });
+          if (tab?.id === undefined) throw new Error('no active tab');
+          await chrome.tabs.sendMessage(tab.id, { type: 'TRANSLATE_PAGE' });
+        });
+      } catch (error) {
+        if (!/Receiving end|no active tab/.test(error.message)) throw error;
+        await sleep(100);
+      }
+    }
+    throw new Error('no content script ever appeared to press the button at');
+  };
 
   const page = await browser.newPage();
   await page.setViewport({ width: 1200, height: 800 });
@@ -543,10 +564,22 @@ try {
   });
   await sleep(5000);
   const afterGiveUp = await stats();
+  const badgeAfter = await page.evaluate(
+    () => document.getElementById('oit-page-progress')?.textContent ?? '',
+  );
   observe('S10 badges after new content', String(afterGiveUp.badges));
+  observe('S10 badge after new content', badgeAfter || '(none)');
+  // Not "no badge". A badge count of zero used to stand in for "no new run
+  // started", and it worked only because every finish message deleted itself
+  // after 2.5 seconds — including the one explaining why nothing was
+  // translated, which is the message a reader most needs to be able to read.
+  // Now a failure stays until dismissed, so the proxy would fail the product
+  // for doing the right thing. What the check was always about is asserted
+  // directly: nothing new was sent, and the badge is still the explanation
+  // rather than a fresh attempt.
   check(
-    afterGiveUp.badges === 0 &&
-      afterGiveUp.translated === callsBefore.translated,
+    afterGiveUp.translated === callsBefore.translated &&
+      !badgeAfter.startsWith('Translating'),
     'the page kept asking a server it had already given up on',
   );
 

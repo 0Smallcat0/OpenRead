@@ -59,12 +59,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-Five ways this extension could look broken on a computer it had just been
+Six ways this extension could look broken on a computer it had just been
 installed on. All four were found by `pnpm e2e:first-run`, a new harness that
 loads the build into a profile that has never translated anything, and reports
 what Chrome offered, what the popup said, and what pressing the button
 produced. Every other harness here deliberately reuses a warm profile, which
 left the first five minutes after a Web Store install untested.
+
+- **A slow PDF translated its first page twice.** A page is marked translated
+  when it *finishes*, and the queue refills from "every drawn page that is not
+  marked" — so a page still being translated looked to every refill like a page
+  nobody had taken, and a second worker took it. The window is milliseconds on
+  a warm profile, which is why four releases of harness runs never saw it, and
+  the length of a language-pack download on the first PDF anyone opens: two
+  translations under one page, and twice the model work to produce them. Caught
+  by `pnpm e2e:page` on a cold profile — the second block's previous sibling was
+  the first block rather than a page — and now held by a unit test that fails
+  without the fix. `ui/fullpage.ts` has carried the same guard, for the same
+  reason, since the web-page path hit this first.
 
 - **A language-pack download that never started waited forever.** There was no
   timeout anywhere on the built-in engine's path, and `Translator.create()` has

@@ -817,7 +817,9 @@ describe('a run that is going nowhere', () => {
         document,
         deps({
           translate: () =>
-            Promise.reject(new Error('This browser has no built-in translator')),
+            Promise.reject(
+              new Error('This browser has no built-in translator'),
+            ),
         }),
       );
       vi.advanceTimersByTime(60_000);

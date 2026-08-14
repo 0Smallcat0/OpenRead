@@ -273,7 +273,7 @@ describe('mountPopup', () => {
     expect(window.close).not.toHaveBeenCalled();
   });
 
-  it("blames Chrome, not the tab, on a page whose address it cannot even see", async () => {
+  it('blames Chrome, not the tab, on a page whose address it cannot even see', async () => {
     // Measured: a `chrome://extensions` tab reports a URL of null to an
     // extension with `<all_urls>`, while the Web Store listing reports its
     // address in full. So a null address is itself the evidence — and telling
