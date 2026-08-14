@@ -424,7 +424,7 @@ function stallWatchdog(ms: number): {
 
   return {
     progress: arm,
-    guard: <T,>(promise: Promise<T>): Promise<T> =>
+    guard: <T>(promise: Promise<T>): Promise<T> =>
       new Promise<T>((resolve, reject) => {
         fail = reject;
         arm();

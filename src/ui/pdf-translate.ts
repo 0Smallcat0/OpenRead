@@ -288,10 +288,31 @@ export async function translatePdf(
   let queued = renderedPages(doc);
   progress.update(0, queued.length);
 
+  /**
+   * Pages a worker has taken but not finished.
+   *
+   * `renderedPages` can only tell a translated page from an untranslated one,
+   * and the marker that separates them is written when a page *finishes*. A
+   * page being translated right now therefore looks untranslated to every
+   * refill — and refills are constant here: the queue empties, and the
+   * observer fires as the viewer draws. Normally the gap between taking a page
+   * and finishing it is milliseconds and nothing was ever seen. On the first
+   * translation of a language pair it is however long Chrome takes to fetch
+   * the pack, so the page went back in the queue, was translated a second
+   * time, and had its translation attached a second time.
+   *
+   * Caught by `e2e:page` on a cold profile — the second block's previous
+   * sibling was the first block rather than a page — and invisible on every
+   * warm run before it. `ui/fullpage.ts` has carried the same set, for the
+   * same reason, since the web-page path hit this first.
+   */
+  const claimed = new Set<HTMLElement>();
+
   const drain = async (): Promise<void> => {
     while (!controller.signal.aborted) {
       const next = byDistanceFromViewport(doc, queued).shift();
       if (!next) break;
+      claimed.add(next);
       queued = queued.filter((page) => page !== next);
       const done = await translatePdfPage(
         next,
@@ -304,7 +325,9 @@ export async function translatePdf(
       paragraphs += done;
       pages++;
       progress.update(pages, pages + queued.length);
-      if (queued.length === 0) queued = renderedPages(doc);
+      if (queued.length === 0) {
+        queued = renderedPages(doc).filter((page) => !claimed.has(page));
+      }
     }
   };
 
@@ -312,7 +335,9 @@ export async function translatePdf(
   // when it draws a page, and that is a DOM change we can be told about.
   watcher = new doc.defaultView!.MutationObserver(() => {
     if (controller.signal.aborted) return;
-    const fresh = renderedPages(doc).filter((page) => !queued.includes(page));
+    const fresh = renderedPages(doc).filter(
+      (page) => !queued.includes(page) && !claimed.has(page),
+    );
     if (fresh.length > 0) queued.push(...fresh);
   });
   const viewer = doc.getElementById('viewer') ?? doc.body;

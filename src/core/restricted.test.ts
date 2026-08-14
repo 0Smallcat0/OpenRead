@@ -29,8 +29,12 @@ describe('describeRestrictedPage', () => {
   });
 
   it('says nothing about an ordinary page', () => {
-    expect(describeRestrictedPage('https://en.wikipedia.org/wiki/Ollama')).toBeNull();
-    expect(describeRestrictedPage('http://localhost:8080/index.html')).toBeNull();
+    expect(
+      describeRestrictedPage('https://en.wikipedia.org/wiki/Ollama'),
+    ).toBeNull();
+    expect(
+      describeRestrictedPage('http://localhost:8080/index.html'),
+    ).toBeNull();
     // Our own reader and PDF viewer are extension pages, and translation works
     // on both — so the scheme must not be on the list.
     expect(
