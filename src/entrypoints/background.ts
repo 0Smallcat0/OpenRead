@@ -151,8 +151,7 @@ export default defineBackground(() => {
     // the setup step rather than out of options. That is worth a warning in
     // the console and nothing more.
     const rules = chrome.declarativeNetRequest as
-      | typeof chrome.declarativeNetRequest
-      | undefined;
+      typeof chrome.declarativeNetRequest | undefined;
     if (typeof rules?.updateSessionRules !== 'function') return;
     try {
       const { baseUrl } = await loadSettings();
