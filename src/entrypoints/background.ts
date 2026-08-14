@@ -138,18 +138,21 @@ export default defineBackground(() => {
    * have since changed.
    */
   async function applyOriginStripRule(): Promise<void> {
-    // Guarded, and not for tidiness. `declarativeNetRequest` does not exist in
-    // Firefox's MV2, which is the build Firefox gets — so this threw at
-    // startup, `originRuleReady` became a rejected promise, and every request
-    // began with `await originRuleReady` outside a try. The rejection escaped
-    // the handler entirely: nothing was posted back to the port, so the panel
-    // sat there translating forever with no error to show. On Firefox the only
-    // engine is Ollama, so that is the whole product, dead and silent.
+    // Guarded, and not for tidiness. This is the one call in the worker that
+    // runs before anything else and whose failure is silent: it threw,
+    // `originRuleReady` became a rejected promise, and every request begins by
+    // awaiting it *outside* its try — so the rejection escaped the handler,
+    // nothing was posted back to the port, and a translation ran forever with
+    // no error to show. That is how the Firefox build managed to be incapable
+    // of translating anything from 2.5.0 until 2.21.0 without one report:
+    // Firefox's MV2 has no `declarativeNetRequest` at all. Firefox is no longer
+    // a target, and the guard stays, because the shape of that failure does not
+    // depend on which browser produced it — a quota error or a rejected rule on
+    // Chrome would do the same.
     //
-    // Failing to install the rule is survivable on its own terms too: it
-    // removes the OLLAMA_ORIGINS setup step, and without it a user is back to
-    // the setup step rather than out of options. That is worth a warning in
-    // the console and nothing more.
+    // Failing to install the rule is survivable on its own terms: it removes
+    // the OLLAMA_ORIGINS setup step, so without it a user is back to that step
+    // rather than out of options. Worth a console warning and nothing more.
     const rules = chrome.declarativeNetRequest as
       typeof chrome.declarativeNetRequest | undefined;
     if (typeof rules?.updateSessionRules !== 'function') return;

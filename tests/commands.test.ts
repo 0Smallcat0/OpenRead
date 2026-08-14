@@ -41,41 +41,16 @@ interface CommandDefinition {
   description?: string;
 }
 
-interface ResolvedManifest {
+// `manifest` is typed as an object, a promise, or a function; this project
+// writes the object form, and reading it needs the narrowing said out loud.
+// It was briefly a function, so that Firefox could be handed a different
+// permission list, and this cast then read `commands` off a function and found
+// nothing — which is how this suite reports that mistake. Firefox is no longer
+// a target; the object form is back.
+const manifest = config.manifest as {
   commands?: Record<string, CommandDefinition>;
-  permissions?: string[];
-}
-
-/**
- * The manifest as WXT will build it for one browser.
- *
- * `manifest` is typed as an object, a promise, or a function, and this project
- * moved to the function form when `declarativeNetRequest` had to be dropped
- * for Firefox — whose MV2 has no such API. The object-form cast that used to
- * be here silently read `commands` off a function, found nothing, and this
- * suite went red for the right reason: the shortcuts really would have been
- * unreadable that way.
- */
-function resolve(browser: string): ResolvedManifest {
-  const source = config.manifest as unknown as
-    | ResolvedManifest
-    | ((env: {
-        browser: string;
-        manifestVersion: number;
-        mode: string;
-        command: string;
-      }) => ResolvedManifest);
-  return typeof source === 'function'
-    ? source({
-        browser,
-        manifestVersion: browser === 'firefox' ? 2 : 3,
-        mode: 'production',
-        command: 'build',
-      })
-    : source;
-}
-
-const commands = resolve('chrome').commands ?? {};
+};
+const commands = manifest.commands ?? {};
 
 describe('keyboard commands', () => {
   it('declares every translate command', () => {
@@ -99,25 +74,4 @@ describe('keyboard commands', () => {
       expect(command.description).toBeTruthy();
     });
   }
-});
-
-describe('what each browser is asked for', () => {
-  it('gives Firefox the same shortcuts as Chrome', () => {
-    // The manifest is per-browser now, which is exactly the kind of change
-    // that quietly drops a feature from one build.
-    expect(Object.keys(resolve('firefox').commands ?? {}).sort()).toEqual(
-      Object.keys(commands).sort(),
-    );
-  });
-
-  it('asks Firefox for no declarativeNetRequest, and Chrome for one', () => {
-    // Firefox gets the MV2 build and MV2 has no such API, so asking bought a
-    // permission warning at install for something that could not be used —
-    // and the worker called it anyway, which took the whole Firefox product
-    // down with it until `applyOriginStripRule` was guarded.
-    expect(resolve('firefox').permissions).not.toContain(
-      'declarativeNetRequest',
-    );
-    expect(resolve('chrome').permissions).toContain('declarativeNetRequest');
-  });
 });

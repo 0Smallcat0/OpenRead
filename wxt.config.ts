@@ -4,7 +4,7 @@ import { defineConfig } from 'wxt';
 // See https://wxt.dev for the entrypoint conventions.
 export default defineConfig({
   srcDir: 'src',
-  manifest: ({ browser }) => ({
+  manifest: {
     name: 'OpenRead',
     // Explicit, because WXT otherwise inherits `description` from package.json,
     // and that one is written for npm (188 chars). The Chrome Web Store rejects
@@ -24,15 +24,10 @@ export default defineConfig({
     // "translate this page", and until 2.7.3 the feature lived only behind a
     // toolbar popup and a keyboard shortcut — findable by someone who read the
     // README, invisible to everyone else.
-    // `declarativeNetRequest` is Chrome-only here: Firefox gets an MV2 build,
-    // and MV2 has no such API. Asking for it there bought a permission warning
-    // at install for something the build could not use, and the background
-    // worker called it anyway — see `applyOriginStripRule`, which is now
-    // guarded because the throw took the whole Firefox product down with it.
     permissions: [
       'storage',
       'activeTab',
-      ...(browser === 'firefox' ? [] : ['declarativeNetRequest']),
+      'declarativeNetRequest',
       'contextMenus',
     ],
     // A keyboard user can select text but never produces a mouseup, so the
@@ -91,5 +86,5 @@ export default defineConfig({
       extension_pages:
         "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
     },
-  }),
+  },
 });
