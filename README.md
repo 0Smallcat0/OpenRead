@@ -54,7 +54,12 @@ seconds.
 
 - **Chrome 138 or later, on desktop.** The built-in translator is Chrome's, not
   this extension's. Firefox has no equivalent API, so the Firefox build runs on
-  the Ollama engine only.
+  the Ollama engine only. **Edge works** — measured on Edge 151, where the
+  built-in translator is there and a cold first translation takes about twenty
+  seconds — with one difference: Edge has already claimed the three suggested
+  shortcuts for itself, so it registers them unbound. Everything is still
+  reachable from the right-click menu and the popup, and the keys can be
+  assigned by hand at `edge://extensions/shortcuts`.
 - **Thirty-nine target languages**, every one probed against a real Chrome
   rather than taken from documentation. The source language is whatever the
   page is in — that side is not a list.
