@@ -1,9 +1,19 @@
 # Chrome Web Store listing copy
 
-Paste-ready copy for the store listing, current as of **2.18.1**. Two languages
-are provided; pick one as the listing language (zh-TW recommended for the
-primary audience) and add the other via the dashboard's localized-listing
-option if desired.
+Paste-ready copy for the store listing, current as of **2.21.0**.
+
+> **What is actually live, checked in the dashboard on 2026-08-16 — it is a
+> mix, and the mix is the worst of both.** The summary is the English one
+> (it comes from `manifest.description`, so it follows the package), the
+> **detailed description is the zh-TW one**, and the listing's language is set
+> to **所有語言 / All languages**. So every English-speaking visitor reads an
+> English one-liner and then a wall of Chinese.
+>
+> **Fix: put the EN description in the All-languages listing.** That one is the
+> fallback every locale without its own listing sees, so it has to be the
+> widest-reach language. The zh-TW copy then belongs in a **zh-TW localized
+> listing** added from the same language selector — the dropdown that currently
+> reads 所有語言.
 
 > Updated for 2.18.1. Seven features shipped between 2.11.0 and here that the
 > copy did not mention — a whole PDF rather than a selection inside one,
@@ -17,10 +27,18 @@ option if desired.
 > product that told the reader to set `OLLAMA_ORIGINS` before starting a
 > server — a step 2.5.0 removed and a requirement 2.7.0 removed.
 
-## Name (≤ 45 chars)
+## Name
 
-- **zh-TW:** `OpenRead — 網頁/PDF 雙語翻譯，全在本機`
-- **EN:** `OpenRead — Private Web & PDF Translation`
+> **These were never in use, and could not be.** The store's 套件標題 is
+> `manifest.name`, not a dashboard field — the listing has always shown the
+> bare `OpenRead` because that is what `wxt.config.ts` sets. Changing it means
+> changing the manifest and uploading; there is nothing to paste here.
+>
+> Worth doing on the next upload, for two reasons at once: `OpenRead` alone is
+> one space away from an unrelated extension called **Open Read** (a paywall
+> shortcut, 104 users, v0.1.0, untouched since 2026-02), and a bare name
+> carries no keywords. Something like `OpenRead — Local Bilingual Translation`
+> fits the 45-character limit, disambiguates on sight, and is searchable.
 
 ## Short description (≤ 132 chars)
 
@@ -46,6 +64,9 @@ API 金鑰、不需要帳號。第一次翻某個語言對時，Chrome 會下載
 • 整頁雙語翻譯：譯文附在原文下方而非取代原文，看起來怪的句子可以立刻對照原文。
   先翻你看得到的部分，捲動時自動跟上，長文或動態載入的頁面按一次就夠
 • 整篇 PDF：每一頁的譯文放在該頁下方，版面、雙欄、圖表、公式一律不動
+• 整本書：EPUB 在內建閱讀器裡打開，目錄在側邊、閱讀位置按書記住，按一次翻譯
+  之後每一章都自動翻。書是從你磁碟上那個檔案讀的，不上傳，裡面的東西也不會
+  去任何地方抓
 • 一段就好：按住 Alt 指向某一段，只翻那一段——不用拖曳選取，也不改寫整頁
 • 翻譯你正在打的字：在任何輸入框按右鍵（或 Ctrl+Shift+K），內容換成譯文，
   Ctrl+Z 可以還原
@@ -99,6 +120,10 @@ Features
 • A whole PDF — each page's translation is placed under the page itself, so
   the layout, the columns, the figures and the equations stay as the author
   set them
+• A whole book — open an EPUB in the built-in reader: contents down the side,
+  your place kept per book, and one press translates every chapter from there
+  on. The book is read out of the file on your disk; nothing is uploaded and
+  nothing inside it is fetched from anywhere
 • One paragraph — hold Alt and point at it. No drag, and the rest of the page
   is left alone
 • The box you are typing in — right-click in any text field (or Ctrl+Shift+K)
@@ -111,8 +136,9 @@ Features
 • Three settings for how it looks — the original beside the translation or the
   translation alone, four ways of marking it, three sizes, all applying to a
   page you are already reading without translating it again
-• Web pages and PDFs alike — .pdf navigations open in a bundled PDF.js
-  viewer with the same select-to-translate UI
+• The same translator everywhere — .pdf navigations open in a bundled PDF.js
+  viewer and EPUBs in the reader, both with the select-to-translate UI, the
+  Alt-point key and whole-page translation working exactly as on a web page
 • Taiwan-convention Chinese — OpenCC s2twp phrase-level conversion, plus a
   vocabulary pass that fixes the mainland word choices Chrome's zh-Hant
   output uses (用戶 -> 使用者, 運行 -> 執行)
@@ -139,7 +165,11 @@ Engineering & evaluation: https://github.com/0Smallcat0/OpenRead/blob/main/docs/
 ## Category & language
 
 - Category: **Productivity → Tools**
-- Listing language: **中文（繁體）** (or English)
+- **All-languages listing: English.** It is what every locale without its own
+  listing falls back to.
+- **zh-TW: a localized listing of its own**, added from the language selector,
+  using the zh-TW copy above. Optional — English already reaches everyone — but
+  it is the only way to rank for 翻譯／繁體中文 in the Chinese store surface.
 
 ## Graphics
 
