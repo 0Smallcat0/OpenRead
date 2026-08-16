@@ -17,6 +17,7 @@
  *   pnpm shoot gif        # just the README clip
  *   pnpm shoot readme     # the README stills
  *   pnpm shoot store      # the four Chrome Web Store screenshots
+ *   pnpm shoot epubstore  # the fifth one: the EPUB reader, translated
  *
  * Environment override: OPENREAD_CHROME.
  *
@@ -28,6 +29,7 @@ import puppeteer from 'puppeteer-core';
 import { build } from 'esbuild';
 import { spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { deflateRawSync, crc32 } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -41,6 +43,133 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const EXTENSION = join(ROOT, '.output/chrome-mv3');
 const SHOTS = join(ROOT, 'docs/screenshots');
 const STORE_SHOTS = join(ROOT, 'docs/store/screenshots');
+
+
+/**
+ * A small public-domain EPUB, written here rather than downloaded.
+ *
+ * The other store shots use a real page on the real internet, deliberately —
+ * what they show is somewhere the reader can go. A book cannot work that way:
+ * the reader opens a file from the viewer's own disk, so there is no URL to
+ * point at. Building one keeps the shot reproducible with no network, and the
+ * text is Melville, so it is a book rather than lorem ipsum.
+ */
+function buildDemoEpub() {
+  const utf8 = (text) => Buffer.from(text, 'utf8');
+  const files = [];
+  const add = (name, data, store = false) => files.push({ name, data, store });
+
+  const chapters = [
+    [
+      'Loomings',
+      '<p>Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, and nothing particular to interest me on shore, I thought I would sail about a little and see the watery part of the world. It is a way I have of driving off the spleen and regulating the circulation.</p><p>Whenever I find myself growing grim about the mouth; whenever it is a damp, drizzly November in my soul; whenever I find myself involuntarily pausing before coffin warehouses, and bringing up the rear of every funeral I meet; then, I account it high time to get to sea as soon as I can.</p>',
+    ],
+    [
+      'The Carpet-Bag',
+      '<p>I stuffed a shirt or two into my old carpet-bag, tucked it under my arm, and started for Cape Horn and the Pacific. Quitting the good city of old Manhatto, I duly arrived in New Bedford.</p>',
+    ],
+    [
+      'The Spouter-Inn',
+      '<p>Entering that gable-ended Spouter-Inn, you found yourself in a wide, low, straggling entry with old-fashioned wainscots, reminding one of the bulwarks of some condemned old craft.</p>',
+    ],
+  ];
+
+  add('mimetype', utf8('application/epub+zip'), true);
+  add(
+    'META-INF/container.xml',
+    utf8(
+      '<?xml version="1.0"?>\n<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">\n  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>\n</container>',
+    ),
+  );
+  chapters.forEach(([title, body], i) =>
+    add(
+      'OEBPS/ch' + String(i) + '.xhtml',
+      utf8(
+        '<?xml version="1.0" encoding="utf-8"?>\n<html xmlns="http://www.w3.org/1999/xhtml"><head><title>' +
+          title +
+          '</title></head><body><h1>' +
+          title +
+          '</h1>' +
+          body +
+          '</body></html>',
+      ),
+    ),
+  );
+  add(
+    'OEBPS/nav.xhtml',
+    utf8(
+      '<?xml version="1.0" encoding="utf-8"?>\n<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Contents</title></head><body><nav epub:type="toc"><ol>' +
+        chapters
+          .map(
+            ([t], i) =>
+              '<li><a href="ch' + String(i) + '.xhtml">' + t + '</a></li>',
+          )
+          .join('') +
+        '</ol></nav></body></html>',
+    ),
+  );
+  add(
+    'OEBPS/content.opf',
+    utf8(
+      '<?xml version="1.0" encoding="utf-8"?>\n<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">\n  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">\n    <dc:title>Moby-Dick; or, The Whale</dc:title>\n    <dc:creator>Herman Melville</dc:creator>\n    <dc:identifier id="id">urn:uuid:openread-store-shot</dc:identifier>\n    <dc:language>en</dc:language>\n  </metadata>\n  <manifest>\n    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>' +
+        chapters
+          .map(
+            (_, i) =>
+              '\n    <item id="c' +
+              String(i) +
+              '" href="ch' +
+              String(i) +
+              '.xhtml" media-type="application/xhtml+xml"/>',
+          )
+          .join('') +
+        '\n  </manifest>\n  <spine>' +
+        chapters
+          .map((_, i) => '\n    <itemref idref="c' + String(i) + '"/>')
+          .join('') +
+        '\n  </spine>\n</package>',
+    ),
+  );
+
+  const parts = [];
+  const centrals = [];
+  let offset = 0;
+  for (const { name, data, store } of files) {
+    const nameBytes = Buffer.from(name, 'utf8');
+    const payload = store ? data : deflateRawSync(data);
+    const sum = crc32(data);
+    const local = Buffer.alloc(30 + nameBytes.length);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(store ? 0 : 8, 8);
+    local.writeUInt32LE(sum, 14);
+    local.writeUInt32LE(payload.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(nameBytes.length, 26);
+    nameBytes.copy(local, 30);
+    const central = Buffer.alloc(46 + nameBytes.length);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(store ? 0 : 8, 10);
+    central.writeUInt32LE(sum, 16);
+    central.writeUInt32LE(payload.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(nameBytes.length, 28);
+    central.writeUInt32LE(offset, 42);
+    nameBytes.copy(central, 46);
+    parts.push(local, payload);
+    centrals.push(central);
+    offset += local.length + payload.length;
+  }
+  const directory = Buffer.concat(centrals);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(files.length, 8);
+  end.writeUInt16LE(files.length, 10);
+  end.writeUInt32LE(directory.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...parts, directory, end]);
+}
 
 const wanted = new Set(process.argv.slice(2));
 const doing = (name) => wanted.size === 0 || wanted.has(name);
@@ -646,6 +775,61 @@ try {
     await four.screenshot({ path: shot4 });
     record(shot4);
     await four.close();
+  }
+
+  if (doing('epubstore')) {
+    // The fifth store shot. The listing describes a book reader that none of
+    // the other four show, and a listing describing more than its pictures do
+    // is a listing asking to be disbelieved.
+    const STORE5 = { width: 1280, height: 800, deviceScaleFactor: 1 };
+    const bookDir = mkdtempSync(join(tmpdir(), 'openread-shot-book-'));
+    const bookPath = join(bookDir, 'moby-dick.epub');
+    writeFileSync(bookPath, buildDemoEpub());
+
+    const five = await browser.newPage();
+    await five.setViewport(STORE5);
+    await five.goto(`chrome-extension://${id}/epub-reader.html`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await sleep(800);
+    const picker = await five.$('#oit-epub-file');
+    if (!picker) throw new Error('the reader page has no file input');
+    await picker.uploadFile(bookPath);
+    await five.waitForFunction(
+      () =>
+        (document.getElementById('oit-epub-where')?.textContent ?? '') !== '',
+      { timeout: 20000 },
+    );
+    // Contents open, because the sidebar is half of what makes this a reader
+    // rather than a page with a book pasted into it.
+    await five.click('#oit-epub-toc-toggle');
+    await sleep(400);
+    await five.click('#oit-epub-translate');
+    for (let waited = 0; waited < 240000; waited += 2000) {
+      await sleep(2000);
+      const done = await five.evaluate(
+        () =>
+          document.querySelectorAll('.oit-bilingual').length > 0 &&
+          !(
+            document.getElementById('oit-page-progress')?.textContent ?? ''
+          ).startsWith('Translating'),
+      );
+      if (done) break;
+    }
+    // The badge says "Done — n translated" and then takes itself away; waiting
+    // it out keeps a transient status bubble out of a permanent screenshot.
+    await five
+      .waitForFunction(
+        () => document.getElementById('oit-page-progress') === null,
+        { timeout: 12000 },
+      )
+      .catch(() => undefined);
+    await five.mouse.move(1240, 760);
+    await sleep(500);
+    const shot5 = join(STORE_SHOTS, 'screenshot-5-epub.png');
+    await five.screenshot({ path: shot5 });
+    record(shot5);
+    await five.close();
   }
 } catch (error) {
   failed = true;
