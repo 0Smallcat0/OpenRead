@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.21.1] - 2026-08-16
+
+### Changed
+
+- **The store listing has a name that says what this is.** The Chrome Web Store
+  title is `manifest.name` — not a field in the developer dashboard — so the
+  listing had always shown a bare `OpenRead`, which carries no keywords and sits
+  one space away from an unrelated extension called **Open Read** (a paywall
+  shortcut, 104 users, untouched since February). It is now `OpenRead — Local
+Bilingual Translation`, 38 of the 45 characters a manifest name may have.
+  `short_name` keeps `OpenRead` for the toolbar tooltip and the extensions list,
+  where a tagline is only something to truncate.
+
 ## [Unreleased]
 
 ### Removed

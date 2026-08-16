@@ -5,7 +5,15 @@ import { defineConfig } from 'wxt';
 export default defineConfig({
   srcDir: 'src',
   manifest: {
-    name: 'OpenRead',
+    // Two names on purpose. `name` is what the Chrome Web Store shows as the
+    // listing title — it is not a dashboard field, so this is the only place it
+    // can be set — and a bare "OpenRead" carried no keywords and sat one space
+    // away from an unrelated extension called "Open Read". `short_name` is what
+    // the browser shows where space is tight (the toolbar tooltip, the
+    // extensions list), which is where the tagline would only be truncated.
+    // 45 characters is the manifest limit for `name`; this is 38.
+    name: 'OpenRead — Local Bilingual Translation',
+    short_name: 'OpenRead',
     // Explicit, because WXT otherwise inherits `description` from package.json,
     // and that one is written for npm (188 chars). The Chrome Web Store rejects
     // an upload whose manifest description exceeds 132 characters, and it

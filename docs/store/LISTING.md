@@ -29,16 +29,19 @@ Paste-ready copy for the store listing, current as of **2.21.0**.
 
 ## Name
 
-> **These were never in use, and could not be.** The store's 套件標題 is
-> `manifest.name`, not a dashboard field — the listing has always shown the
-> bare `OpenRead` because that is what `wxt.config.ts` sets. Changing it means
-> changing the manifest and uploading; there is nothing to paste here.
+`OpenRead — Local Bilingual Translation` (38 of the 45 characters a manifest
+name may have), shipped in **2.21.1**.
+
+> Not a dashboard field. The store's 套件標題 is `manifest.name`, which is why
+> the listing showed a bare `OpenRead` for as long as it did — there was nothing
+> to paste anywhere. Changing it means changing `wxt.config.ts` and uploading a
+> package, which 2.21.1 is.
 >
-> Worth doing on the next upload, for two reasons at once: `OpenRead` alone is
-> one space away from an unrelated extension called **Open Read** (a paywall
-> shortcut, 104 users, v0.1.0, untouched since 2026-02), and a bare name
-> carries no keywords. Something like `OpenRead — Local Bilingual Translation`
-> fits the 45-character limit, disambiguates on sight, and is searchable.
+> Two reasons at once: a bare name carries no keywords, and it sat one space
+> away from an unrelated extension called **Open Read** — a paywall shortcut,
+> 104 users, v0.1.0, untouched since 2026-02. `short_name` keeps `OpenRead` for
+> the toolbar tooltip and the extensions list, where a tagline is only something
+> to truncate.
 
 ## Short description (≤ 132 chars)
 
