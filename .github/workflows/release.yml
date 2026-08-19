@@ -8,6 +8,21 @@ on:
     tags:
       - 'v*'
 
+# One release run at a time for a tag.
+#
+# GitHub delivered the v2.23.0 tag push twice, five seconds apart, and the two
+# runs raced: one created the release while the other took the "already exists"
+# branch, and the retire step below deletes every release that is not this tag
+# — so one run can delete what the other has just made. The end state was right
+# that time by luck.
+#
+# Queued rather than cancelled. `cancel-in-progress` would stop a run halfway
+# through uploading a zip, and a release page with a half-finished asset on it
+# is worse than one that took another minute.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
   # What npm's trusted publishing runs on: GitHub mints a short-lived OIDC
@@ -73,10 +88,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           zip=".output/openread-${GITHUB_REF_NAME#v}-chrome.zip"
-          if gh release view "${GITHUB_REF_NAME}" > /dev/null 2>&1; then
-            gh release edit "${GITHUB_REF_NAME}" \
-              --title "OpenRead ${GITHUB_REF_NAME}" \
-              --notes-file release-notes.md
+          # The numeric id, not `gh release view --json id`, which answers with
+          # the GraphQL node id that the REST endpoint below will not take.
+          id=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" \
+            --jq .id 2>/dev/null || true)
+          if [ -n "${id}" ]; then
+            # Not `gh release edit`. That sends `tag_name` back with the patch,
+            # and GitHub answers 422 "Release.tag_name already exists" — about a
+            # tag which is, of course, this release's own. This branch had never
+            # run until a duplicated tag push made it run, and it failed the
+            # first time it did. Patching only the two fields that are meant to
+            # change avoids the argument entirely.
+            gh api --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/releases/${id}" \
+              -f name="OpenRead ${GITHUB_REF_NAME}" \
+              -F body=@release-notes.md > /dev/null
             gh release upload "${GITHUB_REF_NAME}" "${zip}" --clobber
           else
             gh release create "${GITHUB_REF_NAME}" \
