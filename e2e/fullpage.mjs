@@ -582,9 +582,42 @@ try {
     `switching target language did not re-ask (${switched.note})`,
   );
 
-  // Whichever state this profile is in, the end state is the same: ready. On a
-  // fresh profile that means clicking through a real download.
-  if (switched.offered) {
+  /**
+   * Wait for the banner to settle, whoever is doing the downloading.
+   *
+   * Generous, and it says how long it took. A fresh profile fetches two packs
+   * in one run — the target language, then whatever this phase switches to —
+   * and a single one was measured at 82 s on a fast connection. A harness that
+   * goes red on a slow network is one nobody reads the output of twice.
+   */
+  const untilSettled = async () => {
+    let note = '';
+    let waited = 0;
+    for (; waited < 420000; waited += 2000) {
+      await sleep(2000);
+      note = (await packState()).note;
+      if (note.startsWith('Ready') || note.startsWith('Could not')) break;
+      if (waited % 30000 === 0)
+        console.log(`    ${String(waited / 1000)}s: ${note}`);
+    }
+    return { note, waited };
+  };
+
+  // Whichever state this profile is in, the end state is the same: ready.
+  //
+  // Three states, not two. Since the worker took ownership of pack downloads,
+  // switching target language starts one by itself — the settings write is the
+  // trigger — so a fresh profile now usually finds neither a ready pack nor a
+  // button to press, but a download already under way. That is the improvement;
+  // this used to be a button the user had to find.
+  if (switched.note.startsWith('Downloading')) {
+    const { note, waited } = await untilSettled();
+    console.log(
+      `  the worker had it in hand (${String(Math.round(waited / 1000))} s): ${note}`,
+    );
+    check(note.startsWith('Ready'), `the download did not finish (${note})`);
+    await page.bringToFront();
+  } else if (switched.offered) {
     // A real gesture, not `element.click()`. Chrome gates starting a language
     // pack download on user activation, and a synthetic click carries none —
     // measured here, the create promise then simply never settles rather than
@@ -599,19 +632,7 @@ try {
       expression: `document.getElementById('downloadPack').click()`,
       userGesture: true,
     });
-    // Generous, and it says how long it took. A fresh profile fetches two packs
-    // in one run — the target language, then whatever this phase switches to —
-    // and a single one was measured at 81 s on a fast connection. A harness
-    // that goes red on a slow network is one nobody reads the output of twice.
-    let note = '';
-    let waited = 0;
-    for (; waited < 420000; waited += 2000) {
-      await sleep(2000);
-      note = (await packState()).note;
-      if (note.startsWith('Ready') || note.startsWith('Could not')) break;
-      if (waited % 30000 === 0)
-        console.log(`    ${String(waited / 1000)}s: ${note}`);
-    }
+    const { note, waited } = await untilSettled();
     console.log(
       `  after downloading (${String(Math.round(waited / 1000))} s): ${note}`,
     );

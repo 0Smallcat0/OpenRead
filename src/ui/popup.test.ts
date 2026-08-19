@@ -109,10 +109,12 @@ function deps(overrides: Partial<PopupDeps> = {}): PopupDeps {
     activeUrl: () => Promise.resolve('https://example.com/article'),
     pageLanguage: () => Promise.resolve('en'),
     packAvailability: () => Promise.resolve(packState),
-    downloadPack: (_source, _target, onProgress) => {
+    // "Nothing in flight" by default, so every test that is not about the
+    // install-time fetch sees the branch a user with no prefetch running does.
+    packProgress: () =>
+      Promise.resolve({ downloading: false, loaded: 0, problem: null }),
+    requestPack: (_source, _target) => {
       downloads++;
-      onProgress(0.5);
-      packState = 'available';
       return Promise.resolve();
     },
     writeClipboard: (text: string) => {
@@ -728,7 +730,67 @@ describe('the language pack, before it is needed', () => {
     expect($('downloadPack').hasAttribute('hidden')).toBe(false);
   });
 
-  it('downloads on the click, then reports it ready', async () => {
+  it('reports the fetch the worker already started, and does not offer it again', async () => {
+    // `availability` says `downloadable` for the whole duration of a download
+    // it is itself performing, so this branch is reached with the pack already
+    // on its way. Telling that user "Chrome has not downloaded it yet" and
+    // handing them a button to start it is two wrong things at once.
+    packState = 'downloadable';
+    await open({
+      packProgress: () =>
+        Promise.resolve({ downloading: true, loaded: 0.34, problem: null }),
+    });
+
+    expect($('packNote').textContent).toContain('Downloading');
+    expect($('packNote').textContent).toContain('34%');
+    expect($('downloadPack').hasAttribute('hidden')).toBe(true);
+  });
+
+  it('gives no percentage until one has moved', async () => {
+    packState = 'downloadable';
+    await open({
+      packProgress: () =>
+        Promise.resolve({ downloading: true, loaded: 0, problem: null }),
+    });
+
+    expect($('packNote').textContent).toContain('Downloading');
+    expect($('packNote').textContent).not.toContain('0%');
+  });
+
+  it('passes on why the worker gave up, and offers the button again', async () => {
+    // A stalled component download is what a new install actually meets —
+    // three fresh profiles in one evening stopped at 43%, 11% and 122 MB and
+    // never moved. Until this, the worker met that with a `console.warn`.
+    packState = 'downloadable';
+    await open({
+      packProgress: () =>
+        Promise.resolve({
+          downloading: false,
+          loaded: 0,
+          problem:
+            "Chrome's language-pack download has not moved for three minutes.",
+        }),
+    });
+
+    expect($('packNote').textContent).toContain('has not moved');
+    expect($('downloadPack').hasAttribute('hidden')).toBe(false);
+  });
+
+  it('falls back to the plain note when the worker cannot be asked', async () => {
+    // A worker that is asleep, or an older build answering nothing. Not
+    // knowing is not bad news, and the old branch is still correct.
+    packState = 'downloadable';
+    await open({ packProgress: () => Promise.resolve(null) });
+
+    expect($('packNote').textContent).toContain('has not downloaded');
+    expect($('downloadPack').hasAttribute('hidden')).toBe(false);
+  });
+
+  it('hands the click to the worker, and says the window can be closed', async () => {
+    // The popup is the worst place in the extension to hold a download: it
+    // closes the moment the user looks at anything else, and a pack that dies
+    // partway costs the whole partial download plus the three minutes Chrome
+    // waits before starting over. Measured at 85 MB thrown away.
     packState = 'downloadable';
     await open();
 
@@ -736,32 +798,71 @@ describe('the language pack, before it is needed', () => {
     await settle();
 
     expect(downloads).toBe(1);
-    expect($('packNote').textContent).toContain('Ready');
+    expect($('packNote').textContent).toContain('350 MB');
+    expect($('packNote').textContent).toContain('can close this window');
     expect($('downloadPack').hasAttribute('hidden')).toBe(true);
   });
 
-  it('does not open a percentage readout at 0%', async () => {
-    // The monitor's granularity is not something a caller can rely on: 479
-    // events for one pair, and exactly two — 0 then 1 — for another that took
-    // 81 seconds. A readout opening at "0%" sits there looking stuck.
+  it('keeps reporting until the pack lands, then says it is ready', async () => {
+    // The download belongs to the worker, so this window has nothing to await.
+    // Without a poll the note set at the click is the last thing the popup
+    // ever says, and a reader who keeps it open watches "downloading" forever.
+    // Caught by `e2e:page`, which presses the button and waits for "Ready".
     packState = 'downloadable';
-    let report: ((loaded: number) => void) | null = null;
+    vi.useFakeTimers();
+    try {
+      await open();
+      $('downloadPack').dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
+      await vi.advanceTimersByTimeAsync(10);
+      expect($('packNote').textContent).toContain('can close this window');
+
+      // The worker finishes it.
+      packState = 'available';
+      await vi.advanceTimersByTimeAsync(2500);
+
+      expect($('packNote').textContent).toContain('Ready');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps reporting a download it did not start, until that one lands too', async () => {
+    // Switching target language names a pair nobody has, and the worker starts
+    // fetching it on the settings write — so this window arrives at
+    // "downloading" with no button ever pressed. Rendered once and left alone,
+    // that note says "downloading" forever, including long after the pack is
+    // there. Caught by `e2e:page`.
+    packState = 'downloadable';
+    vi.useFakeTimers();
+    try {
+      await open({
+        packProgress: () =>
+          Promise.resolve({ downloading: true, loaded: 0.2, problem: null }),
+      });
+      expect($('packNote').textContent).toContain('Downloading');
+
+      packState = 'available';
+      await vi.advanceTimersByTimeAsync(2500);
+
+      expect($('packNote').textContent).toContain('Ready');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('offers the button again when the worker would not take it', async () => {
+    packState = 'downloadable';
     await open({
-      downloadPack: (_source, _target, onProgress) => {
-        report = onProgress;
-        return new Promise<void>(() => undefined);
-      },
+      requestPack: () => Promise.reject(new Error('the worker is not there')),
     });
 
     $('downloadPack').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await settle();
-    expect($('packNote').textContent).toContain('a minute or two');
-    expect($('packNote').textContent).toContain('keep this popup open');
 
-    (report as unknown as (loaded: number) => void)(0);
-    expect($('packNote').textContent).not.toContain('0%');
-    (report as unknown as (loaded: number) => void)(0.4);
-    expect($('packNote').textContent).toContain('40%');
+    expect($('packNote').textContent).toContain('not there');
+    expect($('downloadPack').hasAttribute('hidden')).toBe(false);
   });
 
   it('says what to do when Chrome will not do the pair at all', async () => {

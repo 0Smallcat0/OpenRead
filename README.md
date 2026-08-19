@@ -42,10 +42,13 @@ unzip it, open `chrome://extensions`, turn on **Developer mode**, click
 **Load unpacked**, and pick the unzipped folder. The same package works in
 Edge, from `edge://extensions`.
 
-Either way, that is the whole setup. OpenRead uses Chrome's own on-device translator, which
-Chrome downloads the first time you translate — a minute or two, with a
-progress indicator, once per language pair. After that a page takes about two
-seconds.
+Either way, that is the whole setup. OpenRead uses Chrome's own on-device
+translator, whose language pack Chrome downloads once per language pair — about
+350 MB, measured at 82 seconds on a 4 MB/s connection. That download starts the
+moment the extension is installed rather than the first time you press
+translate, and the extension holds it open until it lands: Chrome does not
+resume an interrupted one, it waits three minutes and then starts over. After
+it arrives, a page takes about two seconds.
 
 <p align="center">
   <img src="docs/screenshots/popup.png" alt="The OpenRead popup: translator set to Chrome built-in, target language Traditional Chinese" width="290" />
@@ -218,7 +221,7 @@ all, since that is the easy way to send nothing and prove nothing.
 ```bash
 pnpm install
 pnpm build        # -> .output/chrome-mv3, load it unpacked
-pnpm test         # 748 unit tests
+pnpm test         # 772 unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
 pnpm eval:builtin # score the default engine in a real Chrome -> eval/BUILTIN-RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)
@@ -228,6 +231,8 @@ pnpm e2e:stress   # hostile pages: infinite feeds, route swaps, rapid toggling
 pnpm e2e:egress   # prove the default engine sends nothing, in a real Chrome
 pnpm e2e:epub     # a real .epub opened, read and translated in a real Chrome
 pnpm e2e:first-run # what a brand-new install does on a brand-new profile
+pnpm e2e:prefetch  # prove installing it starts the language-pack download
+pnpm e2e:selection # select text, click the 文 icon, read what comes back
 ```
 
 **[How it is built →](docs/ENGINEERING.md)** — the reliability layer, the

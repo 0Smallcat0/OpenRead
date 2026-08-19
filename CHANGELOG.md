@@ -18,7 +18,92 @@ Bilingual Translation`, 38 of the 45 characters a manifest name may have.
   `short_name` keeps `OpenRead` for the toolbar tooltip and the extensions list,
   where a tagline is only something to truncate.
 
-## [Unreleased]
+## [2.22.0] - 2026-08-20
+
+### Fixed
+
+- **The language pack is fetched by the worker, at install, and nothing is
+  allowed to interrupt it.** This began as "the first press waits too long" and
+  turned out to be a different problem with a much sharper edge.
+
+  Measured against the shipped build, on profiles that had never asked:
+  `en`→`ko` came down in **82 seconds** — 352 MB, at the connection's full
+  4 MB/s. So the wait, left alone, is about a minute and a half.
+
+  Interrupting it is what costs. `en`→`fr`, killed at 85 MB and asked for again
+  in the same profile: nothing happened for about three minutes, then Chrome
+  **deleted the 85 MB** and started from the beginning, finishing at
+  **436 seconds** — 5.3× the uninterrupted time. There is no resume. A user who
+  presses translate, watches an empty page, gives up and closes the tab has
+  not merely waited: they have thrown the download away and added three minutes
+  to the next attempt. Do it twice and the extension never works.
+
+  Every path that could interrupt one is now closed:
+
+  - The fetch starts at `chrome.runtime.onInstalled`, before anything is
+    pressed, and again on browser startup and when the target language changes.
+    `Translator.create()` needs a user gesture in a document but not in a
+    service worker, and the pack is browser-wide.
+  - The worker is held open for the whole download by a counted keepalive.
+    MV3 recycles a worker after 30 s idle and a pending web-platform promise
+    does not count as activity; a translation's `stream-translate` port used to
+    be the only thing keeping it up, and that port dies with the tab.
+  - A pack that starts mid-translation — a page in a language the install-time
+    fetch did not guess — keeps the worker for ten minutes after the reader
+    gives up, rather than losing it the moment they close the tab. It is
+    released immediately when the translation succeeds, because a translation
+    that finished is proof the download did.
+  - The popup's "download it now" button no longer downloads anything. It asks
+    the worker to, because a download the popup was holding died when the popup
+    closed — which is what that window does the moment the user looks away.
+    The banner now says the window _can_ be closed, and keeps reporting the
+    worker's progress until the pack lands — however this window came to be
+    looking at one. Switching target language starts a download without any
+    button being pressed, and the banner used to render "downloading" once and
+    never again, so it said that long after the pack was there.
+
+- **A stalled download is no longer reported as one while Chrome is recovering
+  from it.** `downloadPack` had no deadline at all, which was survivable while
+  its only caller was a button somebody had just pressed. It now has the same
+  watchdog as the translation path — and the worker's own fetch gets a
+  ten-minute fuse rather than three, because Chrome's recovery from a stall is
+  itself about three minutes of complete silence, and a shorter fuse reports a
+  restart as a failure.
+
+- **The badge says a download is coming the moment it is known, not when
+  Chrome gets round to mentioning it.** Measured on a cold profile: the corner
+  badge read "Translating 0/18" for thirty-nine seconds before Chrome's first
+  `downloadprogress` event arrived and corrected it. Nothing was being
+  translated for any of those thirty-nine seconds. `availability` already knew,
+  one line earlier.
+
+- **The toolbar icon shows the pack arriving.** Every other report of it — the
+  corner badge, the popup's banner — needs the user to press or open something
+  first, which is the wrong order: what somebody who just installed this needs
+  to know is that pressing anything is pointless for the next minute or two.
+  The action badge was unused; it now carries `↓`, then a percentage, then
+  nothing, and `!` with the reason in the tooltip if the download gave up.
+
+- **The popup can tell a download in progress from one that has not started.**
+  It could not before, because `Translator.availability()` cannot: it answers
+  `downloadable` for the whole duration of a download it is itself performing —
+  measured at 145,687 ms of `create()` without it once saying `downloading`.
+  So a popup opened a minute after install reported that nothing had been
+  downloaded and offered a button to start what was already running. It now
+  asks the worker, which knows.
+
+- **Chrome 137 and older can no longer install it.** The manifest carried no
+  `minimum_chrome_version`, so the Web Store happily installed an extension
+  whose default engine — Chrome's built-in translator, which ships in 138 —
+  does not exist there. The popup explained the problem well; the store could
+  have prevented it.
+
+### Changed
+
+- **The language-pack banner gives a size rather than a duration.** About
+  350 MB, once. "A minute or two" is right on a fast connection — 352 MB in
+  82 seconds, measured — and wrong by an order of magnitude on a slow one, and
+  the reader knows which they have far better than this does.
 
 ### Removed
 
