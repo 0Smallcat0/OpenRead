@@ -1,11 +1,14 @@
 import { mountPopup } from '../../ui/popup';
 import { probeOllama } from '../../api/probe';
 import type { PlatformOs } from '../../core/diagnostics';
-import { packAvailability, downloadPack } from '../../api/builtin';
+import { packAvailability } from '../../api/builtin';
 import type {
   TranslatePageMessage,
   PageLanguageMessage,
   PageLanguageResponse,
+  PackProgressMessage,
+  PackProgressResponse,
+  PackFetchMessage,
 } from '../../messaging';
 
 /** Map Chrome's platform list onto the three shells that need different fixes. */
@@ -102,5 +105,24 @@ mountPopup(document, {
   // a download wants a user gesture — which is exactly what the button click
   // in here is, and what a message to the service worker would throw away.
   packAvailability,
-  downloadPack,
+  // Handed to the worker rather than run here: this window closing would kill
+  // the download, and an interrupted pack is not a lost minute — Chrome sits
+  // on it for three minutes and then throws the partial away.
+  requestPack: async (source, target) => {
+    const message: PackFetchMessage = { type: 'PACK_FETCH', source, target };
+    await chrome.runtime.sendMessage(message);
+  },
+  // Through the worker, unlike the two above, because it is the only thing
+  // that knows: `Translator.availability()` answers `downloadable` for the
+  // whole duration of a download it is itself running.
+  packProgress: async () => {
+    const message: PackProgressMessage = { type: 'PACK_PROGRESS' };
+    try {
+      return ((await chrome.runtime.sendMessage(message)) ??
+        null) as PackProgressResponse | null;
+    } catch {
+      // A worker that is asleep or gone. Not knowing is not bad news.
+      return null;
+    }
+  },
 });

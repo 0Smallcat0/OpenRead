@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   translateStream: vi.fn(),
   enrichText: vi.fn(),
   loadSettings: vi.fn(),
+  packAvailability: vi.fn(),
+  downloadPack: vi.fn(),
+  translateBuiltin: vi.fn(),
 }));
 
 vi.mock('../src/api/ollama', () => ({
@@ -23,6 +26,27 @@ vi.mock('../src/api/ollama', () => ({
   enrichText: mocks.enrichText,
 }));
 vi.mock('../src/settings', () => ({ loadSettings: mocks.loadSettings }));
+// Only the two the pack prefetch drives. `translateBuiltin` and
+// `BuiltinUnavailableError` stay real: the worker tests an error with
+// `instanceof`, and a stand-in class would pass the check while being the
+// wrong type everywhere else.
+vi.mock('../src/api/builtin', async () => {
+  const actual =
+    await vi.importActual<typeof import('../src/api/builtin')>(
+      '../src/api/builtin',
+    );
+  return {
+    ...actual,
+    packAvailability: mocks.packAvailability,
+    downloadPack: mocks.downloadPack,
+    // Passed through by default: almost every test here wants the real thing,
+    // which without a `Translator` global declines and falls through to Ollama.
+    translateBuiltin: (...args: unknown[]) =>
+      mocks.translateBuiltin.getMockImplementation()
+        ? mocks.translateBuiltin(...args)
+        : (actual.translateBuiltin as (...a: unknown[]) => unknown)(...args),
+  };
+});
 
 const VIEWER = 'chrome-extension://abc/pdfjs/web/viewer.html';
 const BASE_URL = 'http://localhost:11434';
@@ -91,6 +115,10 @@ let createdMenus: { id: string; title: string; contexts: string[] }[];
 let menuClick: (info: { menuItemId: string }, tab?: { id?: number }) => void;
 let startupListeners: (() => void)[];
 let installedListeners: (() => void)[];
+/** Everything written to the toolbar icon, in order. */
+let badges: { text?: string; title?: string }[];
+/** How often the worker has poked a `chrome.*` API to stay alive. */
+let platformInfoCalls: number;
 
 /** Let the worker's awaited `loadSettings()` and stream call resolve. */
 async function settle(): Promise<void> {
@@ -102,6 +130,12 @@ beforeEach(async () => {
   mocks.translateStream.mockReset();
   mocks.enrichText.mockReset();
   mocks.loadSettings.mockReset().mockResolvedValue({ baseUrl: BASE_URL });
+  // "Already on disk" is the state every test that is not about the prefetch
+  // wants: nothing to download, so nothing to assert around.
+  mocks.packAvailability.mockReset().mockResolvedValue('available');
+  mocks.downloadPack.mockReset().mockResolvedValue(undefined);
+  mocks.translateBuiltin.mockReset();
+  platformInfoCalls = 0;
   fileSchemeAllowed = true;
   tabsUpdate = vi.fn().mockResolvedValue(undefined);
   tabsQuery = vi.fn().mockResolvedValue([{ id: 7 }]);
@@ -111,11 +145,17 @@ beforeEach(async () => {
   menuClick = () => undefined;
   startupListeners = [];
   installedListeners = [];
+  badges = [];
 
   const partial: Partial<Registered> = {};
   vi.stubGlobal('chrome', {
     runtime: {
       getURL: () => VIEWER,
+      // What the pack prefetch pokes to keep the worker off the reaper.
+      getPlatformInfo: () => {
+        platformInfoCalls += 1;
+        return Promise.resolve({ os: 'win' });
+      },
       onConnect: {
         addListener: (fn: Registered['onConnect']) => {
           partial.onConnect = fn;
@@ -154,6 +194,16 @@ beforeEach(async () => {
         addListener: (fn: Registered['onCommand']) => {
           partial.onCommand = fn;
         },
+      },
+    },
+    action: {
+      setBadgeText: ({ text }: { text: string }) => {
+        badges.push({ text });
+        return Promise.resolve();
+      },
+      setTitle: ({ title }: { title: string }) => {
+        badges.push({ title });
+        return Promise.resolve();
       },
     },
     extension: {
@@ -202,6 +252,373 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('the language pack, fetched before it is wanted', () => {
+  const BUILTIN = {
+    baseUrl: BASE_URL,
+    engine: 'builtin',
+    targetLang: 'Traditional Chinese',
+  };
+
+  /**
+   * Longer than `settle`: the prefetch awaits settings, then availability,
+   * then the download itself, and each hop is a tick this has to outlast.
+   */
+  async function drain(): Promise<void> {
+    for (let i = 0; i < 40; i++) await Promise.resolve();
+  }
+
+  it('downloads it on install rather than leaving it to the first press', async () => {
+    // The whole point. Measured against the shipped build on a profile that
+    // had never translated: six minutes after the first press the page was
+    // still empty and Chrome's pack was at 43%.
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    mocks.packAvailability.mockResolvedValue('downloadable');
+    registered.onInstalled();
+    await drain();
+
+    expect(mocks.downloadPack).toHaveBeenCalledWith(
+      'en',
+      'zh-Hant',
+      expect.any(Function),
+      expect.any(Number),
+    );
+  });
+
+  it('asks again on browser startup, because Chrome does not resume', async () => {
+    // An interrupted download is not picked up where it stopped: availability
+    // went back to `downloadable`, not `downloading`, and the next attempt
+    // started from zero. Somebody has to ask again, and this is who.
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    mocks.packAvailability.mockResolvedValue('downloadable');
+    registered.onStartup();
+    await drain();
+
+    expect(mocks.downloadPack).toHaveBeenCalledWith(
+      'en',
+      'zh-Hant',
+      expect.any(Function),
+      expect.any(Number),
+    );
+  });
+
+  it('leaves a pack that is already on disk alone', async () => {
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    mocks.packAvailability.mockResolvedValue('available');
+    registered.onInstalled();
+    await drain();
+
+    expect(mocks.downloadPack).not.toHaveBeenCalled();
+  });
+
+  it('does not download one for a user who translates with Ollama', async () => {
+    mocks.loadSettings.mockResolvedValue({ ...BUILTIN, engine: 'ollama' });
+    mocks.packAvailability.mockResolvedValue('downloadable');
+    registered.onInstalled();
+    await drain();
+
+    expect(mocks.downloadPack).not.toHaveBeenCalled();
+  });
+
+  it('says nothing about a pair Chrome cannot serve', async () => {
+    // A target only Ollama has. There is no BCP-47 code to ask Chrome about,
+    // so there is nothing to fetch and nothing to complain about either.
+    mocks.loadSettings.mockResolvedValue({ ...BUILTIN, targetLang: 'Klingon' });
+    registered.onInstalled();
+    await drain();
+
+    expect(mocks.packAvailability).not.toHaveBeenCalled();
+    expect(mocks.downloadPack).not.toHaveBeenCalled();
+  });
+
+  it('fetches the new pair when the target language changes', async () => {
+    // Switching language names a pack that is not on disk either — the same
+    // wait as a fresh install, met in the middle of using the thing.
+    mocks.loadSettings.mockResolvedValue({
+      ...BUILTIN,
+      targetLang: 'Japanese',
+    });
+    mocks.packAvailability.mockResolvedValue('downloadable');
+    registered.onStorageChanged(
+      { targetLang: { newValue: 'Japanese' } },
+      'sync',
+    );
+    await drain();
+
+    expect(mocks.downloadPack).toHaveBeenCalledWith(
+      'en',
+      'ja',
+      expect.any(Function),
+      expect.any(Number),
+    );
+  });
+
+  it('ignores a change in some other area', async () => {
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    mocks.packAvailability.mockResolvedValue('downloadable');
+    registered.onStorageChanged(
+      { targetLang: { newValue: 'Japanese' } },
+      'local',
+    );
+    await drain();
+
+    expect(mocks.downloadPack).not.toHaveBeenCalled();
+  });
+
+  it('does not start a second download on top of the one already running', async () => {
+    // Install and startup both fire on an update, and the storage listener
+    // fires on any settings write. Two `Translator.create()` calls for one
+    // pair is at best wasted and at worst two component-updater jobs racing.
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    mocks.packAvailability.mockResolvedValue('downloadable');
+    mocks.downloadPack.mockReturnValue(new Promise<void>(() => undefined));
+    registered.onInstalled();
+    await drain();
+    registered.onStartup();
+    await drain();
+
+    expect(mocks.downloadPack).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the download on the toolbar icon, where a new install is looking', async () => {
+    // Every other report of this download needs the user to press or open
+    // something first, which is the wrong order: what they need to know is
+    // that pressing anything is pointless for the next few minutes.
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    mocks.packAvailability.mockResolvedValue('downloadable');
+    mocks.downloadPack.mockImplementation(
+      (_source: string, _target: string, onProgress: (n: number) => void) => {
+        onProgress(0);
+        onProgress(0.42);
+        return new Promise<void>(() => undefined);
+      },
+    );
+    registered.onInstalled();
+    await drain();
+
+    const texts = badges.map((b) => b.text).filter((t) => t !== undefined);
+    // No percentage to open with: the monitor fired 479 times for one pair and
+    // twice for another, so "0%" would sit there looking stuck.
+    expect(texts[0]).toBe('↓');
+    expect(texts).toContain('42%');
+    expect(texts).not.toContain('0%');
+  });
+
+  it('takes the badge off once the pack is there', async () => {
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    mocks.packAvailability.mockResolvedValue('downloadable');
+    registered.onInstalled();
+    await drain();
+
+    // Filtered on `undefined` rather than on truthiness: the value being
+    // asserted is the empty string, which is what takes a badge off.
+    expect(
+      badges
+        .map((b) => b.text)
+        .filter((t) => t !== undefined)
+        .at(-1),
+    ).toBe('');
+  });
+
+  it('leaves a mark on the icon when the download gave up', async () => {
+    // The state most worth noticing. Clearing the icon would hide it behind a
+    // popup the user has no reason to open.
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    mocks.packAvailability.mockResolvedValue('downloadable');
+    mocks.downloadPack.mockRejectedValue(new Error('has not moved'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    registered.onInstalled();
+    await drain();
+    warn.mockRestore();
+
+    expect(
+      badges
+        .map((b) => b.text)
+        .filter(Boolean)
+        .at(-1),
+    ).toBe('!');
+  });
+
+  it('keeps the worker up for a download the reader walked away from', async () => {
+    // The install-time fetch covers `en` -> the configured target. A page in
+    // some other language starts its pack here instead, mid-translation, and
+    // the only thing holding the worker up for it is the port — which dies
+    // with the tab. Measured on a pack interrupted at 85 MB: Chrome sat on it
+    // for three minutes, deleted it, and started again, finishing at 436 s
+    // against 82 s for the same pair left alone.
+    // The shared fixture stores the Ollama engine; this branch only runs for
+    // the other one.
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    vi.useFakeTimers();
+    try {
+      mocks.translateBuiltin.mockImplementation(
+        async (params: { onDownloadProgress?: (n: number) => void }) => {
+          params.onDownloadProgress?.(0.1);
+          throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+        },
+      );
+      const port = new FakePort('stream-translate');
+      registered.onConnect(port);
+      port.send({
+        type: 'START_STREAM',
+        text: 'A paragraph in a language nobody prefetched.',
+        targetLang: 'Traditional Chinese',
+        model: 'qwen3:latest',
+      });
+      await vi.advanceTimersByTimeAsync(100);
+
+      // The reader gives up and closes the tab.
+      port.hangUp();
+      const atAbort = platformInfoCalls;
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      // Still being poked a minute later, with no port and no page left.
+      expect(platformInfoCalls).toBeGreaterThan(atAbort);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('lets go of the worker once the pack has landed', async () => {
+    // A translation that finished is proof the download did too, and holding
+    // the worker up past that is a timer running for nothing.
+    // The shared fixture stores the Ollama engine; this branch only runs for
+    // the other one.
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    vi.useFakeTimers();
+    try {
+      mocks.translateBuiltin.mockImplementation(
+        async (params: {
+          onDownloadProgress?: (n: number) => void;
+          onChunk: (c: string) => void;
+        }) => {
+          params.onDownloadProgress?.(0.1);
+          params.onChunk('你好');
+        },
+      );
+      const port = new FakePort('stream-translate');
+      registered.onConnect(port);
+      port.send({
+        type: 'START_STREAM',
+        text: 'Hello',
+        targetLang: 'Traditional Chinese',
+        model: 'qwen3:latest',
+      });
+      await vi.advanceTimersByTimeAsync(100);
+      const afterDone = platformInfoCalls;
+      await vi.advanceTimersByTimeAsync(120_000);
+
+      expect(platformInfoCalls).toBe(afterDone);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('tells the popup a fetch is in flight, and how far in', async () => {
+    // The popup cannot work this out for itself: `Translator.availability()`
+    // answers `downloadable` for the whole duration of a download it is
+    // performing, so without this it reports "nothing downloaded yet" over a
+    // pack that is a third of the way in, and offers a button to start it.
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    mocks.packAvailability.mockResolvedValue('downloadable');
+    mocks.downloadPack.mockImplementation(
+      (_source: string, _target: string, onProgress: (n: number) => void) => {
+        onProgress(0.34);
+        return new Promise<void>(() => undefined);
+      },
+    );
+    registered.onInstalled();
+    await drain();
+
+    const answered = vi.fn();
+    registered.onMessage({ type: 'PACK_PROGRESS' }, {}, answered);
+    expect(answered).toHaveBeenCalledWith({
+      downloading: true,
+      loaded: 0.34,
+      problem: null,
+    });
+  });
+
+  it('answers the popup asking it to take a download', async () => {
+    // Not politeness: `chrome.runtime.sendMessage` rejects with "Could not
+    // establish connection. Receiving end does not exist." when a listener
+    // returns without replying, and the popup showed that to the user as the
+    // reason its download would not start.
+    mocks.packAvailability.mockResolvedValue('downloadable');
+    const answered = vi.fn();
+    registered.onMessage(
+      { type: 'PACK_FETCH', source: 'en', target: 'ja' },
+      {},
+      answered,
+    );
+    await drain();
+
+    expect(answered).toHaveBeenCalledWith({ ok: true });
+    expect(mocks.downloadPack).toHaveBeenCalledWith(
+      'en',
+      'ja',
+      expect.any(Function),
+      expect.any(Number),
+    );
+  });
+
+  it('says nothing is in flight when nothing is', async () => {
+    const answered = vi.fn();
+    registered.onMessage({ type: 'PACK_PROGRESS' }, {}, answered);
+    expect(answered).toHaveBeenCalledWith({
+      downloading: false,
+      loaded: 0,
+      problem: null,
+    });
+  });
+
+  it('passes on why the last attempt gave up', async () => {
+    // A stalled component download is what a new install meets, and a
+    // `console.warn` is not a report: nobody opens a devtools window on a
+    // service worker to find out why the extension they just installed is not
+    // translating.
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    mocks.packAvailability.mockResolvedValue('downloadable');
+    mocks.downloadPack.mockRejectedValue(
+      new Error(
+        "Chrome's language-pack download has not moved for three minutes.",
+      ),
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    registered.onInstalled();
+    await drain();
+    warn.mockRestore();
+
+    const answered = vi.fn();
+    registered.onMessage({ type: 'PACK_PROGRESS' }, {}, answered);
+    expect(answered).toHaveBeenCalledWith({
+      downloading: false,
+      loaded: 0,
+      problem: expect.stringContaining('has not moved'),
+    });
+  });
+
+  it('survives a download that fails', async () => {
+    // Nothing is lost by this failing: the first translation fetches the pack
+    // the old way. An unhandled rejection in the worker would be worse than
+    // the wait it is trying to avoid.
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    mocks.packAvailability.mockResolvedValue('downloadable');
+    mocks.downloadPack.mockRejectedValue(new Error('the updater never moved'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    registered.onInstalled();
+    await drain();
+
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+
+    // And the next ask is not blocked by the failed one still looking busy.
+    mocks.downloadPack.mockResolvedValue(undefined);
+    registered.onStartup();
+    await drain();
+    expect(mocks.downloadPack).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('PDF routing', () => {

@@ -10,7 +10,14 @@
  */
 import { translateStream, enrichText } from '../api/ollama';
 import { loadSettings } from '../settings';
-import { translateBuiltin, BuiltinUnavailableError } from '../api/builtin';
+import {
+  translateBuiltin,
+  BuiltinUnavailableError,
+  packAvailability,
+  downloadPack,
+  PACK_STALL_MS,
+} from '../api/builtin';
+import { toBcp47 } from '../core/bcp47';
 import { buildOriginStripRule, ORIGIN_STRIP_RULE_ID } from '../core/dnr-rule';
 import { describeEngineFailure } from '../core/diagnostics';
 import {
@@ -27,6 +34,7 @@ import {
   type PortRequest,
   type RuntimeRequest,
   type EnrichCaptureResponse,
+  type PackProgressResponse,
   type StreamResponse,
 } from '../messaging';
 
@@ -189,11 +197,227 @@ export default defineBackground(() => {
   chrome.runtime.onInstalled.addListener(() => {
     originRuleReady = applyOriginStripRule();
   });
+  /**
+   * The pair fetched ahead of time.
+   *
+   * A source language is not knowable before there is a page, and English is
+   * what the great majority of what this extension gets pointed at is written
+   * in. Guessing wrong costs a download the user did not need; not guessing at
+   * all costs every user the wait below.
+   */
+  const PREFETCH_SOURCE = 'en';
+
+  let packKeepAlive: ReturnType<typeof setInterval> | undefined;
+  /** How many downloads are counting on the worker staying up. */
+  let packHolds = 0;
+  /** Set while the install-time fetch is running, for the popup to read. */
+  let packPrefetching = false;
+
+  /**
+   * Hold the worker open until the pack has landed, and say when to let go.
+   *
+   * Interrupting one of these downloads is not free, and it is not merely a
+   * lost minute. Measured: `en`→`ko` on a profile that had never asked came
+   * down in 82 seconds — 352 MB at the connection's full 4 MB/s. The same
+   * request, killed partway and made again, does not resume and does not
+   * restart; it sits at zero bytes for as long as anyone is willing to watch.
+   * A pair can be spoiled this way, and once it is, the wait stops being a
+   * wait and becomes a permanent failure.
+   *
+   * MV3 recycles a worker after 30 s of idle, and a pending web-platform
+   * promise is not activity — only a `chrome.*` call resets that clock. So
+   * every path that can start a pack download has to keep the worker up until
+   * it finishes: the install-time prefetch, which has no page at all, and a
+   * translation, whose port dies with the tab the reader closes while waiting.
+   *
+   * Counted rather than a boolean: the prefetch and a translation can be
+   * waiting on different pairs at once, and the first to finish must not drop
+   * the other one's worker.
+   */
+  /**
+   * How long the worker is kept up for a download whose reader has gone.
+   *
+   * Generous on purpose: the whole point is to outlast the download, and the
+   * cost of being wrong in this direction is a `getPlatformInfo()` every 20 s
+   * for a few minutes. Being wrong in the other direction costs the user the
+   * entire pack and three minutes on top. Ten minutes covers 352 MB on any
+   * connection this extension is usable on, and one Chrome stall-and-restart
+   * cycle besides.
+   */
+  const PACK_GRACE_MS = 600_000;
+
+  /** Let go of a hold after `ms`, rather than at the end of this turn. */
+  function keepAliveFor(release: () => void, ms: number): void {
+    setTimeout(release, ms);
+  }
+
+  function holdWorkerOpen(): () => void {
+    packHolds += 1;
+    packKeepAlive ??= setInterval(() => {
+      void chrome.runtime.getPlatformInfo();
+    }, 20_000);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      packHolds -= 1;
+      if (packHolds <= 0 && packKeepAlive !== undefined) {
+        clearInterval(packKeepAlive);
+        packKeepAlive = undefined;
+        packHolds = 0;
+      }
+    };
+  }
+
+  /**
+   * How far the prefetch has got, for the popup to read.
+   *
+   * `Translator.availability()` cannot be asked this: it answers
+   * `downloadable` throughout a download it is itself performing. Without a
+   * number kept here, a popup opened two minutes after install reports that
+   * nothing has been downloaded yet and offers a button to start what is
+   * already running.
+   */
+  let packLoaded = 0;
+
+  /** Why the last prefetch gave up, for the popup to pass on. */
+  let packProblem: string | null = null;
+
+  /**
+   * The toolbar icon, while the pack is on its way.
+   *
+   * The one surface a user who has just installed something is already looking
+   * at, and until now this extension never wrote to it. Everything else that
+   * reports the download — the corner badge, the popup's banner — needs the
+   * user to press something or open something first, which is the wrong order:
+   * the thing they need to know is that pressing anything is pointless for the
+   * next few minutes.
+   *
+   * Guarded because `chrome.action` is undefined in the jsdom stubs, and
+   * because failing to draw a badge is not worth failing a download over.
+   */
+  function paintBadge(text: string, title: string): void {
+    try {
+      void chrome.action?.setBadgeText?.({ text });
+      void chrome.action?.setTitle?.({ title });
+    } catch {
+      // A browser that disagrees about the action API. Nothing is lost.
+    }
+  }
+
+  /**
+   * Get this pair onto the disk, and see it through.
+   *
+   * The one place in the extension that starts a language-pack download, and
+   * deliberately so. Left alone, the download is not the problem: `en`→`ko` on
+   * a profile that had never asked came down in 82 seconds — 352 MB at the
+   * connection's full 4 MB/s. Interrupting it is the problem. `en`→`fr` killed
+   * at 85 MB and asked for again sat at nothing for three minutes, then Chrome
+   * deleted the 85 MB and started over, finishing at 436 seconds. There is no
+   * resume, and the penalty is paid again on every interruption — which is how
+   * a minute and a half becomes an extension that never works for somebody who
+   * pressed translate twice and closed the tab twice.
+   *
+   * So: started before anyone can be waiting on it, held by the worker rather
+   * than by a page or a popup that can be closed, and kept off MV3's reaper
+   * until it lands. `Translator.create()` needs a user gesture in a document
+   * but not in a service worker (see `downloadPack`), which is what makes the
+   * worker the right owner rather than merely a convenient one. The pack is
+   * browser-wide, so paying for it here means every later context finds it.
+   *
+   * One at a time. Two downloads share one connection and finish later than
+   * they would in sequence, and a second caller finding this busy is almost
+   * always the same pair arriving from a different door.
+   */
+  async function ensurePack(source: string, target: string): Promise<void> {
+    if (packPrefetching) return;
+    const availability = await packAvailability(source, target);
+    if (availability !== 'downloadable') return;
+
+    /**
+     * A translation started from a page holds a `stream-translate` port open,
+     * and an open port is what keeps an MV3 worker from being recycled. A
+     * download started at install has neither port nor page — only a pending
+     * web-platform promise, which does not count against the idle timer. A
+     * `chrome.*` call is what resets it, and the timer is 30 s.
+     */
+    packLoaded = 0;
+    packProblem = null;
+    const pair = `${source} → ${target}`;
+    // No percentage to open with: Chrome's monitor fired 479 times for one
+    // pair and exactly twice for another, so "0%" would sit there looking
+    // stuck for the part of the download that most needs not to.
+    paintBadge('↓', `OpenRead is downloading the ${pair} translation model.`);
+    packPrefetching = true;
+    const release = holdWorkerOpen();
+    try {
+      await downloadPack(
+        source,
+        target,
+        (loaded) => {
+          packLoaded = loaded;
+          const percent = Math.round(loaded * 100);
+          if (percent > 0) {
+            paintBadge(
+              `${String(percent)}%`,
+              `OpenRead is downloading the ${pair} translation model — ` +
+                `${String(percent)}% done. Translation works the moment it ` +
+                `lands.`,
+            );
+          }
+        },
+        // The long fuse: nothing is waiting on this one, and Chrome's own
+        // recovery from a stall takes about three minutes of total silence.
+        PACK_STALL_MS,
+      );
+      paintBadge('', `OpenRead — ready to translate ${pair}.`);
+    } catch (error) {
+      // Kept rather than only logged. `BuiltinUnavailableError` from here is
+      // the stall message, which names the three things worth checking; a
+      // warning in a console the user will never open is not a report.
+      packProblem = error instanceof Error ? error.message : String(error);
+      // The badge stays, deliberately. A download that gave up is the state
+      // most worth noticing, and clearing the icon would hide it behind a
+      // popup the user has no reason to open.
+      paintBadge('!', `OpenRead: ${packProblem}`);
+      console.warn(
+        'OpenRead could not fetch the language pack ahead of time.',
+        error,
+      );
+    } finally {
+      packPrefetching = false;
+      release();
+    }
+  }
+
+  /** The pair the settings imply, for the install-time fetch. */
+  async function prefetchPack(): Promise<void> {
+    const { engine, targetLang } = await loadSettings();
+    if (engine !== 'builtin') return;
+    const target = toBcp47(targetLang);
+    // A language only Ollama serves. Nothing to fetch.
+    if (!target) return;
+    await ensurePack(PREFETCH_SOURCE, target);
+  }
+
+  chrome.runtime.onInstalled.addListener(() => void prefetchPack());
+  // Also the resume path: an interrupted download is not resumed. Chrome sits
+  // on it for about three minutes, deletes what it had and starts over —
+  // measured at 85 MB thrown away — so the next start has to ask again.
+  chrome.runtime.onStartup.addListener(() => void prefetchPack());
+
   // Pointing the extension at a different server has to move the rule with it,
   // or the new server answers 403 and the old one stays reachable.
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'sync' && 'baseUrl' in changes) {
+    if (area !== 'sync') return;
+    if ('baseUrl' in changes) {
       originRuleReady = applyOriginStripRule();
+    }
+    // Changing the target language, or switching back to the built-in engine,
+    // names a pack that is not on disk yet — the same wait as a fresh install,
+    // and the same answer.
+    if ('targetLang' in changes || 'engine' in changes) {
+      void prefetchPack();
     }
   });
 
@@ -372,6 +596,21 @@ export default defineBackground(() => {
         // needs no server, so it is tried before the rule that exists to let
         // one be reached.
         if (engine === 'builtin') {
+          /**
+           * Taken the first time Chrome says a pack is on its way, and not
+           * given back when the reader walks away.
+           *
+           * The install-time fetch covers `en` → whatever the settings say; a
+           * page in some other language is a pair nobody has asked for yet, so
+           * the download starts here instead, in the middle of a translation
+           * somebody is watching. The only thing keeping the worker alive for
+           * it is this port, and the port dies with the tab — so a reader who
+           * gets bored and closes it takes the download with them. That is not
+           * a lost minute: Chrome does not resume, it waits about three
+           * minutes and then deletes what it had. Measured at 85 MB thrown
+           * away, and 436 s against 82 s for the same pair left alone.
+           */
+          let packHold: (() => void) | undefined;
           try {
             await withGlossary((text, onChunk) =>
               translateBuiltin({
@@ -381,14 +620,24 @@ export default defineBackground(() => {
                 signal,
                 onChunk,
                 // Without this the first use of a language pair is a silent
-                // two-minute wait, which reads as a broken extension.
-                onDownloadProgress: (loaded) =>
-                  post({ status: 'downloading', loaded }),
+                // wait of a minute or more, which reads as a broken extension.
+                onDownloadProgress: (loaded) => {
+                  packHold ??= holdWorkerOpen();
+                  post({ status: 'downloading', loaded });
+                },
               }),
             );
+            // It landed: the translation could not have finished otherwise.
+            packHold?.();
             post({ status: 'done' });
             return;
           } catch (error) {
+            // Every other exit gives the download the worker for a while
+            // longer, whatever became of the translation. An abort here is
+            // usually the tab closing, which is exactly the case worth
+            // surviving; the timer is what stops a dead one holding the worker
+            // for good.
+            if (packHold) keepAliveFor(packHold, PACK_GRACE_MS);
             if (signal.aborted || (error as Error).name === 'AbortError') {
               return;
             }
@@ -457,6 +706,33 @@ export default defineBackground(() => {
           void routeToViewer(tabId, url, true).catch(() => undefined);
         }
         return;
+      }
+
+      // Answered synchronously: the popup asks on every render of the pack
+      // banner, and a promise here would make it flicker.
+      if (request.type === 'PACK_PROGRESS') {
+        const response: PackProgressResponse = {
+          downloading: packPrefetching,
+          loaded: packLoaded,
+          problem: packProblem,
+        };
+        sendResponse(response);
+        return undefined;
+      }
+
+      // The popup asking the worker to own a download it must not run itself:
+      // closing the popup would kill it, and an interrupted pack costs the
+      // whole partial download plus the three minutes Chrome waits before
+      // starting over.
+      if (request.type === 'PACK_FETCH') {
+        void ensurePack(request.source, request.target);
+        // Answered, and not for politeness: `chrome.runtime.sendMessage`
+        // rejects with "Could not establish connection. Receiving end does not
+        // exist." when a listener returns without replying, and the popup
+        // showed that to the user as the reason its download would not start.
+        // Caught by `e2e:page`, which presses the button for real.
+        sendResponse({ ok: true });
+        return undefined;
       }
 
       if (request.type === 'ENRICH_CAPTURE') {

@@ -122,12 +122,69 @@ export interface OpenInViewerMessage {
   type: 'OPEN_IN_VIEWER';
 }
 
+/**
+ * popup -> background: is the worker fetching a language pack right now?
+ *
+ * Asked because `Translator.availability()` cannot answer it. It reports
+ * `downloadable` for the entire duration of a download it is itself
+ * performing — measured at 145,687 ms of `create()` with availability never
+ * once saying `downloading` — so a popup that trusts it tells a user whose
+ * pack is 40% of the way in that nothing has been downloaded yet, and offers
+ * them a button to start what is already running. The worker knows.
+ */
+export interface PackProgressMessage {
+  type: 'PACK_PROGRESS';
+}
+
+/**
+ * popup -> background: fetch this pair, and own it.
+ *
+ * The popup used to run the download itself, on the grounds that Chrome's
+ * gate on starting one wants a user gesture and a message to the worker would
+ * throw that gesture away. The gate is real in a document and absent in a
+ * service worker, so the worker can do it — and it is the only context that
+ * should, because closing the popup kills a download running in it.
+ *
+ * That is not a lost minute. Measured: `en`→`fr` interrupted at 85 MB and
+ * asked for again sat at zero for three minutes, then Chrome deleted the 85 MB
+ * and started from the beginning. A user who opens the popup, starts the
+ * download and closes the window has paid for nothing and added three minutes.
+ */
+export interface PackFetchMessage {
+  type: 'PACK_FETCH';
+  /** BCP-47, both. The popup knows the page's language; the worker does not. */
+  source: string;
+  target: string;
+}
+
+/** background -> popup: whether a pack is in flight, and how far in. */
+export interface PackProgressResponse {
+  /** True while the worker's own prefetch is running. */
+  downloading: boolean;
+  /**
+   * 0-1, and coarse: Chrome's monitor fired 479 times for one pair and twice
+   * for another. Zero means "started, nothing reported yet", not "no progress".
+   */
+  loaded: number;
+  /**
+   * Why the last attempt gave up, or null if none has.
+   *
+   * A pack download that has given up is the failure a new install actually
+   * meets, and until this existed the worker met it with a `console.warn`
+   * nobody opens a devtools window on a service worker to read. The popup is
+   * where a user who just installed the thing is already looking.
+   */
+  problem: string | null;
+}
+
 export type RuntimeRequest =
   | EnrichCaptureMessage
   | OpenInViewerMessage
   | TranslateSelectionMessage
   | TranslatePageMessage
   | TranslateInputMessage
+  | PackProgressMessage
+  | PackFetchMessage
   | PageLanguageMessage;
 
 /** background -> content: the parsed enrichment, or null on any failure. */

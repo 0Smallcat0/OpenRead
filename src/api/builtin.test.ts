@@ -14,6 +14,7 @@ import {
   resetTranslatorCache,
   BuiltinUnavailableError,
   DOWNLOAD_STALL_MS,
+  downloadPack,
 } from './builtin';
 
 interface Stub {
@@ -75,6 +76,7 @@ async function collect(params: {
   text: string;
   targetLang: string;
   sourceLang?: string;
+  onDownloadProgress?: (loaded: number) => void;
 }): Promise<string> {
   let out = '';
   await translateBuiltin({ ...params, onChunk: (chunk) => (out += chunk) });
@@ -509,7 +511,95 @@ describe('zh is two scripts wearing one code', () => {
   });
 });
 
+describe('the wait, announced before Chrome announces it', () => {
+  it('reports a download the moment availability says there will be one', async () => {
+    // Measured on a cold profile against the shipped 2.21.1 build: the badge
+    // read "Translating 0/18" for thirty-nine seconds before Chrome's first
+    // `downloadprogress` event arrived to correct it. Nothing was being
+    // translated for any of those thirty-nine seconds. `availability` knew.
+    const global = globalThis as unknown as Record<string, unknown>;
+    let progressAttached = false;
+    global.Translator = {
+      availability: () => Promise.resolve('downloadable'),
+      create: (options: { monitor?: (m: unknown) => void }) => {
+        options.monitor?.({
+          addEventListener: () => {
+            progressAttached = true;
+          },
+        });
+        return Promise.resolve({
+          translate: (input: string) => Promise.resolve(`[zh] ${input}`),
+        });
+      },
+    };
+
+    const seen: number[] = [];
+    await collect({
+      text: 'A paragraph that has to wait for a pack.',
+      targetLang: 'Traditional Chinese',
+      sourceLang: 'en',
+      onDownloadProgress: (loaded: number) => seen.push(loaded),
+    });
+
+    // Zero, not a percentage: the badge renders that as "Downloading language
+    // pack…" with no number, and there is no honest number to give yet.
+    expect(seen[0]).toBe(0);
+    expect(progressAttached).toBe(true);
+  });
+
+  it('says nothing when the pack is already there', async () => {
+    // The common case by far, and a badge that flashes "Downloading language
+    // pack…" over a translation that needs no download is its own small lie.
+    const global = globalThis as unknown as Record<string, unknown>;
+    global.Translator = {
+      availability: () => Promise.resolve('available'),
+      create: () =>
+        Promise.resolve({
+          translate: (input: string) => Promise.resolve(`[zh] ${input}`),
+        }),
+    };
+
+    const seen: number[] = [];
+    await collect({
+      text: 'A paragraph that needs no pack.',
+      targetLang: 'Traditional Chinese',
+      sourceLang: 'en',
+      onDownloadProgress: (loaded: number) => seen.push(loaded),
+    });
+
+    expect(seen).toEqual([]);
+  });
+});
+
 describe('a language-pack download that never moves', () => {
+  it('gives up on the prefetch too, not only on a translation', async () => {
+    // `downloadPack` was the one caller of `Translator.create()` with no
+    // deadline on it. That was survivable while its only user was a button
+    // somebody had just pressed; the worker now starts one unattended at
+    // install, and a stall there is a keepalive timer poking a worker forever
+    // over a download that is not happening. Reproduced against the shipped
+    // 2.21.1 build: a download interrupted at 43% and asked for again in the
+    // same profile sat at 0% for sixteen minutes with 143 GB free.
+    const global = globalThis as unknown as Record<string, unknown>;
+    global.Translator = {
+      availability: () => Promise.resolve('downloadable'),
+      create: () => new Promise(() => undefined),
+    };
+
+    vi.useFakeTimers();
+    try {
+      const run = downloadPack('en', 'zh-Hant');
+      const settled = Promise.all([
+        expect(run).rejects.toThrow(BuiltinUnavailableError),
+        expect(run).rejects.toThrow(/22 GB|metered|on-device-internals/),
+      ]);
+      await vi.advanceTimersByTimeAsync(DOWNLOAD_STALL_MS + 1000);
+      await settled;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('stops waiting and says what to check', async () => {
     // Reported from a fresh install on a fresh Chrome: the badge read
     // "Downloading language pack…" and stayed there. There was no timeout

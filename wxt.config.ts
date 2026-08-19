@@ -14,6 +14,13 @@ export default defineConfig({
     // 45 characters is the manifest limit for `name`; this is 38.
     name: 'OpenRead — Local Bilingual Translation',
     short_name: 'OpenRead',
+    // Chrome 138 is where `Translator` and `LanguageDetector` ship, and the
+    // built-in engine is the default and the entire pitch. Without this the
+    // Web Store happily installs the extension on Chrome 137, where the popup
+    // can do nothing but explain that it cannot work — a one-star review the
+    // store would have prevented for free. It is also what makes the listing's
+    // "Needs Chrome 138 or later" enforced rather than merely written down.
+    minimum_chrome_version: '138',
     // Explicit, because WXT otherwise inherits `description` from package.json,
     // and that one is written for npm (188 chars). The Chrome Web Store rejects
     // an upload whose manifest description exceeds 132 characters, and it

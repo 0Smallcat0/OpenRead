@@ -71,12 +71,34 @@ export interface PopupDeps {
     source: string,
     target: string,
   ) => Promise<PackReport | null>;
-  /** Fetch it. Called from the click, which is what satisfies Chrome's gate. */
-  downloadPack: (
-    source: string,
-    target: string,
-    onProgress: (loaded: number) => void,
-  ) => Promise<void>;
+  /**
+   * Ask the worker to fetch it, and to own it.
+   *
+   * Not fetched here. The popup used to run the download itself, because
+   * Chrome's gate on starting one wants a user gesture in a document and a
+   * message to the worker throws that gesture away — but the gate does not
+   * apply in a service worker, and the popup is the worst place in the
+   * extension to hold a download: it closes when the user looks away.
+   *
+   * That is not a lost minute. Measured: a pack interrupted at 85 MB and asked
+   * for again sat at zero for three minutes, then Chrome deleted the 85 MB and
+   * began from the beginning.
+   */
+  requestPack: (source: string, target: string) => Promise<void>;
+  /**
+   * Is the worker already fetching one, and how far in?
+   *
+   * `packAvailability` cannot answer this — it reports `downloadable` for the
+   * whole duration of a download it is itself performing — so without asking
+   * the worker, a popup opened two minutes after install tells the user
+   * nothing has been downloaded and offers a button to start what is already
+   * running.
+   */
+  packProgress: () => Promise<{
+    downloading: boolean;
+    loaded: number;
+    problem: string | null;
+  } | null>;
 }
 
 interface Elements {
@@ -305,6 +327,47 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
   let pageLang = 'en';
   /** Rising, so a slow availability check cannot overwrite a newer one. */
   let packGeneration = 0;
+  /** Stops the follow below from outliving the thing it is following. */
+  let packFollow: ReturnType<typeof setInterval> | undefined;
+
+  /**
+   * Re-read the worker until the pack is there.
+   *
+   * The download belongs to the worker now, so this window has nothing to
+   * await. Without a poll the note set at the click would be the last thing
+   * this popup ever said, and a reader who keeps it open would watch
+   * "downloading" forever and never see it land. `renderPack` already knows
+   * how to say both things; it just has to be asked again.
+   *
+   * Two seconds, and it stops itself after fifteen minutes — long enough for
+   * 350 MB on a connection this extension is usable on, and short enough that
+   * a popup left open on a dead download is not a timer running for the life
+   * of the browser.
+   */
+  const stopFollowing = (): void => {
+    if (packFollow !== undefined) clearInterval(packFollow);
+    packFollow = undefined;
+  };
+
+  const followPack = (): void => {
+    // Already following. Restarting would only push the deadline out on every
+    // re-render, which is how a poll outlives the window it belongs to.
+    if (packFollow !== undefined) return;
+    const until = Date.now() + 900_000;
+    packFollow = setInterval(() => {
+      if (Date.now() > until) {
+        stopFollowing();
+        return;
+      }
+      void deps.packAvailability(pageLang, toBcp47(el.lang.value) ?? '').then(
+        (state) => {
+          if (state === 'available' || state === 'unavailable') stopFollowing();
+          renderPack();
+        },
+        () => undefined,
+      );
+    }, 2000);
+  };
   /** Whether stored settings have reached the form yet. */
   let settingsLoaded = false;
 
@@ -345,7 +408,7 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
       hidePack();
       return;
     }
-    void deps.packAvailability(pageLang, target).then((availability) => {
+    void deps.packAvailability(pageLang, target).then(async (availability) => {
       if (mine !== packGeneration) return;
       const pair = `${pageLang} → ${target}`;
       el.downloadPack?.setAttribute('hidden', '');
@@ -354,16 +417,60 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
           setPackNote(`Ready to translate ${pair} instantly.`, 'ready');
           break;
         case 'downloading':
-          setPackNote(`Downloading the ${pair} model…`);
-          break;
-        case 'downloadable':
           setPackNote(
-            `Chrome has not downloaded the ${pair} model yet. The first ` +
-              `translation will wait a minute or two for it.`,
+            `Downloading the ${pair} model — about 350 MB, once. ` +
+              `Translation works the moment it lands.`,
+          );
+          break;
+        case 'downloadable': {
+          // `downloadable` is also what Chrome says while it is downloading —
+          // measured at 145,687 ms of `create()` with availability never once
+          // saying `downloading` — so the worker is the only thing that knows
+          // whether the install-time fetch is already running. Without asking
+          // it, this branch tells a user whose pack is 40% in that nothing has
+          // been downloaded, and offers a button to start what is running.
+          const inFlight = await deps.packProgress().catch(() => null);
+          if (mine !== packGeneration) return;
+          if (inFlight?.downloading) {
+            // However this window arrived at "a download is running" — its own
+            // button, a language switch that started one, or simply being
+            // opened during the install-time fetch — the note has to keep
+            // moving. Rendered once and left alone, it says "downloading"
+            // forever, including long after the pack has landed. Caught by
+            // `e2e:page`, which switches target language and then waits for
+            // the banner to say Ready.
+            followPack();
+            const percent = Math.round(inFlight.loaded * 100);
+            setPackNote(
+              percent > 0
+                ? `Downloading the ${pair} model, ${String(percent)}% of ` +
+                    `about 350 MB. Translation works the moment it lands.`
+                : `Downloading the ${pair} model — about 350 MB, once. ` +
+                    `Translation works the moment it lands.`,
+            );
+            break;
+          }
+          // A stall is the failure a new install actually meets, and the
+          // message names the three things worth checking — free disk, a
+          // metered connection, chrome://on-device-internals. Offering the
+          // button again is right: it is the one thing a user can do about it.
+          if (inFlight?.problem) {
+            setPackNote(inFlight.problem, 'warn');
+            el.downloadPack?.removeAttribute('hidden');
+            break;
+          }
+          // A size rather than a duration. "A minute or two" is right on a
+          // fast connection — 352 MB in 82 seconds, measured — and wrong by an
+          // order of magnitude on a slow one, and the reader knows which they
+          // have far better than this does.
+          setPackNote(
+            `Chrome has not downloaded the ${pair} model yet — about 350 MB, ` +
+              `once. Start it now rather than meeting it mid-sentence.`,
             'warn',
           );
           el.downloadPack?.removeAttribute('hidden');
           break;
+        }
         case 'unavailable':
           setPackNote(
             `Chrome cannot translate ${pair}. Switch to Ollama for this pair.`,
@@ -565,34 +672,28 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     if (!target) return;
     const source = pageLang;
     el.downloadPack?.setAttribute('hidden', '');
-    // No percentage in the first message on purpose. The monitor's granularity
-    // is not something a caller can rely on — measured at 479 events for one
-    // pair and exactly two, 0 then 1, for another that took 81 seconds — so a
-    // readout that opens at "0%" would sit there looking stuck for most of the
-    // download. A number appears only once one has actually moved.
+    // "You can close this" rather than "keep this open", which is the whole
+    // point of handing it to the worker: a download this window was holding
+    // died with the window, and dying costs the entire partial download plus
+    // the three minutes Chrome waits before starting over.
     setPackNote(
-      `Downloading the ${source} → ${target} model. This takes a minute or two, ` +
-        `once — keep this popup open until it finishes.`,
+      `Downloading the ${source} → ${target} model — about 350 MB, once. ` +
+        `You can close this window; it carries on without it.`,
     );
-    void deps
-      .downloadPack(source, target, (loaded) => {
-        const percent = Math.round(loaded * 100);
-        if (percent > 0 && percent < 100) {
-          setPackNote(
-            `Downloading the ${source} → ${target} model — ${String(percent)}%`,
-          );
-        }
-      })
-      .then(
-        () => {
-          renderPack();
-        },
-        (error: unknown) => {
-          const reason = error instanceof Error ? error.message : String(error);
-          setPackNote(`Could not download it — ${reason}`, 'warn');
-          el.downloadPack?.removeAttribute('hidden');
-        },
-      );
+    void deps.requestPack(source, target).then(
+      () => {
+        // The worker owns the download; this window only reports on it. Left
+        // at that, the note just set would be the last thing this popup ever
+        // said — a reader who keeps it open would watch "downloading" forever
+        // and never see it land.
+        followPack();
+      },
+      (error: unknown) => {
+        const reason = error instanceof Error ? error.message : String(error);
+        setPackNote(`Could not start the download — ${reason}`, 'warn');
+        el.downloadPack?.removeAttribute('hidden');
+      },
+    );
   });
 
   el.auto.addEventListener('change', () => {

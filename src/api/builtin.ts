@@ -275,9 +275,13 @@ export type PackReport = PackAvailability | 'no-api';
  * waited. Found by `e2e:first-run` with the API disabled.
  *
  * Exists so the popup can say so *before* the first translation rather than
- * after it. The download is once per pair per profile and takes 30 s to two
- * minutes; met on a first press it is indistinguishable from the extension
- * being broken, and it is the longest wait anywhere in this product.
+ * after it. The download is once per pair per profile and it is by a wide
+ * margin the longest wait anywhere in this product: 352 MB, measured at 82
+ * seconds on a 4 MB/s connection when nothing interrupts it — and at 436
+ * seconds when something does, because Chrome does not resume. Met on a first
+ * press even the good case is indistinguishable from the extension being
+ * broken, which is why the worker starts it at install time instead
+ * (`ensurePack` in the background entrypoint).
  */
 export async function packAvailability(
   sourceLanguage: string,
@@ -312,11 +316,24 @@ export async function packAvailability(
  * events for `en`→`zh-Hant` and exactly two — 0 then 1 — for `en`→`ko`, which
  * took 81 s. A caller that renders a percentage will sometimes render 0% for a
  * minute and a half, so it needs to say something that stays true either way.
+ *
+ * Watchdogged on the same terms as the translation path. This was the one
+ * caller of `Translator.create()` with no deadline on it at all, which was
+ * survivable while its only user was a button somebody had just pressed and is
+ * not now that the worker starts one unattended at install.
+ *
+ * `stallMs` because the right deadline depends on who is waiting. Three
+ * minutes is right for a reader watching a badge that has stopped moving. It
+ * is wrong for the worker's own fetch: Chrome's recovery from an interrupted
+ * download is itself about three minutes of total silence — measured, followed
+ * by it deleting the 85 MB it had and starting again — so a three-minute fuse
+ * there reports a restart as a failure. See `PACK_STALL_MS`.
  */
 export async function downloadPack(
   sourceLanguage: string,
   targetLanguage: string,
   onProgress?: (loaded: number) => void,
+  stallMs: number = DOWNLOAD_STALL_MS,
 ): Promise<void> {
   const translators = factory();
   if (!translators) throw new BuiltinUnavailableError('No built-in translator');
@@ -324,17 +341,21 @@ export async function downloadPack(
   if (!source) {
     throw new BuiltinUnavailableError(`Not a language code: ${sourceLanguage}`);
   }
-  const translator = await translators.create({
-    sourceLanguage: source,
-    targetLanguage,
-    monitor: onProgress
-      ? (monitor) => {
-          monitor.addEventListener('downloadprogress', (event) => {
-            onProgress(event.loaded);
-          });
-        }
-      : undefined,
-  });
+  const watchdog = stallWatchdog(stallMs);
+  const translator = await watchdog.guard(
+    translators.create({
+      sourceLanguage: source,
+      targetLanguage,
+      // Attached whether or not the caller wants a percentage: the watchdog
+      // measures silence, and it can only hear it through this.
+      monitor: (monitor) => {
+        monitor.addEventListener('downloadprogress', (event) => {
+          watchdog.progress();
+          onProgress?.(event.loaded);
+        });
+      },
+    }),
+  );
   // Not kept. The pack is what this was for, and it is browser-wide; the
   // instance belongs to whichever context translates next.
   translator.destroy?.();
@@ -394,6 +415,23 @@ function untilAborted<T>(
  * mistaken for a dead one.
  */
 export const DOWNLOAD_STALL_MS = 180_000;
+
+/**
+ * The same deadline, for a download nobody is watching.
+ *
+ * Three minutes is right when a reader is sitting in front of a badge that has
+ * stopped moving: they need to be told. It is wrong for the worker's own
+ * fetch, where giving up buys nothing — no one is waiting, the only cost of
+ * waiting longer is a timer, and the cost of giving up early is a false alarm
+ * on the toolbar over a download that was fine.
+ *
+ * Ten minutes because Chrome's own recovery fits inside it. Measured on a
+ * download interrupted at 85 MB and asked for again: nothing at all happened
+ * for about three minutes, then Chrome deleted the 85 MB and began again from
+ * zero — and the progress monitor said nothing for the whole of that. A fuse
+ * shorter than one of those cycles reports a stall that is really a restart.
+ */
+export const PACK_STALL_MS = 600_000;
 
 /** What the reader is told when it has not moved. */
 export const STALLED_MESSAGE =
@@ -546,6 +584,24 @@ export async function translateBuiltin({
       `Chrome has no ${sourceLanguage} → ${targetLanguage} language pack.`,
     );
   }
+
+  /**
+   * Say a download is coming before it says anything for itself.
+   *
+   * `availability` has just answered, and it is the earliest moment anyone can
+   * know. Chrome's first `downloadprogress` event is not: measured on a cold
+   * profile against the shipped 2.21.1 build, the badge read "Translating
+   * 0/18" for thirty-nine seconds before the first event arrived and changed
+   * it to "Downloading language pack…". Thirty-nine seconds of a counter that
+   * does not move, while the extension claims to be working, is the exact
+   * shape of "this is broken" — and it was a lie besides, since nothing was
+   * being translated.
+   *
+   * Zero rather than a percentage, which is what the badge already renders as
+   * "Downloading language pack…" with no number, because there is no honest
+   * number yet.
+   */
+  if (availability !== 'available') onDownloadProgress?.(0);
 
   // Attached whether or not anyone asked for progress: the caller's callback is
   // optional, and the watchdog below is not. A translation started without a
