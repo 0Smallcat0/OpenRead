@@ -35,6 +35,7 @@ import {
   type RuntimeRequest,
   type EnrichCaptureResponse,
   type PackProgressResponse,
+  type PageLanguageResponse,
   type StreamResponse,
 } from '../messaging';
 
@@ -106,8 +107,18 @@ export default defineBackground(() => {
   }
 
   // Auto-redirect PDF navigations into the vendored PDF.js viewer, and EPUB
-  // navigations into the reader.
+  // navigations into the reader. And, once the document is parsed and its
+  // content script is there to be asked, start the language pack this page
+  // will need — see `prefetchForPage`.
+  //
+  // One listener for both, rather than two: the routing has to see `loading`
+  // and the pack has to see `complete`, but they are the same event and the
+  // second `addListener` was one more thing to remember when reading this.
   chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'complete') {
+      prefetchForPage(tabId, tab.url);
+      return;
+    }
     if (changeInfo.status !== 'loading' || !tab.url) return;
     void routeToViewer(tabId, tab.url);
     void routeToReader(tabId, tab.url).catch(() => undefined);
@@ -388,6 +399,65 @@ export default defineBackground(() => {
       packPrefetching = false;
       release();
     }
+  }
+
+  /**
+   * Pairs this worker has already offered to fetch.
+   *
+   * A page load is a cheap event and there are a lot of them; without this,
+   * every one of them would ask Chrome about availability again for a pair
+   * that was answered on the first.
+   */
+  const packsAsked = new Set<string>();
+
+  /** `zh-Hant` and `zh-TW` are the same language for "is this worth a pack?". */
+  const baseOf = (code: string): string =>
+    code.split('-')[0]?.toLowerCase() ?? code;
+
+  /**
+   * Start a page's pack when the page opens, not when the reader presses.
+   *
+   * The install-time fetch can only guess one pair — English into whatever the
+   * settings say — because a source language is not knowable before there is a
+   * page. Everything else used to be met the hard way: open a Japanese
+   * article, press translate, and wait out a download that had not started.
+   *
+   * Fetching all 39 target languages at install instead was measured and
+   * rejected: each additional language costs about 130 MB of its own (`en`→
+   * `fr` +131.7 MB, `en`→`de` +133.4 MB, `en`→`ar` +127.8 MB, on a profile
+   * that already held two), so the full set is roughly five gigabytes. This
+   * extension exists because the alternative to it is a server and a
+   * five-gigabyte model; shipping one at install would be the joke told about
+   * us. A page actually opened is the honest signal, and it costs 130 MB per
+   * language somebody genuinely reads.
+   *
+   * Quiet and best-effort. A page with no content script, a `chrome://` page,
+   * a page that declares no language: all of them simply produce nothing.
+   */
+  function prefetchForPage(tabId: number, url: string | undefined): void {
+    if (!url || !/^https?:/i.test(url)) return;
+    void (async () => {
+      const { engine, targetLang } = await loadSettings();
+      if (engine !== 'builtin') return;
+      const target = toBcp47(targetLang);
+      if (!target) return;
+      // One download at a time. A second one started underneath the first
+      // shares the connection and finishes later than either would alone, and
+      // the pair is not marked as asked, so the next page in it tries again.
+      if (packPrefetching) return;
+      const reply = (await chrome.tabs
+        .sendMessage(tabId, { type: 'PAGE_LANGUAGE' })
+        .catch(() => null)) as PageLanguageResponse | null;
+      const source = reply?.lang?.trim();
+      if (!source) return;
+      // A page already in the target language is never translated, so there is
+      // nothing here worth 130 MB.
+      if (baseOf(source) === baseOf(target)) return;
+      const key = `${source}->${target}`;
+      if (packsAsked.has(key)) return;
+      packsAsked.add(key);
+      await ensurePack(source, target);
+    })();
   }
 
   /** The pair the settings imply, for the install-time fetch. */

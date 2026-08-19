@@ -540,6 +540,107 @@ describe('the language pack, fetched before it is wanted', () => {
     });
   });
 
+  it('starts the pack for a page as it opens, not when the reader presses', async () => {
+    // The install-time fetch can only guess one pair, because a source
+    // language is not knowable before there is a page. Everything else used to
+    // be met the hard way: open a Japanese article, press translate, wait out
+    // a download that had not started.
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    mocks.packAvailability.mockResolvedValue('downloadable');
+    tabsSendMessage.mockResolvedValue({ lang: 'ja' });
+
+    registered.onUpdated(
+      9,
+      { status: 'complete' },
+      {
+        url: 'https://example.jp/article',
+      },
+    );
+    await drain();
+
+    expect(tabsSendMessage).toHaveBeenCalledWith(9, { type: 'PAGE_LANGUAGE' });
+    expect(mocks.downloadPack).toHaveBeenCalledWith(
+      'ja',
+      'zh-Hant',
+      expect.any(Function),
+      expect.any(Number),
+    );
+  });
+
+  it('asks about a pair once, however many pages arrive in it', async () => {
+    // A page load is a cheap event and there are a lot of them.
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    mocks.packAvailability.mockResolvedValue('available');
+    tabsSendMessage.mockResolvedValue({ lang: 'ja' });
+
+    for (const id of [1, 2, 3]) {
+      registered.onUpdated(
+        id,
+        { status: 'complete' },
+        {
+          url: 'https://example.jp/article',
+        },
+      );
+      await drain();
+    }
+
+    expect(mocks.packAvailability).toHaveBeenCalledTimes(1);
+  });
+
+  it('spends nothing on a page already in the target language', async () => {
+    // 130 MB is what one of these costs. A page that will never be translated
+    // is not worth any of it.
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    mocks.packAvailability.mockResolvedValue('downloadable');
+    tabsSendMessage.mockResolvedValue({ lang: 'zh-TW' });
+
+    registered.onUpdated(
+      9,
+      { status: 'complete' },
+      {
+        url: 'https://example.tw/article',
+      },
+    );
+    await drain();
+
+    expect(mocks.packAvailability).not.toHaveBeenCalled();
+    expect(mocks.downloadPack).not.toHaveBeenCalled();
+  });
+
+  it('ignores a page that will not say what language it is in', async () => {
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+    tabsSendMessage.mockResolvedValue({ lang: null });
+
+    registered.onUpdated(
+      9,
+      { status: 'complete' },
+      {
+        url: 'https://example.com/article',
+      },
+    );
+    await drain();
+
+    expect(mocks.downloadPack).not.toHaveBeenCalled();
+  });
+
+  it('leaves a chrome:// page alone', async () => {
+    // No content script to ask, and asking is a message that rejects.
+    mocks.loadSettings.mockResolvedValue(BUILTIN);
+
+    registered.onUpdated(
+      9,
+      { status: 'complete' },
+      {
+        url: 'chrome://extensions',
+      },
+    );
+    await drain();
+
+    expect(tabsSendMessage).not.toHaveBeenCalledWith(9, {
+      type: 'PAGE_LANGUAGE',
+    });
+  });
+
   it('answers the popup asking it to take a download', async () => {
     // Not politeness: `chrome.runtime.sendMessage` rejects with "Could not
     // establish connection. Receiving end does not exist." when a listener

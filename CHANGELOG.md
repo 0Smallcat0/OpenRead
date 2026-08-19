@@ -18,6 +18,34 @@ Bilingual Translation`, 38 of the 45 characters a manifest name may have.
   `short_name` keeps `OpenRead` for the toolbar tooltip and the extensions list,
   where a tagline is only something to truncate.
 
+## [2.23.0] - 2026-08-20
+
+### Added
+
+- **A page in a language you have no pack for starts fetching it as it
+  loads.** The install-time fetch can only guess one pair — English into
+  whatever the settings say — because a source language is not knowable before
+  there is a page. Everything else was still met the hard way: open a Japanese
+  article, press translate, wait out a download that had not started. Now the
+  worker asks each page what language it is in as it finishes loading, and
+  starts the pack then. By the time a reader has finished the first paragraph
+  and reached for the button, it is on its way or already there.
+
+  Fetching all 39 target languages at install was measured first, and rejected.
+  Each additional language costs about 130 MB of its own — `en`→`fr` +131.7 MB,
+  `en`→`de` +133.4 MB, `en`→`ar` +127.8 MB, on a profile that already held two
+  — so the full set is roughly five gigabytes. This extension exists because
+  the alternative to it is a server and a five-gigabyte model; shipping one at
+  install would be the joke told about us. A page actually opened costs 130 MB
+  per language somebody genuinely reads, and nothing for the other 37.
+
+  Asked once per pair per worker, skipped for a page already in the target
+  language, and skipped while another pack is downloading — two at once share
+  one connection and both finish later than either would alone.
+
+  `pnpm e2e:page-pack` opens a Japanese article on a profile that has never
+  seen one and weighs the profile.
+
 ## [2.22.0] - 2026-08-20
 
 ### Fixed

@@ -221,7 +221,7 @@ all, since that is the easy way to send nothing and prove nothing.
 ```bash
 pnpm install
 pnpm build        # -> .output/chrome-mv3, load it unpacked
-pnpm test         # 772 unit tests
+pnpm test         # 780 unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
 pnpm eval:builtin # score the default engine in a real Chrome -> eval/BUILTIN-RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)
@@ -232,6 +232,7 @@ pnpm e2e:egress   # prove the default engine sends nothing, in a real Chrome
 pnpm e2e:epub     # a real .epub opened, read and translated in a real Chrome
 pnpm e2e:first-run # what a brand-new install does on a brand-new profile
 pnpm e2e:prefetch  # prove installing it starts the language-pack download
+pnpm e2e:page-pack # prove opening a foreign page starts its pack too
 pnpm e2e:selection # select text, click the 文 icon, read what comes back
 ```
 
