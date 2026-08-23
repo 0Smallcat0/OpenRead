@@ -18,6 +18,40 @@ Bilingual Translation`, 38 of the 45 characters a manifest name may have.
   `short_name` keeps `OpenRead` for the toolbar tooltip and the extensions list,
   where a tagline is only something to truncate.
 
+## [Unreleased]
+
+### Fixed
+
+- **`e2e:page` no longer fails a healthy build over somebody's connection.**
+  The language-pack phase waited seven minutes for the banner to say "Ready"
+  and failed if it did not. Seven minutes is a guess about a network, and a
+  guess is not something to fail a build over: a second 350 MB pack after a
+  fresh one genuinely took longer than that here — and then finished on its
+  own, after the harness had closed the browser, with `availability` answering
+  `available` afterwards. Nothing was wrong except the deadline.
+
+  It now asserts the thing the phase is actually about — **is this pack
+  arriving without anybody pressing anything** — by weighing the profile.
+  Ready passes; still downloading with megabytes landing on disk passes and
+  says it was a slow connection; a banner claiming a download while the disk
+  stays flat fails, because that is the shape of a download that is not really
+  running. Chrome's own progress monitor cannot tell those apart: it reported
+  0% for 51 seconds while 222 MB landed, and reports the same 0% for a
+  download that has stopped.
+
+  The eighth time an assertion in this repo turned out to be measuring
+  something other than what it was named for.
+
+- **`e2e:page` no longer asserts undo against a press that meant Stop.** The
+  toggle has three meanings, not two: pressing during a run is Stop, and
+  stopping deliberately leaves what already landed — a reader who presses Stop
+  has said "no more", not "take back what I have read". The PDF phase pressed
+  once after a run that had not finished (a language pack downloading
+  underneath it will do that), got Stop, and failed the build over the product
+  behaving exactly as designed. It now checks whether the run finished and
+  presses the extra time that state costs, saying so in the output. The ninth
+  one.
+
 ## [2.23.0] - 2026-08-20
 
 ### Added
