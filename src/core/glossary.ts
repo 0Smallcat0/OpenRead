@@ -67,6 +67,9 @@ export const MAX_TOKENS = 50;
 /** Whitespace tolerated inside a token: Arabic respaced other shapes. */
 const TOKEN_PATTERN = /\[\[\s*(\d+)\s*\]\]/g;
 
+/** The same, captured whole, so `split` keeps tokens at the odd indices. */
+const TOKEN_SPLIT = /(\[\[\s*\d+\s*\]\])/;
+
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -121,7 +124,14 @@ export function serializeGlossary(entries: readonly GlossaryEntry[]): string {
  * assertion there would match nothing at all — 資料庫 has no word edge in
  * 建立資料庫時 and is still the term.
  */
-const needsBoundary = (side: string): boolean => /[A-Za-z0-9]/.test(side);
+const needsBoundary = (side: string): boolean =>
+  // Every script that separates its words with spaces, not only ASCII: tested
+  // on `[A-Za-z0-9]` alone, `кот` fired inside `который` and `résumé` inside
+  // `résuméstyle`. What is excluded is the scripts written without spaces.
+  /[\p{L}\p{N}]/u.test(side) &&
+  !/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}\p{Script=Tibetan}]/u.test(
+    side,
+  );
 
 function matcher(term: string): RegExp {
   const body = escapeRegExp(term);
@@ -173,16 +183,27 @@ export function protectTerms(
   const byLength = [...entries].sort((a, b) => b.term.length - a.term.length);
   for (const entry of byLength) {
     if (values.length >= MAX_TOKENS) break;
-    out = out.replace(matcher(entry.term), (match) => {
-      if (values.length >= MAX_TOKENS) return match;
-      const index = claim();
-      // An entry with no replacement keeps the glossary's own spelling rather
-      // than the page's: a list that says `OpenRead` is a statement about how
-      // the name is written, and a page that wrote `openread` was wrong.
-      values.push(entry.as || entry.term);
-      indices.push(index);
-      return tokenFor(index);
-    });
+    // Only between the placeholders already issued, never inside one: a term
+    // `0` matched the 0 in `[[0]]` and produced `[[[[1]]]]`, which can never
+    // be restored, so the glossary silently did nothing for that block.
+    out = out
+      .split(TOKEN_SPLIT)
+      .map((part, i) =>
+        i % 2 === 1
+          ? part
+          : part.replace(matcher(entry.term), (match) => {
+              if (values.length >= MAX_TOKENS) return match;
+              const index = claim();
+              // An entry with no replacement keeps the glossary's own
+              // spelling rather than the page's: a list that says `OpenRead`
+              // is a statement about how the name is written, and a page that
+              // wrote `openread` was wrong.
+              values.push(entry.as || entry.term);
+              indices.push(index);
+              return tokenFor(index);
+            }),
+      )
+      .join('');
   }
   return { text: out, values, indices };
 }

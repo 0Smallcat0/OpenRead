@@ -167,4 +167,29 @@ describe('mountHoverTranslate', () => {
     await point(document.getElementById('a'));
     expect(asked).toEqual([]);
   });
+
+  it('swallows a settings read that fails, rather than once per mouse move', async () => {
+    // After the extension reloads, the scripts left in open tabs throw
+    // "Extension context invalidated" on every storage read — and this read
+    // runs on every mousemove, each one an unhandled rejection in the page.
+    unmount?.();
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      unmount = mountHoverTranslate(document, {
+        getKey: () =>
+          Promise.reject(new Error('Extension context invalidated.')),
+        translateBlock: () => Promise.resolve(true),
+      });
+      await point(document.getElementById('a'));
+      await point(document.getElementById('b'));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
 });

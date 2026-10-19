@@ -28,7 +28,7 @@ import {
 /** Where every EPUB says to start looking. Fixed by the specification. */
 const CONTAINER_PATH = 'META-INF/container.xml';
 
-/** Present when a book's resources are encrypted — that is, when it has DRM. */
+/** Where a book records what it encrypts: DRM, or only its fonts (see `isCopyProtected`). */
 const ENCRYPTION_PATH = 'META-INF/encryption.xml';
 
 /** The media type of an EPUB 2 navigation document. */
@@ -119,6 +119,43 @@ function parseXml(xml: string, what: string): Document {
  */
 function byName(root: Document | Element, name: string): Element[] {
   return Array.from(root.getElementsByTagNameNS('*', name));
+}
+
+/**
+ * Font obfuscation, which is not DRM.
+ *
+ * It scrambles an embedded font so it cannot be lifted out of the book, and
+ * it is recorded in the same `encryption.xml` that DRM uses — but every
+ * chapter is plain XHTML. Calibre, Sigil and plenty of DRM-free shops write
+ * it, and treating the file's presence as proof of DRM refused every one of
+ * those books. This reader does not use the book's fonts, so the scrambled
+ * ones cost nothing.
+ */
+const FONT_OBFUSCATION = new Set([
+  'http://www.idpf.org/2008/embedding',
+  'http://ns.adobe.com/pdf/enc#RC',
+]);
+
+/**
+ * Whether `encryption.xml` encrypts anything but fonts.
+ *
+ * Refuses on anything it cannot read, and on any entry it does not recognise:
+ * a book wrongly refused says why, while a book wrongly opened is a page of
+ * ciphertext with nothing to say why.
+ */
+export function isCopyProtected(encryptionXml: string): boolean {
+  let doc: Document;
+  try {
+    doc = parseXml(encryptionXml, 'encryption.xml');
+  } catch {
+    return true;
+  }
+  return byName(doc, 'EncryptedData').some((entry) => {
+    const algorithm = byName(entry, 'EncryptionMethod')[0]?.getAttribute(
+      'Algorithm',
+    );
+    return !algorithm || !FONT_OBFUSCATION.has(algorithm.trim());
+  });
 }
 
 /** Whether an href points somewhere other than inside this archive. */
@@ -366,7 +403,10 @@ export async function openEpub(bytes: Uint8Array): Promise<OpenBook> {
   // so every check below passes and the reader renders a page of mojibake with
   // nothing to say why. Books bought from most shops are like this. Saying so
   // is the whole of what can be done about it: the key is not in the file.
-  if (files.has(ENCRYPTION_PATH)) {
+  if (
+    files.has(ENCRYPTION_PATH) &&
+    isCopyProtected(await readText(ENCRYPTION_PATH))
+  ) {
     throw new EpubError(
       'This EPUB is copy-protected (DRM), so its text cannot be read by ' +
         'anything but the shop that sold it. A DRM-free EPUB will open here.',

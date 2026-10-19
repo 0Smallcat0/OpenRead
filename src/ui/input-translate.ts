@@ -15,7 +15,8 @@
  */
 
 /** Fields worth offering. */
-const EDITABLE = 'input, textarea, [contenteditable=""], [contenteditable="true"]';
+const EDITABLE =
+  'input, textarea, [contenteditable=""], [contenteditable="true"]';
 
 /**
  * Types where the text is a value rather than prose. A password is not to be
@@ -65,15 +66,22 @@ export function activeField(doc: Document): InputTarget | null {
   while (element?.shadowRoot?.activeElement) {
     element = element.shadowRoot.activeElement;
   }
-  if (!element || !(element instanceof (doc.defaultView?.HTMLElement ?? HTMLElement))) {
+  if (
+    !element ||
+    !(element instanceof (doc.defaultView?.HTMLElement ?? HTMLElement))
+  ) {
     return null;
   }
   if (!element.matches(EDITABLE)) return null;
-  if (element instanceof (doc.defaultView?.HTMLInputElement ?? HTMLInputElement)) {
+  if (
+    element instanceof (doc.defaultView?.HTMLInputElement ?? HTMLInputElement)
+  ) {
     if (NOT_PROSE.has(element.type.toLowerCase())) return null;
   }
-  if ('readOnly' in element && (element as HTMLInputElement).readOnly) return null;
-  if ('disabled' in element && (element as HTMLInputElement).disabled) return null;
+  if ('readOnly' in element && (element as HTMLInputElement).readOnly)
+    return null;
+  if ('disabled' in element && (element as HTMLInputElement).disabled)
+    return null;
   return element;
 }
 
@@ -134,7 +142,16 @@ export async function translateActiveInput(
 ): Promise<'no-field' | 'empty' | 'failed' | 'done'> {
   const field = activeField(doc);
   if (!field) {
-    deps.notify?.('Click into a text box first, then press the shortcut.');
+    // The shortcut and the context menu reach every frame, and only one of
+    // them holds the box. Said once, by the top frame, and not even there when
+    // its focus is an <iframe> — the box is inside it, being translated, and
+    // a "click into a text box" over it is simply wrong.
+    const view = doc.defaultView;
+    const topFrame = view !== null && view === view.top;
+    const tag = doc.activeElement?.tagName;
+    if (topFrame && tag !== 'IFRAME' && tag !== 'FRAME') {
+      deps.notify?.('Click into a text box first, then press the shortcut.');
+    }
     return 'no-field';
   }
   const source = fieldText(field).trim();
@@ -153,6 +170,14 @@ export async function translateActiveInput(
     // box they have left is worse than not writing at all.
     if (activeField(doc) !== field) {
       deps.notify?.('You moved out of the box, so nothing was changed.');
+      return 'failed';
+    }
+    // And what is in it now is what was sent. Anything typed during the round
+    // trip was not translated, and replacing the box would throw it away.
+    if (fieldText(field).trim() !== source) {
+      deps.notify?.(
+        'The text changed while it was being translated, so nothing was replaced.',
+      );
       return 'failed';
     }
     if (!replaceFieldText(field, translated)) {

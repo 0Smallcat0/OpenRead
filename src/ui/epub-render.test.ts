@@ -222,3 +222,27 @@ describe('mediaTypeFor', () => {
     expect(mediaTypeFor('weird.xyz')).toBe('application/octet-stream');
   });
 });
+
+describe('renderChapter: requests that do not look like a src', () => {
+  it('fetches nothing for a table background, an escaped url() or an image-set()', async () => {
+    const { html } = await render(
+      '<table background="https://t.example/a.gif"><tr><td background="https://t.example/b.gif">x</td></tr></table>' +
+        '<p style="color: red; background: u\\72l(https://t.example/c.gif)">y</p>' +
+        '<p style="background-image: image-set(\'https://t.example/d.gif\' 1x)">z</p>',
+    );
+    expect(html).not.toContain('t.example');
+    // What else the style said is still there.
+    expect(html).toContain('color: red');
+  });
+
+  it('fetches nothing through SVG filters or animation', async () => {
+    const { html } = await render(
+      '<svg xmlns="http://www.w3.org/2000/svg"><filter id="f"><feImage href="https://t.example/e.png"/></filter>' +
+        '<image href="pic.png"><set attributeName="href" to="https://t.example/f.png"/></image>' +
+        '<use href="https://t.example/g.svg#x"/>' +
+        '<animate attributeName="href" values="https://t.example/h.png"/></svg>',
+      { 'OEBPS/text/pic.png': 'PNG' },
+    );
+    expect(html).not.toContain('t.example');
+  });
+});

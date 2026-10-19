@@ -215,35 +215,86 @@ const MIN_DETECTION_CONFIDENCE = 0.2;
  */
 const translatorCache = new Map<string, Promise<TranslatorInstance>>();
 
+/**
+ * Who is waiting on each pair's create while it is still pending.
+ *
+ * Chrome takes one `monitor` per `create()`, and the create is shared — so
+ * only the request that started it used to hear its progress. Everyone who
+ * joined later waited on the same download in silence: their badge stayed at
+ * "Downloading…" with no number, and their stall watchdog, hearing nothing,
+ * declared a download that was moving to have "not moved for three minutes".
+ * A second tab in the same language, or the tab that started the download
+ * being closed, was enough. So the one monitor is fanned out to every waiter.
+ */
+const progressListeners = new Map<string, Set<(loaded: number) => void>>();
+
 function pairKey(sourceLanguage: string, targetLanguage: string): string {
   return `${sourceLanguage}->${targetLanguage}`;
 }
 
+/**
+ * The shared translator for a pair, with `onProgress` hearing its download.
+ *
+ * Returns the promise and a function that stops `onProgress` hearing it, for
+ * when the caller has stopped waiting.
+ */
 function sharedTranslator(
   translators: TranslatorFactory,
   sourceLanguage: string,
   targetLanguage: string,
-  monitor: ((monitor: DownloadMonitor) => void) | undefined,
-): Promise<TranslatorInstance> {
+  onProgress: (loaded: number) => void,
+): { translator: Promise<TranslatorInstance>; unsubscribe: () => void } {
   const key = pairKey(sourceLanguage, targetLanguage);
   const existing = translatorCache.get(key);
-  if (existing) return existing;
+  const listeners = progressListeners.get(key);
+  // A settled create has no download left to report, so no listener set.
+  if (existing) {
+    listeners?.add(onProgress);
+    return {
+      translator: existing,
+      unsubscribe: () => listeners?.delete(onProgress),
+    };
+  }
 
+  const waiting = new Set([onProgress]);
+  progressListeners.set(key, waiting);
+  const forget = (): void => {
+    if (progressListeners.get(key) === waiting) progressListeners.delete(key);
+  };
   const created = translators
-    .create({ sourceLanguage, targetLanguage, monitor })
-    .catch((error: unknown) => {
-      // A failed create must not be remembered, or one bad moment poisons the
-      // pair for the life of the worker.
-      translatorCache.delete(key);
-      throw error;
-    });
+    .create({
+      sourceLanguage,
+      targetLanguage,
+      monitor: (monitor) => {
+        monitor.addEventListener('downloadprogress', (event) => {
+          for (const listener of [...waiting]) listener(event.loaded);
+        });
+      },
+    })
+    .then(
+      (instance) => {
+        forget();
+        return instance;
+      },
+      (error: unknown) => {
+        forget();
+        // A failed create must not be remembered, or one bad moment poisons
+        // the pair for the life of the worker.
+        if (translatorCache.get(key) === created) translatorCache.delete(key);
+        throw error;
+      },
+    );
   translatorCache.set(key, created);
-  return created;
+  return {
+    translator: created,
+    unsubscribe: () => waiting.delete(onProgress),
+  };
 }
 
 /** Forget every cached translator and the shared detector. For tests. */
 export function resetTranslatorCache(): void {
   translatorCache.clear();
+  progressListeners.clear();
   sharedDetector = null;
 }
 
@@ -603,24 +654,28 @@ export async function translateBuiltin({
    */
   if (availability !== 'available') onDownloadProgress?.(0);
 
-  // Attached whether or not anyone asked for progress: the caller's callback is
-  // optional, and the watchdog below is not. A translation started without a
-  // badge to update can stall just as easily as one with.
+  // Listened to whether or not anyone asked for progress: the caller's
+  // callback is optional, and the watchdog below is not. A translation started
+  // without a badge to update can stall just as easily as one with.
   const stall = stallWatchdog(DOWNLOAD_STALL_MS);
-  const monitor = (m: DownloadMonitor) => {
-    m.addEventListener('downloadprogress', (event) => {
-      stall.progress();
-      onDownloadProgress?.(event.loaded);
-    });
+  const onProgress = (loaded: number): void => {
+    stall.progress();
+    onDownloadProgress?.(loaded);
   };
 
-  const instance = (): Promise<TranslatorInstance> =>
-    stall.guard(
-      untilAborted(
-        sharedTranslator(translators, sourceLanguage, targetLanguage, monitor),
-        signal,
-      ),
+  const instance = async (): Promise<TranslatorInstance> => {
+    const { translator, unsubscribe } = sharedTranslator(
+      translators,
+      sourceLanguage,
+      targetLanguage,
+      onProgress,
     );
+    try {
+      return await stall.guard(untilAborted(translator, signal));
+    } finally {
+      unsubscribe();
+    }
+  };
 
   const translator = await instance();
   if (signal?.aborted) return;

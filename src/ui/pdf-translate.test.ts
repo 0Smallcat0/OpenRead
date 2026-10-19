@@ -117,3 +117,56 @@ describe('translatePdf', () => {
     expect(blocks()).toBe(0);
   });
 });
+
+describe('pages the viewer draws later', () => {
+  it('translates a page drawn after the first pass has finished', async () => {
+    // Pages render lazily — a text layer on 2 of 14 on the viewer's own
+    // sample — and the observer that watches for the rest only ever added
+    // them to a queue nobody was draining any more. Scrolling on translated
+    // nothing past the first screen.
+    viewerWith(1);
+    const extra = document.createElement('div');
+    extra.className = 'page';
+    extra.innerHTML = '<div class="textLayer"></div>';
+    document.getElementById('viewer')?.appendChild(extra);
+
+    await translatePdf(document, {
+      targetLang: 'Traditional Chinese',
+      translate: (text) => Promise.resolve(`[zh] ${text}`),
+    });
+    expect(blocks()).toBe(1);
+
+    const span = document.createElement('span');
+    span.textContent = 'A page the reader scrolled to, drawn only just now.';
+    extra.querySelector('.textLayer')?.appendChild(span);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(blocks()).toBe(2);
+    expect(extra.nextElementSibling?.className).toBe(PDF_TRANSLATION_CLASS);
+  });
+});
+
+describe('a page where every paragraph failed', () => {
+  it('is not marked translated, so the next press tries it again', async () => {
+    // Every paragraph throwing — a language pack not there yet, Ollama not
+    // running — still marked the page done. The badge said "1 pages
+    // translated" over a page with nothing under it, and every later press
+    // found "Nothing to translate" until the tab was reloaded.
+    viewerWith(1);
+    const failed = await translatePdf(document, {
+      targetLang: 'Traditional Chinese',
+      translate: () => Promise.reject(new Error('engine down')),
+    });
+    expect(failed.pages).toBe(0);
+    expect(document.getElementById('oit-page-progress')?.textContent).toMatch(
+      /failed/,
+    );
+
+    const retried = await translatePdf(document, {
+      targetLang: 'Traditional Chinese',
+      translate: (text) => Promise.resolve(`[zh] ${text}`),
+    });
+    expect(retried.pages).toBe(1);
+    expect(blocks()).toBe(1);
+  });
+});

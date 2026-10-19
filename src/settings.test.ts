@@ -90,3 +90,30 @@ describe('limitGlossary', () => {
     expect(limitGlossary(raw)).toBe(raw);
   });
 });
+
+describe('the limit is in bytes, which is what storage counts', () => {
+  const bytes = (value: unknown): number =>
+    new TextEncoder().encode(JSON.stringify(value)).length;
+
+  it('keeps a Chinese glossary under the per-item ceiling', () => {
+    // Chrome measures 8,192 bytes of UTF-8, and a CJK character is three of
+    // them. Counted in characters, 359 lines of `termN = 資料庫錯誤` passed as
+    // 5,993 and went to storage as 9,591 bytes — and the rejected write took
+    // the engine and the target language with it, on every save after.
+    const raw = Array.from(
+      { length: 360 },
+      (_, i) => `term${String(i)} = 資料庫錯誤`,
+    ).join('\n');
+    const kept = limitGlossary(raw);
+    expect(bytes(kept)).toBeLessThanOrEqual(MAX_GLOSSARY_BYTES);
+    expect(kept.startsWith('term0 = 資料庫錯誤')).toBe(true);
+  });
+
+  it('keeps a list of non-ASCII hosts under it too', () => {
+    const hosts = Array.from(
+      { length: 300 },
+      (_, i) => `例子${String(i)}.中文網.台灣`,
+    );
+    expect(bytes(limitExcept(hosts))).toBeLessThanOrEqual(MAX_EXCEPT_BYTES);
+  });
+});

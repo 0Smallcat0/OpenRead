@@ -112,12 +112,23 @@ export async function captureNote(
   }
 
   const content = buildMarkdown(note);
-  const uri = buildObsidianUri({
-    vault: config.vault || undefined,
-    folder: config.folder || undefined,
-    filename: captureFilename(note),
-    content,
-  });
+  let uri: string;
+  try {
+    uri = buildObsidianUri({
+      vault: config.vault || undefined,
+      folder: config.folder || undefined,
+      filename: captureFilename(note),
+      content,
+    });
+  } catch {
+    // `encodeURIComponent` throws on half a surrogate pair, which a page can
+    // hold. Rejecting left the caller's button disabled on "Saving…" with
+    // nothing said; the clipboard needs no encoding and is the honest fallback.
+    const copied = await copyToClipboard(content);
+    return copied
+      ? { ok: true, method: 'clipboard' }
+      : { ok: false, reason: 'copy-failed' };
+  }
 
   if (uri.length <= URI_LIMIT) {
     openUri(uri);

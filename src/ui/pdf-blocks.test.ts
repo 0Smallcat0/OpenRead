@@ -153,7 +153,11 @@ describe('groupIntoParagraphs', () => {
     // left-edge rule split every heading, author list and affiliation into
     // fragments and translated each one alone.
     const { layer, rectOf } = layerOf([
-      { text: 'Trace-based Type Specialization for Dynamic', top: 100, left: 157 },
+      {
+        text: 'Trace-based Type Specialization for Dynamic',
+        top: 100,
+        left: 157,
+      },
       { text: 'Languages', top: 133, left: 462 },
     ]);
     const paragraphs = collectPdfParagraphs(layer, rectOf);
@@ -176,5 +180,26 @@ describe('groupIntoParagraphs', () => {
   it('has nothing to say about an empty layer', () => {
     expect(groupIntoParagraphs([])).toEqual([]);
     expect(collectPdfParagraphs(document.createElement('div'))).toEqual([]);
+  });
+});
+
+describe('a tagged PDF', () => {
+  it('reads the lines inside marked content, not one glued run', () => {
+    // The vendored viewer asks for `includeMarkedContent`, so a tagged PDF —
+    // anything exported from Word, Google Docs or InDesign — nests its spans
+    // and `<br>`s inside `span.markedContent`. Walking only the layer's own
+    // children took each of those wrappers for a single span: every line of a
+    // paragraph glued together without a space, and the page one request.
+    const layer = document.createElement('div');
+    layer.className = 'textLayer';
+    layer.innerHTML =
+      '<span class="markedContent"><span>The quick brown</span><br>' +
+      '<span>fox jumps over</span><br></span>' +
+      '<span class="markedContent"><span>Second para</span><br></span>';
+    expect(collectPdfLines(layer).map((line) => line.text)).toEqual([
+      'The quick brown',
+      'fox jumps over',
+      'Second para',
+    ]);
   });
 });

@@ -236,6 +236,15 @@ export interface SelectionSettings {
 export interface SelectionUIOptions {
   /** Read the current model + target language at translate time. */
   getSettings: () => Promise<SelectionSettings>;
+  /**
+   * Whether the document's own `<html lang>` describes the text on it.
+   *
+   * True on a web page. False in the EPUB reader, which is the extension's own
+   * page and declares itself `en` whatever the book is written in — so a
+   * German book, asked for English, came back from the panel as the same
+   * German: the engine had been told it was already English.
+   */
+  fromPageLanguage?: boolean;
 }
 
 /**
@@ -653,9 +662,10 @@ export function mountSelectionTranslator(
         // the engine answer "already in that language" and hand the words back
         // untouched. Reported from use: Chinese typed into a box on an `en`
         // page, asked for English, came back as the same Chinese.
-        sourceLang: fromEditableField()
-          ? undefined
-          : document.documentElement.lang || undefined,
+        sourceLang:
+          fromEditableField() || options.fromPageLanguage === false
+            ? undefined
+            : document.documentElement.lang || undefined,
       };
       port.postMessage(message);
     };
@@ -786,22 +796,30 @@ export function mountSelectionTranslator(
           targetLang: config.targetLang,
         };
 
-        void captureNote(note, captureConfig).then((outcome) => {
-          if (outcome.ok) {
-            // "Sent", not "Saved": handing a URL to the OS protocol handler
-            // gives no completion signal back, so if Obsidian is not installed
-            // — or declines the URL — nothing happens and the page is never
-            // told. Claiming a save we cannot observe is the one thing worse
-            // than saying less.
-            hint.textContent =
-              outcome.method === 'clipboard'
-                ? 'Copied — paste into Obsidian'
-                : 'Sent to Obsidian ↗';
-          } else {
+        void captureNote(note, captureConfig).then(
+          (outcome) => {
+            if (outcome.ok) {
+              // "Sent", not "Saved": handing a URL to the OS protocol handler
+              // gives no completion signal back, so if Obsidian is not installed
+              // — or declines the URL — nothing happens and the page is never
+              // told. Claiming a save we cannot observe is the one thing worse
+              // than saying less.
+              hint.textContent =
+                outcome.method === 'clipboard'
+                  ? 'Copied — paste into Obsidian'
+                  : 'Sent to Obsidian ↗';
+            } else {
+              hint.textContent = 'Save failed';
+              btn.disabled = false;
+            }
+          },
+          () => {
+            // Anything that escapes `captureNote` is still a failed save, and
+            // without this the button stayed disabled on "Saving…" for good.
             hint.textContent = 'Save failed';
             btn.disabled = false;
-          }
-        });
+          },
+        );
       });
     }
   }
@@ -860,14 +878,15 @@ export function mountSelectionTranslator(
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return false;
     const container = selection.getRangeAt(0).commonAncestorContainer as
-      | Node
-      | undefined;
+      Node | undefined;
     const scope =
       container?.nodeType === 1
         ? (container as Element)
         : (container?.parentElement ?? null);
     if (
-      scope?.closest('input, textarea, [contenteditable=""], [contenteditable="true"]')
+      scope?.closest(
+        'input, textarea, [contenteditable=""], [contenteditable="true"]',
+      )
     ) {
       return true;
     }
@@ -877,9 +896,9 @@ export function mountSelectionTranslator(
     const active = document.activeElement;
     return Boolean(
       active &&
-        active.matches(
-          'input, textarea, [contenteditable=""], [contenteditable="true"]',
-        ),
+      active.matches(
+        'input, textarea, [contenteditable=""], [contenteditable="true"]',
+      ),
     );
   }
 

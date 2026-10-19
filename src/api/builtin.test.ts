@@ -693,4 +693,68 @@ describe('a language-pack download that never moves', () => {
       vi.useRealTimers();
     }
   });
+  it('lets every request waiting on one download hear it, not only the first', async () => {
+    // The create is shared per pair, and Chrome takes one monitor per create
+    // — the first caller's. A second tab in the same language, or the first
+    // tab closed mid-download, left everyone else listening to nothing: no
+    // progress on their badge, and a watchdog that called a download moving
+    // the whole time "not moved for three minutes".
+    const global = globalThis as unknown as Record<string, unknown>;
+    const listeners: ((event: { loaded: number }) => void)[] = [];
+    global.Translator = {
+      availability: () => Promise.resolve('downloadable'),
+      create: (options: {
+        monitor?: (m: {
+          addEventListener: (
+            type: string,
+            listener: (event: { loaded: number }) => void,
+          ) => void;
+        }) => void;
+      }) => {
+        options.monitor?.({
+          addEventListener: (_type, listener) => listeners.push(listener),
+        });
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            resolve({ translate: (input: string) => Promise.resolve(input) });
+          }, DOWNLOAD_STALL_MS * 3);
+        });
+      },
+    };
+
+    vi.useFakeTimers();
+    try {
+      const first = new AbortController();
+      const heard: number[] = [];
+      const runs = [
+        translateBuiltin({
+          text: 'The tab that started the download.',
+          targetLang: 'Traditional Chinese',
+          sourceLang: 'en',
+          signal: first.signal,
+          onChunk: () => undefined,
+        }),
+        translateBuiltin({
+          text: 'A second tab in the same language.',
+          targetLang: 'Traditional Chinese',
+          sourceLang: 'en',
+          onChunk: () => undefined,
+          onDownloadProgress: (loaded) => heard.push(loaded),
+        }),
+      ];
+      await vi.advanceTimersByTimeAsync(0);
+      // The tab that started it is closed.
+      first.abort();
+      await expect(runs[0]).rejects.toThrow(/Abort/);
+      for (let i = 0; i < 3; i++) {
+        await vi.advanceTimersByTimeAsync(DOWNLOAD_STALL_MS - 1000);
+        for (const listener of listeners) listener({ loaded: 0.25 * (i + 1) });
+      }
+      await vi.advanceTimersByTimeAsync(DOWNLOAD_STALL_MS);
+      await expect(runs[1]).resolves.toBeUndefined();
+      expect(heard).toEqual([0, 0.25, 0.5, 0.75]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

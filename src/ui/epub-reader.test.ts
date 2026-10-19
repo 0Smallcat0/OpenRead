@@ -163,6 +163,42 @@ describe('mountReader', () => {
     expect(store.revoked).toEqual(store.urls);
   });
 
+  it('shows the chapter asked for last, not the one that rendered last', async () => {
+    // Two quick presses — Next twice, or a contents entry while a chapter full
+    // of pictures is still decompressing — used to race: whichever render
+    // finished last won the page, under a header and a saved position that
+    // named the other chapter, and its pictures were never released.
+    const pictures = Array.from(
+      { length: 30 },
+      (_, n) => `<img src="fig${String(n)}.png" alt=""/>`,
+    ).join('');
+    const chapters: string[] = [];
+    const view = reader(store, ({ index }) => chapters.push(String(index)));
+    await view.open(
+      await buildEpub({
+        chapters: [
+          { name: 'ch1.xhtml', body: '<p>Opening.</p>' },
+          { name: 'ch2.xhtml', body: `<p>Slow pictures.</p>${pictures}` },
+          { name: 'ch3.xhtml', body: '<p>The plain chapter.</p>' },
+        ],
+        extra: Array.from({ length: 30 }, (_, n) => ({
+          name: `OEBPS/fig${String(n)}.png`,
+          body: `PNGDATA${String(n)}`,
+        })),
+      }),
+    );
+    chapters.length = 0;
+
+    await Promise.all([view.goTo(1), view.goTo(2)]);
+
+    expect(id('oit-epub-content').textContent).toContain('The plain chapter.');
+    expect(id('oit-epub-where').textContent).toContain('3 / 3');
+    expect(view.position()?.spineIndex).toBe(2);
+    expect(chapters).toEqual(['2']);
+    // Every picture the abandoned render made is let go.
+    expect(store.revoked.sort()).toEqual(store.urls.sort());
+  });
+
   it('remembers where the reader was and opens there', async () => {
     const bytes = await buildEpub({ identifier: 'urn:uuid:abc' });
 

@@ -165,7 +165,10 @@ describe('translateActiveInput', () => {
     field.value = 'already english';
     field.focus();
     expect(
-      await translateActiveInput(document, deps((text) => Promise.resolve(text))),
+      await translateActiveInput(
+        document,
+        deps((text) => Promise.resolve(text)),
+      ),
     ).toBe('failed');
     expect(inserted).toEqual([]);
     expect(field.value).toBe('already english');
@@ -213,10 +216,63 @@ describe('translateActiveInput', () => {
       await translateActiveInput(
         document,
         deps(() =>
-          Promise.reject(new Error("Can't reach Ollama at http://127.0.0.1:1.")),
+          Promise.reject(
+            new Error("Can't reach Ollama at http://127.0.0.1:1."),
+          ),
         ),
       ),
     ).toBe('failed');
     expect(notes.join(' ')).toContain("Can't reach Ollama");
+  });
+
+  it('does not overwrite what the writer typed while it ran', async () => {
+    // A round trip to Ollama is seconds. Whatever the writer added in that
+    // time was not part of what was translated, and replacing the box threw
+    // it away with only Ctrl+Z to get it back.
+    const field = document.getElementById('notes') as HTMLTextAreaElement;
+    field.value = '你好';
+    field.focus();
+
+    const run = translateActiveInput(
+      document,
+      deps(
+        () =>
+          new Promise<string>((resolve) => {
+            setTimeout(() => resolve('Hello'), 0);
+          }),
+      ),
+    );
+    field.value = '你好，我明天會到';
+
+    expect(await run).toBe('failed');
+    expect(inserted).toEqual([]);
+    expect(field.value).toBe('你好，我明天會到');
+    expect(notes.join(' ')).toContain('changed');
+  });
+
+  it('says nothing about a missing box when the box is in a frame', async () => {
+    // The shortcut and the context menu reach every frame. With the cursor in
+    // an embedded editor, the top page's focused element is the <iframe> —
+    // and the top page used to announce "Click into a text box first" over
+    // the frame that was translating correctly.
+    const frame = document.createElement('iframe');
+    document.body.appendChild(frame);
+    frame.focus();
+    expect(document.activeElement).toBe(frame);
+
+    expect(await translateActiveInput(document, deps())).toBe('no-field');
+    expect(notes).toEqual([]);
+  });
+
+  it('leaves the no-box notice to the top frame', async () => {
+    // Every ad and widget iframe gets the broadcast too; each one used to put
+    // up its own stuck "Click into a text box first" badge.
+    const frame = document.createElement('iframe');
+    document.body.appendChild(frame);
+    const inner = frame.contentDocument as Document;
+    inner.body.innerHTML = '<p>An advert.</p>';
+
+    expect(await translateActiveInput(inner, deps())).toBe('no-field');
+    expect(notes).toEqual([]);
   });
 });

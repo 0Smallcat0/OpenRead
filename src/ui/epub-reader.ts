@@ -122,6 +122,12 @@ export function mountReader(doc: Document, deps: ReaderDeps): Reader {
   let key = '';
   let index = 0;
   let urls: string[] = [];
+  /**
+   * Which `goTo` is the latest. Rendering a chapter is asynchronous — every
+   * picture in it is decompressed first — so two quick presses can finish in
+   * either order, and only the one asked for last may touch the page.
+   */
+  let navigation = 0;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
   const view = doc.defaultView;
@@ -270,6 +276,7 @@ export function mountReader(doc: Document, deps: ReaderDeps): Reader {
     clearError();
     releaseChapterUrls();
     index = bounded;
+    const turn = ++navigation;
 
     let rendered;
     try {
@@ -284,10 +291,19 @@ export function mountReader(doc: Document, deps: ReaderDeps): Reader {
         doc,
       );
     } catch (failure) {
+      if (turn !== navigation) return;
       content.replaceChildren();
       showError(
         `This chapter could not be read. ${(failure as Error).message}`,
       );
+      return;
+    }
+
+    // Overtaken by a later press while it rendered. Painting it now would put
+    // this chapter under the other one's header and saved position, and its
+    // pictures would never be released — so they are released here instead.
+    if (turn !== navigation) {
+      for (const url of rendered.urls) deps.revokeUrl(url);
       return;
     }
 
