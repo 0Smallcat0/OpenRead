@@ -62,10 +62,7 @@ export type InputTarget = HTMLInputElement | HTMLTextAreaElement | HTMLElement;
  * the host: a comment box in a web component would otherwise never be found.
  */
 export function activeField(doc: Document): InputTarget | null {
-  let element: Element | null = doc.activeElement;
-  while (element?.shadowRoot?.activeElement) {
-    element = element.shadowRoot.activeElement;
-  }
+  const element = deepActiveElement(doc);
   if (
     !element ||
     !(element instanceof (doc.defaultView?.HTMLElement ?? HTMLElement))
@@ -82,6 +79,15 @@ export function activeField(doc: Document): InputTarget | null {
     return null;
   if ('disabled' in element && (element as HTMLInputElement).disabled)
     return null;
+  return element;
+}
+
+/** The focused element, looking through open shadow roots to the real one. */
+function deepActiveElement(doc: Document): Element | null {
+  let element: Element | null = doc.activeElement;
+  while (element?.shadowRoot?.activeElement) {
+    element = element.shadowRoot.activeElement;
+  }
   return element;
 }
 
@@ -162,7 +168,10 @@ export async function translateActiveInput(
     // the <iframe>, and with both quiet the shortcut did nothing at all.
     const view = doc.defaultView;
     const topFrame = view !== null && view === view.top;
-    const tag = doc.activeElement?.tagName;
+    // Deep, like the field itself: an <iframe> inside a web component leaves
+    // the top page's focus on the shadow host, and the notice went up over a
+    // box the frame was translating.
+    const tag = deepActiveElement(doc)?.tagName;
     if ((topFrame || doc.hasFocus()) && tag !== 'IFRAME' && tag !== 'FRAME') {
       deps.notify?.('Click into a text box first, then press the shortcut.');
     }

@@ -264,6 +264,23 @@ describe('translateActiveInput', () => {
     expect(notes).toEqual([]);
   });
 
+  it('says nothing about a missing box when the frame is in a shadow root', async () => {
+    // An embedded editor inside a web component: the top page's focused
+    // element is the shadow host, not the <iframe>, so the frame check missed
+    // it and "Click into a text box first" went up over a box being translated.
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = host.attachShadow({ mode: 'open' });
+    const frame = document.createElement('iframe');
+    root.appendChild(frame);
+    frame.focus();
+    expect(document.activeElement).toBe(host);
+    expect(root.activeElement).toBe(frame);
+
+    expect(await translateActiveInput(document, deps())).toBe('no-field');
+    expect(notes).toEqual([]);
+  });
+
   it('leaves the no-box notice to the top frame', async () => {
     // Every ad and widget iframe gets the broadcast too; each one used to put
     // up its own stuck "Click into a text box first" badge.
