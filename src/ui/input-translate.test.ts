@@ -276,3 +276,55 @@ describe('translateActiveInput', () => {
     expect(notes).toEqual([]);
   });
 });
+
+describe('translateActiveInput: what counts as a change', () => {
+  const slow = (out: string) => () =>
+    new Promise<string>((resolve) => {
+      setTimeout(() => resolve(out), 0);
+    });
+
+  it('keeps line breaks typed at the end while it ran', async () => {
+    // Compared trimmed, `你好` and `你好\n\n` were the same text, and the two
+    // new lines went with the replacement.
+    const field = document.getElementById('notes') as HTMLTextAreaElement;
+    field.value = '你好';
+    field.focus();
+    const run = translateActiveInput(document, deps(slow('Hello')));
+    field.value = '你好\n\n';
+
+    expect(await run).toBe('failed');
+    expect(inserted).toEqual([]);
+    expect(field.value).toBe('你好\n\n');
+  });
+
+  it('keeps a picture or a new line added to a rich box while it ran', async () => {
+    // textContent has no image and no line in it, so an editor box looked
+    // unchanged and both were replaced away.
+    const field = document.getElementById('rich') as HTMLElement;
+    field.textContent = '你好';
+    field.focus();
+    const run = translateActiveInput(document, deps(slow('Hello')));
+    field.innerHTML = '你好<div><br></div><div><img alt=""></div>';
+
+    expect(await run).toBe('failed');
+    expect(inserted).toEqual([]);
+    expect(field.querySelector('img')).not.toBeNull();
+  });
+
+  it('still says there is no box from a frame that has the focus', async () => {
+    // Focus on a password field inside an iframe: the top page's focus is
+    // the <iframe>, so it stays quiet, and the frame is not the top, so it
+    // stayed quiet too — the shortcut did nothing, with nothing said.
+    const frame = document.createElement('iframe');
+    document.body.appendChild(frame);
+    const inner = frame.contentDocument as Document;
+    inner.body.innerHTML = '<input id="pw" type="password" />';
+    frame.focus();
+    (inner.getElementById('pw') as HTMLElement).focus();
+
+    expect(await translateActiveInput(document, deps())).toBe('no-field');
+    expect(notes).toEqual([]);
+    expect(await translateActiveInput(inner, deps())).toBe('no-field');
+    expect(notes.join(' ')).toContain('text box');
+  });
+});

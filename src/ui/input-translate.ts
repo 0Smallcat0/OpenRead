@@ -96,6 +96,17 @@ export function fieldText(field: InputTarget): string {
   return field.textContent ?? '';
 }
 
+/** Everything in the field, markup included for an editor box. */
+function rawContent(field: InputTarget): string {
+  if (
+    field instanceof HTMLInputElement ||
+    field instanceof HTMLTextAreaElement
+  ) {
+    return field.value;
+  }
+  return field.innerHTML;
+}
+
 /**
  * Put `text` in, the way a person typing would.
  *
@@ -146,14 +157,21 @@ export async function translateActiveInput(
     // them holds the box. Said once, by the top frame, and not even there when
     // its focus is an <iframe> — the box is inside it, being translated, and
     // a "click into a text box" over it is simply wrong.
+    // A frame other than the top one speaks only when it holds the focus
+    // itself: a password field inside an iframe leaves the top page's focus on
+    // the <iframe>, and with both quiet the shortcut did nothing at all.
     const view = doc.defaultView;
     const topFrame = view !== null && view === view.top;
     const tag = doc.activeElement?.tagName;
-    if (topFrame && tag !== 'IFRAME' && tag !== 'FRAME') {
+    if ((topFrame || doc.hasFocus()) && tag !== 'IFRAME' && tag !== 'FRAME') {
       deps.notify?.('Click into a text box first, then press the shortcut.');
     }
     return 'no-field';
   }
+  // The whole field as it stands, markup included, for the check below:
+  // trimmed text alone missed new lines typed at the end and a picture or a
+  // line break added to an editor box, and replacing threw them away.
+  const snapshot = rawContent(field);
   const source = fieldText(field).trim();
   if (!source) {
     deps.notify?.('Nothing written yet.');
@@ -174,7 +192,7 @@ export async function translateActiveInput(
     }
     // And what is in it now is what was sent. Anything typed during the round
     // trip was not translated, and replacing the box would throw it away.
-    if (fieldText(field).trim() !== source) {
+    if (rawContent(field) !== snapshot) {
       deps.notify?.(
         'The text changed while it was being translated, so nothing was replaced.',
       );
