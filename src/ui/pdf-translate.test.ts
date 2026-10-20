@@ -256,3 +256,30 @@ describe('a press after some pages failed', () => {
     expect(blocks()).toBe(0);
   });
 });
+
+describe('a press after the target language changed', () => {
+  it('translates into the new language rather than clearing', async () => {
+    // A web page already did this: the reader switched the popup from
+    // Chinese to Japanese and pressed, and got Japanese. In the PDF viewer
+    // the same press found a translated document and cleared it, leaving the
+    // reader with nothing and a second press to make.
+    viewerWith(1);
+    await togglePdfTranslation(document, {
+      targetLang: 'Traditional Chinese',
+      translate: (text) => Promise.resolve(`[zh] ${text}`),
+    });
+    expect(blocks()).toBe(1);
+
+    const again = await togglePdfTranslation(document, {
+      targetLang: 'Japanese',
+      translate: (text) => Promise.resolve(`[ja] ${text}`),
+    });
+    expect(again?.pages).toBe(1);
+    const block = document.querySelector<HTMLElement>(
+      `.${PDF_TRANSLATION_CLASS}`,
+    );
+    expect(blocks()).toBe(1);
+    expect(block?.lang).toBe('ja');
+    expect(block?.textContent).toMatch(/^\[ja\]/);
+  });
+});

@@ -88,6 +88,14 @@ export function isPdfTranslated(doc: Document): boolean {
   return doc.querySelector(`.${PDF_TRANSLATION_CLASS}`) !== null;
 }
 
+/** Whether what is on the page is in `targetLang`, judged by its `lang`. */
+function isPdfTranslatedInto(doc: Document, targetLang: string): boolean {
+  const tag = toBcp47(targetLang) ?? '';
+  return Array.from(
+    doc.querySelectorAll<HTMLElement>(`.${PDF_TRANSLATION_CLASS}`),
+  ).every((block) => block.lang === tag);
+}
+
 /** Remove every inserted translation. Returns how many pages were cleared. */
 export function clearPdfTranslation(doc: Document): number {
   stopPdfTranslation();
@@ -462,15 +470,23 @@ export async function togglePdfTranslation(
     stopPdfTranslation();
     return null;
   }
-  // A failed page the viewer still has drawn is retried first: it is what the
-  // reader is pressing about. One scrolled out of the viewer's cache is not,
-  // or a press could never clear the document again.
-  if (
-    isPdfTranslated(doc) &&
-    !renderedPages(doc).some((page) => page.hasAttribute(PDF_FAILED_ATTR))
-  ) {
-    clearPdfTranslation(doc);
-    return null;
+  if (isPdfTranslated(doc)) {
+    // Another language on the page is replaced, as a web page's is: the
+    // reader changed the target and pressed, and clearing left them with
+    // nothing and a second press to make.
+    if (!isPdfTranslatedInto(doc, deps.targetLang)) {
+      clearPdfTranslation(doc);
+      return translatePdf(doc, deps);
+    }
+    // A failed page the viewer still has drawn is retried first: it is what
+    // the reader is pressing about. One scrolled out of the viewer's cache is
+    // not, or a press could never clear the document again.
+    if (
+      !renderedPages(doc).some((page) => page.hasAttribute(PDF_FAILED_ATTR))
+    ) {
+      clearPdfTranslation(doc);
+      return null;
+    }
   }
   return translatePdf(doc, deps);
 }
