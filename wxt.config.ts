@@ -27,7 +27,7 @@ export default defineConfig({
     // prefills the listing's short description from this field — so it is kept
     // identical to the EN short description in docs/store/LISTING.md.
     description:
-      'Bilingual whole-page translation for web pages, PDFs and EPUBs, entirely on your own machine. No account, no API key, no setup.',
+      'Bilingual translation for web pages, PDFs, EPUBs and YouTube captions, on your own machine. No account, no API key needed.',
     // Least-privilege: v1 declared `scripting` + `declarativeNetRequest` but
     // used neither, which is a store-review red flag. `scripting` stays gone.
     // `declarativeNetRequest` is back in 2.5.0 with an actual job: one
