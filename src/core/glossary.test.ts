@@ -195,6 +195,25 @@ describe('word edges outside ASCII', () => {
     ).toBe('my [[0]].');
   });
 
+  it('will not fire when the next character is a combining mark', () => {
+    // A vowel sign or an accent written as a separate mark is part of the
+    // word, but not a letter: `भारत` fired inside `भारतीय` and came back as
+    // `Indiaीय`, and `cafe` inside a decomposed `café`.
+    expect(
+      protectTerms('भारतीय लोग', [{ term: 'भारत', as: 'India' }]).values,
+    ).toEqual([]);
+    expect(
+      protectTerms('cafe\u0301 here', [{ term: 'cafe', as: 'X' }]).values,
+    ).toEqual([]);
+    // A term that itself ends in a mark still gets its end boundary.
+    expect(
+      protectTerms('हिन्दीभाषी', [{ term: 'हिन्दी', as: 'Hindi' }]).values,
+    ).toEqual([]);
+    expect(protectTerms('भारत में', [{ term: 'भारत', as: 'India' }]).text).toBe(
+      '[[0]] में',
+    );
+  });
+
   it('still matches Japanese and Thai with no spaces around them', () => {
     expect(
       protectTerms('データベースを作る', [{ term: 'データベース', as: 'DB' }])

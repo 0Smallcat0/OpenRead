@@ -135,9 +135,16 @@ const needsBoundary = (side: string): boolean =>
 
 function matcher(term: string): RegExp {
   const body = escapeRegExp(term);
-  const before = needsBoundary(term[0] ?? '') ? '(?<![\\p{L}\\p{N}])' : '';
-  const after = needsBoundary(term[term.length - 1] ?? '')
-    ? '(?![\\p{L}\\p{N}])'
+  // A combining mark (a vowel sign in Devanagari, an accent in decomposed
+  // text) belongs to the word it follows: `भारत` must not fire inside
+  // `भारतीय`. So marks count as word characters, and a term's end is the
+  // character its trailing marks sit on.
+  const base = term.replace(/\p{M}+$/u, '');
+  const before = needsBoundary(term[0] ?? '')
+    ? '(?<![\\p{L}\\p{N}\\p{M}])'
+    : '';
+  const after = needsBoundary(base[base.length - 1] ?? '')
+    ? '(?![\\p{L}\\p{N}\\p{M}])'
     : '';
   return new RegExp(`${before}${body}${after}`, 'giu');
 }
