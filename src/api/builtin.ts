@@ -137,6 +137,13 @@ export function isBuiltinSupported(): boolean {
  */
 let sharedDetector: Promise<DetectorInstance> | null = null;
 
+/**
+ * Everyone waiting on the shared detector's download, fanned out from the one
+ * monitor Chrome allows — which used to be the first caller's, and only if
+ * that caller asked. See `ProgressFanout`.
+ */
+let detectorProgress: ProgressFanout | null = null;
+
 export async function detectLanguage(
   text: string,
   signal?: AbortSignal,
@@ -155,15 +162,35 @@ export async function detectLanguage(
   const detectors = detectorFactory();
   if (!detectors) return null;
   try {
-    sharedDetector ??= detectors.create({
-      monitor: onDownloadProgress
-        ? (m: DownloadMonitor) => {
+    if (!sharedDetector) {
+      const fanout = progressFanout();
+      detectorProgress = fanout;
+      const forget = (): void => {
+        if (detectorProgress === fanout) detectorProgress = null;
+      };
+      sharedDetector = detectors
+        .create({
+          monitor: (m: DownloadMonitor) => {
             m.addEventListener('downloadprogress', (event) => {
-              onDownloadProgress(event.loaded);
+              fanout.emit(event.loaded);
             });
-          }
-        : undefined,
-    });
+          },
+        })
+        .then(
+          (instance) => {
+            forget();
+            return instance;
+          },
+          (error: unknown) => {
+            forget();
+            throw error;
+          },
+        );
+    }
+    const unsubscribe =
+      onDownloadProgress && detectorProgress
+        ? detectorProgress.add(onDownloadProgress)
+        : () => undefined;
     let detector: DetectorInstance;
     try {
       detector = await untilAborted(sharedDetector, signal);
@@ -172,6 +199,8 @@ export async function detectLanguage(
       // rejected promise forever rather than trying again.
       sharedDetector = null;
       throw error;
+    } finally {
+      unsubscribe();
     }
     const results = await detector.detect(text.slice(0, 1000));
     const best = results[0];
@@ -226,7 +255,37 @@ const translatorCache = new Map<string, Promise<TranslatorInstance>>();
  * A second tab in the same language, or the tab that started the download
  * being closed, was enough. So the one monitor is fanned out to every waiter.
  */
-const progressListeners = new Map<string, Set<(loaded: number) => void>>();
+const progressListeners = new Map<string, ProgressFanout>();
+
+/**
+ * One download monitor's events, handed to every listener that joins.
+ *
+ * A listener that joins mid-download hears the last value straight away. It
+ * used to hear nothing until Chrome's next event: a second tab arriving at
+ * 60% showed "Downloading language pack…" with no number, on a slow pack for
+ * tens of seconds, while the download it was waiting on was moving.
+ */
+interface ProgressFanout {
+  emit: (loaded: number) => void;
+  /** Returns the function that stops `listener` hearing it. */
+  add: (listener: (loaded: number) => void) => () => void;
+}
+
+function progressFanout(): ProgressFanout {
+  const listeners = new Set<(loaded: number) => void>();
+  let last: number | undefined;
+  return {
+    emit: (loaded) => {
+      last = loaded;
+      for (const listener of [...listeners]) listener(loaded);
+    },
+    add: (listener) => {
+      listeners.add(listener);
+      if (last !== undefined) listener(last);
+      return () => listeners.delete(listener);
+    },
+  };
+}
 
 function pairKey(sourceLanguage: string, targetLanguage: string): string {
   return `${sourceLanguage}->${targetLanguage}`;
@@ -246,17 +305,16 @@ function sharedTranslator(
 ): { translator: Promise<TranslatorInstance>; unsubscribe: () => void } {
   const key = pairKey(sourceLanguage, targetLanguage);
   const existing = translatorCache.get(key);
-  const listeners = progressListeners.get(key);
   // A settled create has no download left to report, so no listener set.
   if (existing) {
-    listeners?.add(onProgress);
     return {
       translator: existing,
-      unsubscribe: () => listeners?.delete(onProgress),
+      unsubscribe: progressListeners.get(key)?.add(onProgress) ?? (() => {}),
     };
   }
 
-  const waiting = new Set([onProgress]);
+  const waiting = progressFanout();
+  const unsubscribe = waiting.add(onProgress);
   progressListeners.set(key, waiting);
   const forget = (): void => {
     if (progressListeners.get(key) === waiting) progressListeners.delete(key);
@@ -267,7 +325,7 @@ function sharedTranslator(
       targetLanguage,
       monitor: (monitor) => {
         monitor.addEventListener('downloadprogress', (event) => {
-          for (const listener of [...waiting]) listener(event.loaded);
+          waiting.emit(event.loaded);
         });
       },
     })
@@ -287,7 +345,7 @@ function sharedTranslator(
   translatorCache.set(key, created);
   return {
     translator: created,
-    unsubscribe: () => waiting.delete(onProgress),
+    unsubscribe,
   };
 }
 
@@ -296,6 +354,7 @@ export function resetTranslatorCache(): void {
   translatorCache.clear();
   progressListeners.clear();
   sharedDetector = null;
+  detectorProgress = null;
 }
 
 export type PackAvailability =
