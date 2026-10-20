@@ -74,6 +74,7 @@ const MARKUP = `
       <span id="siteExceptLabel"></span>
     </label>
     <textarea id="glossary"></textarea>
+    <input id="videoSubtitles" type="checkbox" />
     <input id="obsidianVault" type="text" />
     <input id="obsidianFolder" type="text" />
     <input id="enrichOnCapture" type="checkbox" />
@@ -583,6 +584,17 @@ bug = 瑕疵`;
 
     expect(stored.obsidianVault).toBe('My Vault');
     expect(stored.enrichOnCapture).toBe(true);
+  });
+
+  it('shows video captions on by default and stores turning them off', async () => {
+    await open();
+    const box = document.getElementById('videoSubtitles') as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    box.checked = false;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+
+    expect(stored.videoSubtitles).toBe(false);
   });
 
   it('writes before translating, so the page gets what the popup shows', async () => {

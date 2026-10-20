@@ -34,6 +34,14 @@ export interface PortTranslateParams {
    * which the UI then reported as "it is already in that language".
    */
   fromPageLanguage?: boolean;
+  /**
+   * What the text is written in, when the caller knows better than the page.
+   *
+   * A video's captions: on YouTube `<html lang>` is the language of the
+   * site's own buttons, set by the viewer's account, and says nothing about
+   * what the person on screen is speaking. The caption track names that.
+   */
+  sourceLang?: string;
 }
 
 export function translateViaPort({
@@ -44,6 +52,7 @@ export function translateViaPort({
   retryCount,
   onDownloadProgress,
   fromPageLanguage = true,
+  sourceLang,
 }: PortTranslateParams): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     if (signal.aborted) {
@@ -104,9 +113,11 @@ export function translateViaPort({
       retryCount,
       // The page knows what it is written in; a detector handed one caption
       // does not. Omitted where the page cannot know — see `fromPageLanguage`.
-      sourceLang: fromPageLanguage
-        ? document.documentElement.lang || undefined
-        : undefined,
+      sourceLang:
+        sourceLang ??
+        (fromPageLanguage
+          ? document.documentElement.lang || undefined
+          : undefined),
     };
     port.postMessage(message);
   });

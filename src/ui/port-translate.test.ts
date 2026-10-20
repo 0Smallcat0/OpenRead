@@ -112,6 +112,24 @@ describe('translateViaPort', () => {
     );
   });
 
+  it('names the source the caller gives over the one the page claims', async () => {
+    // YouTube's `<html lang>` is the viewer's interface language; the caption
+    // track knows what is being spoken.
+    document.documentElement.lang = 'zh-TW';
+    const promise = translateViaPort({
+      text: 'good morning',
+      targetLang: 'Traditional Chinese',
+      model: 'qwen3:latest',
+      signal: new AbortController().signal,
+      sourceLang: 'en',
+    });
+    emit({ status: 'done' });
+    await promise;
+    expect(port.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceLang: 'en' }),
+    );
+  });
+
   it('reports a language-pack download without settling', async () => {
     // The first use of a language pair is roughly two minutes. Without this
     // the promise just sits there and the UI says nothing, which is how

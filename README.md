@@ -1,8 +1,9 @@
 # OpenRead
 
-> **Read the web, your PDFs and your books in your own language, without
-> sending a word of it to anyone.** No account and no cloud by default — and
-> your own API key, if you want a stronger model than your machine can run.
+> **Read the web, your PDFs, your books and YouTube's captions in your own
+> language, without sending a word of it to anyone.** No account and no cloud
+> by default — and your own API key, if you want a stronger model than your
+> machine can run.
 
 ![Selecting a paragraph on Wikipedia and translating it into Traditional Chinese in place, with buttons to save it to Obsidian or copy it](docs/screenshots/demo.gif)
 
@@ -122,6 +123,15 @@ it arrives, a page takes about two seconds.
   book is read out of the file in your hands: nothing is uploaded, and nothing
   inside it is fetched from anywhere — a picture comes from the archive, and a
   chapter that points at a remote image simply does not get one.
+- **A video** — on YouTube, turn captions on with **CC** and each line shows
+  with its translation under it, inside the player. Auto-generated captions,
+  which arrive one word at a time with no punctuation, are put back into
+  sentences at the speaker's pauses first, so what gets translated is a
+  sentence rather than a fragment. Only the next minute and a half is
+  translated, as the video plays — on your own API key, a two-hour lecture
+  costs what you watch of it. Captions already in your language, YouTube's own
+  translation included, are left as they are. **Bilingual YouTube captions**
+  in the popup turns it off.
 
 | The whole page, bilingual                                                                                                                                                     | A paper, in the bundled PDF viewer                                                                      |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |

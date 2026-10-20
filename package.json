@@ -34,6 +34,7 @@
     "e2e:stress": "node e2e/stress.mjs",
     "e2e:egress": "node e2e/no-egress.mjs",
     "e2e:byok": "node e2e/byok.mjs",
+    "e2e:youtube": "node e2e/youtube.mjs",
     "cli": "pnpm build:cli && node bin/openread.mjs",
     "prepare": "wxt prepare && node scripts/build-cli.mjs",
     "prepack": "node scripts/build-cli.mjs",

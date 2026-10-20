@@ -20,6 +20,31 @@ Bilingual Translation`, 38 of the 45 characters a manifest name may have.
 
 ## [Unreleased]
 
+### Added
+
+- **Bilingual YouTube captions.** Turn captions on and each line shows with its
+  translation under it, inside the player. The track is the one the player
+  already fetched — read as it arrives rather than requested again, so there
+  is no token to forge and nothing to break when YouTube changes it. Speech
+  recognition, which sends a timestamp per word and no punctuation at all, is
+  rebuilt into sentences at the speaker's pauses before anything is
+  translated; a transcript is cut at its own full stops. Translation runs 90
+  seconds ahead of the playhead rather than over the whole track, so a
+  two-hour lecture on your own API key costs what you watch of it. Captions
+  already in your language — YouTube's own translation into it included — are
+  left alone, adverts get none, and three failures in a row hand YouTube its
+  captions back with the reason. On by default, since nothing happens until
+  CC is pressed; **Bilingual YouTube captions** in the popup turns it off.
+  `e2e:youtube` drives it on a real video in a fresh profile.
+- **Your own API key, on any OpenAI-compatible provider** — OpenAI, DeepSeek,
+  OpenRouter, Groq, Gemini's compatibility endpoint, or LM Studio on this
+  computer. For the reader whose language pair Chrome has no pack for and
+  whose computer cannot run a model worth reading. Opt-in, never a fallback:
+  the default engines still send nothing. The key stays in
+  `chrome.storage.local` and is never synced; the popup checks it against the
+  provider's model list and offers what it can reach; a 429 is waited out per
+  `Retry-After`. `e2e:byok` drives it against a stand-in API.
+
 ### Fixed
 
 - **A second request waiting on the same language-pack download hears it

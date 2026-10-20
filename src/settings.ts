@@ -90,6 +90,11 @@ export interface Settings {
    * grammar and for why the placeholder looks the way it does.
    */
   glossary: string;
+  /**
+   * Replace a YouTube video's captions with the original and its translation,
+   * once the reader turns captions on. See `ui/subtitles.ts`.
+   */
+  videoSubtitles: boolean;
   /** Obsidian vault to capture into; empty = the user's current/last vault. */
   obsidianVault: string;
   /** Vault-relative folder for captures; empty = the vault root. */
@@ -130,6 +135,10 @@ export const DEFAULT_SETTINGS: Settings = {
   hoverTranslate: 'alt',
   inputTargetLang: 'English',
   glossary: '',
+  // On, unlike automatic page translation, because the reader has already
+  // asked: nothing happens to a video until they press CC, and then only when
+  // the captions are in a language other than theirs.
+  videoSubtitles: true,
   obsidianVault: '',
   obsidianFolder: 'OpenRead',
   enrichOnCapture: false,
@@ -201,6 +210,7 @@ export async function loadSettings(): Promise<Settings> {
     'hoverTranslate',
     'inputTargetLang',
     'glossary',
+    'videoSubtitles',
     'obsidianVault',
     'obsidianFolder',
     'enrichOnCapture',

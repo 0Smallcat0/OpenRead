@@ -20,6 +20,7 @@ src/
     auto-translate.ts     whether a page translates itself, and per-site exceptions
     frames.ts             which iframes hold an article rather than an advert
     glossary.ts           terms held out of translation behind a placeholder
+    captions.ts           a YouTube caption track → sentences worth translating
     capture.ts            capture → Markdown + obsidian:// URI builders
     enrich.ts             enrich prompt + tolerant small-model JSON salvager
     diagnostics.ts        connection probe verdicts + engine-failure wording
@@ -46,12 +47,16 @@ src/
     epub-render.ts        chapter XHTML → DOM, with script and the network out
     epub-reader.ts        the reader: chapters, contents, remembered position
     port-translate.ts     one block through the background port
+    subtitles.ts          original + translation over the YouTube player
+    timedtext-hook.ts     copies the player's own caption responses out
     popup.ts              the settings UI's logic, testable without a popup
     capture.ts            capture orchestrator: enrich round-trip + write
   entrypoints/
     background.ts         service worker: stream broker + PDF/EPUB router + enrich
     content.ts            mounts the selection translator on web pages
     pdf-viewer.ts         mounts the same translator inside the PDF.js viewer
+    youtube-hook.content.ts  page world: the caption hook, before the player loads
+    youtube.content.ts    decides when to replace YouTube's captions, and does
     epub-reader/          the EPUB reader page (index.html + main.ts)
     popup/                settings UI (index.html + main.ts)
   node/                 the same pipeline off the browser
@@ -72,6 +77,8 @@ e2e/                    real browser, real engine — none of these run in CI
   no-egress.mjs           proves the default engine sends nothing, by recording
   epub.mjs                a real .epub, with the archive built by Node's own zlib
   first-run.mjs           what a brand-new install does on a brand-new profile
+  byok.mjs                your own API key, against a stand-in provider
+  youtube.mjs             a real video: press CC, wait for a translated line
 public/
   pdfjs/                  vendored PDF.js viewer (worker path fixed to .mjs)
 eval/
