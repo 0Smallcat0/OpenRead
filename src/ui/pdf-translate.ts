@@ -24,6 +24,14 @@ import { toBcp47 } from '../core/bcp47';
 
 /** Marks a page whose translation has been placed after it. */
 export const PDF_TRANSLATED_ATTR = 'data-oit-pdf-translated';
+/**
+ * Marks a page where every paragraph failed, so the next press retries it.
+ *
+ * Without it a press after a partial failure saw a translated document and
+ * cleared it — wiping the pages that worked, when the badge had just said
+ * "1 failed" and the reader was pressing to try that page again.
+ */
+const PDF_FAILED_ATTR = 'data-oit-pdf-failed';
 export const PDF_TRANSLATION_CLASS = 'oit-pdf-translation';
 const STYLE_ID = 'oit-pdf-translation-style';
 
@@ -90,9 +98,10 @@ export function clearPdfTranslation(doc: Document): number {
   for (const observer of widthWatchers) observer.disconnect();
   widthWatchers.clear();
   for (const page of Array.from(
-    doc.querySelectorAll(`[${PDF_TRANSLATED_ATTR}]`),
+    doc.querySelectorAll(`[${PDF_TRANSLATED_ATTR}], [${PDF_FAILED_ATTR}]`),
   )) {
     page.removeAttribute(PDF_TRANSLATED_ATTR);
+    page.removeAttribute(PDF_FAILED_ATTR);
   }
   return inserted.length;
 }
@@ -350,7 +359,9 @@ export async function translatePdf(
       if (controller.signal.aborted) return;
       if (done === null) {
         failedPages++;
+        next.setAttribute(PDF_FAILED_ATTR, '');
       } else {
+        next.removeAttribute(PDF_FAILED_ATTR);
         paragraphs += done;
         pages++;
       }
@@ -451,7 +462,13 @@ export async function togglePdfTranslation(
     stopPdfTranslation();
     return null;
   }
-  if (isPdfTranslated(doc)) {
+  // A failed page the viewer still has drawn is retried first: it is what the
+  // reader is pressing about. One scrolled out of the viewer's cache is not,
+  // or a press could never clear the document again.
+  if (
+    isPdfTranslated(doc) &&
+    !renderedPages(doc).some((page) => page.hasAttribute(PDF_FAILED_ATTR))
+  ) {
     clearPdfTranslation(doc);
     return null;
   }

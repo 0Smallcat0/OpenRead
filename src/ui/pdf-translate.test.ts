@@ -13,6 +13,7 @@ import {
   translatePdf,
   stopPdfTranslation,
   clearPdfTranslation,
+  togglePdfTranslation,
   PDF_TRANSLATION_CLASS,
 } from './pdf-translate';
 
@@ -212,5 +213,46 @@ describe('a page where every paragraph failed', () => {
     });
     expect(retried.pages).toBe(1);
     expect(blocks()).toBe(1);
+  });
+});
+
+describe('a press after some pages failed', () => {
+  it('retries the failed pages rather than clearing the ones that worked', async () => {
+    // One page translated and one failed: the document "is translated", so
+    // the next press took the clear path and wiped the page that worked. The
+    // badge had just said "1 failed" — the reader pressed to retry it, and
+    // had to press twice more to get both.
+    viewerWith(2);
+    const first = await togglePdfTranslation(document, {
+      targetLang: 'Traditional Chinese',
+      translate: (text) =>
+        text.startsWith('Page 2')
+          ? Promise.reject(new Error('engine hiccup'))
+          : Promise.resolve(`[zh] ${text}`),
+    });
+    expect(first?.pages).toBe(1);
+    expect(blocks()).toBe(1);
+
+    const retried: string[] = [];
+    const second = await togglePdfTranslation(document, {
+      targetLang: 'Traditional Chinese',
+      translate: (text) => {
+        retried.push(text);
+        return Promise.resolve(`[zh] ${text}`);
+      },
+    });
+    expect(second?.pages).toBe(1);
+    expect(retried).toHaveLength(1);
+    expect(retried[0]).toMatch(/^Page 2/);
+    expect(blocks()).toBe(2);
+
+    // With nothing left failed, the press is a clear again.
+    expect(
+      await togglePdfTranslation(document, {
+        targetLang: 'Traditional Chinese',
+        translate: (text) => Promise.resolve(text),
+      }),
+    ).toBeNull();
+    expect(blocks()).toBe(0);
   });
 });
