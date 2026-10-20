@@ -408,6 +408,24 @@ describe('openEpub', () => {
     }
   });
 
+  it('refuses font obfuscation applied to something that is not a font', async () => {
+    // The obfuscation algorithm scrambles the first kilobyte of whatever it
+    // names. Named on a chapter, that chapter opens as garbage with nothing to
+    // say why, which is the outcome the DRM check exists to prevent.
+    const bytes = await buildEpub({
+      extra: [
+        {
+          name: 'META-INF/encryption.xml',
+          body: encryption(
+            'http://www.idpf.org/2008/embedding',
+            'OEBPS/text/ch1.xhtml',
+          ),
+        },
+      ],
+    });
+    await expect(openEpub(bytes)).rejects.toThrow(/copy-protected|DRM/);
+  });
+
   it('tells a zip that is not an EPUB from a file that is not a zip', async () => {
     const notAnEpub = await buildZip([{ name: 'notes.txt', body: 'hello' }]);
     await expect(openEpub(notAnEpub)).rejects.toThrow(/not an EPUB/);
@@ -418,13 +436,13 @@ describe('openEpub', () => {
 });
 
 /** An `encryption.xml` naming one encrypted file, the way producers write it. */
-function encryption(algorithm: string): string {
+function encryption(algorithm: string, uri = 'OEBPS/fonts/f.otf'): string {
   return (
     '<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" ' +
     'xmlns:enc="http://www.w3.org/2001/04/xmlenc#" ' +
     'xmlns:ds="http://www.w3.org/2000/09/xmldsig#">' +
     `<enc:EncryptedData><enc:EncryptionMethod Algorithm="${algorithm}"/>` +
-    '<enc:CipherData><enc:CipherReference URI="OEBPS/fonts/f.otf"/>' +
+    `<enc:CipherData><enc:CipherReference URI="${uri}"/>` +
     '</enc:CipherData></enc:EncryptedData></encryption>'
   );
 }

@@ -136,6 +136,9 @@ const FONT_OBFUSCATION = new Set([
   'http://ns.adobe.com/pdf/enc#RC',
 ]);
 
+/** Font files by extension, the only thing font obfuscation may name. */
+const FONT_FILE = /\.(otf|ttf|woff2?)$/i;
+
 /**
  * Whether `encryption.xml` encrypts anything but fonts.
  *
@@ -154,7 +157,11 @@ export function isCopyProtected(encryptionXml: string): boolean {
     const algorithm = byName(entry, 'EncryptionMethod')[0]?.getAttribute(
       'Algorithm',
     );
-    return !algorithm || !FONT_OBFUSCATION.has(algorithm.trim());
+    if (!algorithm || !FONT_OBFUSCATION.has(algorithm.trim())) return true;
+    // The obfuscation algorithm scrambles the first kilobyte of whatever it
+    // names, so it is only harmless when what it names is a font.
+    const uri = byName(entry, 'CipherReference')[0]?.getAttribute('URI') ?? '';
+    return !FONT_FILE.test(uri.split(/[?#]/)[0] ?? '');
   });
 }
 
