@@ -5,13 +5,44 @@
  * grow without limit is therefore the one that can take every other setting
  * down with it.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
+  activeModel,
   limitExcept,
   limitGlossary,
+  loadApiKey,
+  DEFAULT_SETTINGS,
   MAX_EXCEPT_BYTES,
   MAX_GLOSSARY_BYTES,
 } from './settings';
+
+describe('the API key', () => {
+  afterEach(() => {
+    delete (globalThis as { chrome?: unknown }).chrome;
+  });
+
+  it('reads as empty where there is no local storage to ask', async () => {
+    expect(await loadApiKey()).toBe('');
+  });
+
+  it('reads back what was stored, and nothing that is not a string', async () => {
+    let value: unknown = 'sk-test';
+    (globalThis as { chrome?: unknown }).chrome = {
+      storage: { local: { get: () => Promise.resolve({ apiKey: value }) } },
+    };
+    expect(await loadApiKey()).toBe('sk-test');
+    value = 42;
+    expect(await loadApiKey()).toBe('');
+  });
+});
+
+describe('activeModel', () => {
+  it('names the model the chosen engine will actually run', () => {
+    const base = { ...DEFAULT_SETTINGS, modelId: 'qwen3', apiModel: 'remote' };
+    expect(activeModel({ ...base, engine: 'ollama' })).toBe('qwen3');
+    expect(activeModel({ ...base, engine: 'openai' })).toBe('remote');
+  });
+});
 
 describe('limitExcept', () => {
   it('leaves an ordinary list alone', () => {

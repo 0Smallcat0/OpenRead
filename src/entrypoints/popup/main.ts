@@ -1,5 +1,5 @@
 import { mountPopup } from '../../ui/popup';
-import { probeOllama } from '../../api/probe';
+import { probeApi, probeOllama } from '../../api/probe';
 import type { PlatformOs } from '../../core/diagnostics';
 import { packAvailability } from '../../api/builtin';
 import type {
@@ -94,6 +94,7 @@ document.getElementById('openEpub')?.addEventListener('click', () => {
 
 mountPopup(document, {
   probe: probeOllama,
+  probeApi,
   platformOs,
   writeClipboard: (text) => navigator.clipboard.writeText(text),
   translateActivePage,

@@ -1,7 +1,8 @@
 # OpenRead
 
 > **Read the web, your PDFs and your books in your own language, without
-> sending a word of it to anyone.** No account, no API key, no cloud.
+> sending a word of it to anyone.** No account and no cloud by default — and
+> your own API key, if you want a stronger model than your machine can run.
 
 ![Selecting a paragraph on Wikipedia and translating it into Traditional Chinese in place, with buttons to save it to Obsidian or copy it](docs/screenshots/demo.gif)
 
@@ -15,8 +16,8 @@
 ## Why
 
 - **Some things cannot go in a cloud translator.** Unpublished drafts,
-  contracts, medical records, anything under NDA. Every engine here runs on
-  your own machine.
+  contracts, medical records, anything under NDA. Both default engines run on
+  your own machine; the optional third sends text only to the API you name.
 - **Bilingual, not replaced.** The translation goes _under_ each paragraph, so
   a sentence that looks wrong can be checked against the original instead of
   taken on faith.
@@ -80,7 +81,8 @@ it arrives, a page takes about two seconds.
 - **Chrome decides which pairs exist.** It downloads packs per language pair,
   and a pair it has no pack for is one the built-in engine cannot do. When that
   happens OpenRead falls back to Ollama; with no Ollama configured, that is
-  where the attempt ends.
+  where the attempt ends — or choose your own API in the popup, which has no
+  pairs to run out of.
 
 ## Use it
 
@@ -172,20 +174,21 @@ Not a reimplementation — `src/node/translate.ts` calls the identical function
 the extension calls, and a test pins the CLI's defaults against the
 extension's.
 
-## Two engines
+## Three engines
 
-|                           | Chrome built-in _(default)_ | Ollama                    |
-| ------------------------- | --------------------------- | ------------------------- |
-| To install                | nothing                     | a server + a 5.2 GB model |
-| A 44-block article        | **~2 s**                    | 54 s                      |
-| chrF on 27 fixtures       | 36.5                        | **46.4**                  |
-| Reads surrounding context | no                          | yes                       |
-| Choose the model          | no                          | yes                       |
-| Capture enrichment        | no                          | yes                       |
+|                           | Chrome built-in _(default)_ | Ollama                    | Your own API         |
+| ------------------------- | --------------------------- | ------------------------- | -------------------- |
+| To install                | nothing                     | a server + a 5.2 GB model | nothing — a key      |
+| A 44-block article        | **~2 s**                    | 54 s                      | depends on provider  |
+| chrF on 27 fixtures       | 36.5                        | **46.4**                  | depends on the model |
+| Reads surrounding context | no                          | yes                       | yes                  |
+| Choose the model          | no                          | yes                       | yes                  |
+| Capture enrichment        | no                          | yes                       | no                   |
+| Text leaves your machine  | no                          | no                        | **yes**, to that API |
 
-Both run entirely on your machine, and both numbers come from the same 27
-fixtures against the same Taiwanese references — the built-in engine's are in
-[`eval/BUILTIN-RESULTS.md`](eval/BUILTIN-RESULTS.md), the model's in
+The first two run entirely on your machine, and their numbers come from the
+same 27 fixtures against the same Taiwanese references — the built-in engine's
+are in [`eval/BUILTIN-RESULTS.md`](eval/BUILTIN-RESULTS.md), the model's in
 [`eval/BENCHMARK-RESULTS.md`](eval/BENCHMARK-RESULTS.md). Ten chrF is the price
 of installing nothing; a whole segment finishes on the built-in engine in about
 the time Ollama takes to paint its first character.
@@ -193,11 +196,20 @@ the time Ollama takes to paint its first character.
 Switch in the popup; `ollama pull qwen3` and `ollama serve` is the whole Ollama
 setup, with no `OLLAMA_ORIGINS` step — [here is why](docs/ENGINEERING.md#how-it-works).
 
+**Your own API** is any server that speaks OpenAI's chat-completions protocol:
+OpenAI, DeepSeek, OpenRouter, Groq, Google Gemini's compatibility endpoint, or
+LM Studio on your own computer. Pick the address from the list, paste a key,
+and the popup checks it and offers the models it can reach. It is for the
+language pair Chrome has no pack for, on a computer that cannot run a model
+worth reading. The key is kept in this browser's local storage and is never
+synced; the text you translate goes to that provider and is billed to your key.
+
 ## Privacy
 
-No account, no API key, no analytics, and no remote endpoint anywhere in the
+No account, no analytics, and no endpoint of the developer's anywhere in the
 code. On the default engine the extension makes no network request at all; on
-the Ollama engine, only to the server URL you configured, on your own machine.
+the Ollama engine, only to the server URL you configured, on your own machine;
+on your own API, only to the address you entered, with your key.
 Permissions are `storage`, `activeTab`, `contextMenus` and
 `declarativeNetRequest` — the last one strips the `Origin` header from this
 extension's own requests to your Ollama server, scoped so a web page's requests
@@ -221,7 +233,7 @@ all, since that is the easy way to send nothing and prove nothing.
 ```bash
 pnpm install
 pnpm build        # -> .output/chrome-mv3, load it unpacked
-pnpm test         # 780 unit tests
+pnpm test         # 874 unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
 pnpm eval:builtin # score the default engine in a real Chrome -> eval/BUILTIN-RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)
@@ -229,6 +241,7 @@ pnpm shoot        # re-shoot every screenshot and the clip on this page
 pnpm e2e:page     # whole-page translation in a real Chrome, end to end
 pnpm e2e:stress   # hostile pages: infinite feeds, route swaps, rapid toggling
 pnpm e2e:egress   # prove the default engine sends nothing, in a real Chrome
+pnpm e2e:byok     # your own API key, against a stand-in provider on 127.0.0.1
 pnpm e2e:epub     # a real .epub opened, read and translated in a real Chrome
 pnpm e2e:first-run # what a brand-new install does on a brand-new profile
 pnpm e2e:prefetch  # prove installing it starts the language-pack download

@@ -27,7 +27,7 @@ import {
 } from '../../ui/fullpage';
 import { translateViaPort } from '../../ui/port-translate';
 import { shouldBypassAI } from '../../core/language';
-import { loadSettings, type Settings } from '../../settings';
+import { activeModel, loadSettings, type Settings } from '../../settings';
 
 /** Where a book's reading position is filed. */
 const POSITION_PREFIX = 'epub-position:';
@@ -206,7 +206,7 @@ mountSelectionTranslator({
     const settings = await loadSettings();
     return {
       engine: settings.engine,
-      modelId: settings.modelId,
+      modelId: activeModel(settings),
       targetLang: settings.targetLang,
       obsidianVault: settings.obsidianVault,
       obsidianFolder: settings.obsidianFolder,

@@ -30,6 +30,7 @@ src/
   api/
     builtin.ts            Chrome's on-device translator: pairs, packs, retry
     ollama.ts             typed streaming + single-shot + enrich client
+    openai.ts             your own key: any OpenAI-compatible streaming API
     probe.ts              is the server there, and does it have that model
   messaging.ts            typed content⇄background port + one-shot protocol
   settings.ts             typed chrome.storage.sync wrapper

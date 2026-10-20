@@ -3,13 +3,15 @@
  *
  * - Streams: one long-lived `stream-translate` port per active translation.
  *   Each port owns a single AbortController; a new START_STREAM cancels the
- *   previous request, and a disconnect aborts in-flight work. The Ollama base
- *   URL is loaded from storage here; inference runs on the user's machine.
+ *   previous request, and a disconnect aborts in-flight work. Engine settings
+ *   are loaded from storage here; inference runs on the user's machine unless
+ *   they chose their own OpenAI-compatible API.
  * - PDF routing: `.pdf` navigations are redirected into the bundled viewer.
  * - EPUB routing: `.epub` navigations are redirected into the reader page.
  */
 import { translateStream, enrichText } from '../api/ollama';
-import { loadSettings } from '../settings';
+import { translateStreamOpenAI } from '../api/openai';
+import { loadSettings, loadApiKey } from '../settings';
 import {
   translateBuiltin,
   BuiltinUnavailableError,
@@ -704,6 +706,42 @@ export default defineBackground(() => {
           if (signal.aborted) return;
           post({ status: 'streaming', chunk: plain });
         };
+
+        // The user's own API, when they chose it. Never a fallback for the
+        // other engines and never fallen back from: it is the one path that
+        // sends text off the machine, so it runs only when picked, and a
+        // failure is reported as its own rather than retried on Ollama the
+        // user may not have.
+        if (engine === 'openai') {
+          try {
+            const apiKey = await within(loadApiKey(), SETTINGS_WAIT_MS);
+            await withGlossary((text, onChunk) =>
+              translateStreamOpenAI({
+                text,
+                baseUrl: settings.apiBaseUrl,
+                apiKey,
+                model: settings.apiModel,
+                targetLang: message.targetLang,
+                context: message.context,
+                retryCount: message.retryCount ?? 0,
+                signal,
+                onChunk,
+              }),
+            );
+            post({ status: 'done' });
+          } catch (error) {
+            if (signal.aborted || (error as Error).name === 'AbortError')
+              return;
+            post({
+              status: 'error',
+              message:
+                error instanceof TypeError
+                  ? `Can't reach ${settings.apiBaseUrl}. Check the address in OpenRead's settings.`
+                  : (error as Error).message,
+            });
+          }
+          return;
+        }
 
         // Why the built-in engine bowed out, kept for the message below. Null
         // whenever it never ran or never failed.

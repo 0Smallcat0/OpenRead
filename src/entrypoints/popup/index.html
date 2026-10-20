@@ -133,6 +133,7 @@
       #siteExceptRow[hidden],
       #pack[hidden],
       #downloadPack[hidden],
+      #apiOnly[hidden],
       #ollamaOnly[hidden] {
         display: none;
       }
@@ -193,32 +194,40 @@
       }
       /* The connection line sits under the URL field it reports on, so it reads
          as that field's state rather than as a second status area. */
-      #connection {
+      #connection,
+      #apiConnection {
         margin-top: 6px;
         font-size: 12px;
         line-height: 1.4;
         color: #4b5563;
       }
-      #connection.ok {
+      #connection.ok,
+      #apiConnection.ok {
         color: #15803d;
       }
-      #connection.warn {
+      #connection.warn,
+      #apiConnection.warn {
         color: #b45309;
       }
-      #connection.error {
+      #connection.error,
+      #apiConnection.error {
         color: #b91c1c;
       }
       @media (prefers-color-scheme: dark) {
-        #connection {
+        #connection,
+        #apiConnection {
           color: #9ca3af;
         }
-        #connection.ok {
+        #connection.ok,
+        #apiConnection.ok {
           color: #16a34a;
         }
-        #connection.warn {
+        #connection.warn,
+        #apiConnection.warn {
           color: #fbbf24;
         }
-        #connection.error {
+        #connection.error,
+        #apiConnection.error {
           color: #f87171;
         }
       }
@@ -291,8 +300,60 @@
       <select id="engine">
         <option value="builtin">Chrome built-in — no setup</option>
         <option value="ollama">Ollama — local LLM</option>
+        <option value="openai">
+          Your own API key — OpenAI, DeepSeek, Gemini…
+        </option>
       </select>
       <p id="engineNote"></p>
+
+      <!-- The one engine that sends text off the machine, so its controls only
+           exist on screen once it has been chosen. -->
+      <div id="apiOnly" hidden>
+        <label for="apiBaseUrl">API address</label>
+        <!-- A list of the common ones, not a select: any server that speaks the
+             protocol works, including one on this computer. -->
+        <input
+          id="apiBaseUrl"
+          type="text"
+          list="apiBaseOptions"
+          spellcheck="false"
+          placeholder="https://api.openai.com/v1"
+        />
+        <datalist id="apiBaseOptions">
+          <option value="https://api.openai.com/v1">OpenAI</option>
+          <option value="https://api.deepseek.com/v1">DeepSeek</option>
+          <option value="https://openrouter.ai/api/v1">OpenRouter</option>
+          <option
+            value="https://generativelanguage.googleapis.com/v1beta/openai"
+          >
+            Google Gemini
+          </option>
+          <option value="https://api.groq.com/openai/v1">Groq</option>
+          <option value="http://localhost:1234/v1">
+            LM Studio on this computer
+          </option>
+        </datalist>
+
+        <label for="apiKey">API key</label>
+        <input
+          id="apiKey"
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Not needed for LM Studio"
+        />
+
+        <label for="apiModel">Model</label>
+        <input
+          id="apiModel"
+          type="text"
+          list="apiModelOptions"
+          spellcheck="false"
+          placeholder="Pick from the list once the key is checked"
+        />
+        <datalist id="apiModelOptions"></datalist>
+        <div id="apiConnection" role="status" aria-live="polite"></div>
+      </div>
 
       <!-- Every Ollama-only control lives here, so choosing the built-in
            engine hides a server URL, a model name and a connection check that

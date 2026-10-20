@@ -1,11 +1,73 @@
 import { describe, it, expect } from 'vitest';
 import {
+  apiHasModel,
   corsFixCommand,
+  describeApiConnection,
   describeConnection,
   describeEngineFailure,
   modelIsInstalled,
   type ConnectionProbe,
 } from './diagnostics';
+
+describe('describeApiConnection', () => {
+  const API = {
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'm',
+    hasKey: true,
+  };
+
+  it('says a rejected key is the key, and a missing one is missing', () => {
+    expect(
+      describeApiConnection({ kind: 'unauthorized', status: 401 }, API),
+    ).toMatchObject({
+      tone: 'error',
+      message: expect.stringMatching(/rejected this key/),
+    });
+    expect(
+      describeApiConnection(
+        { kind: 'unauthorized', status: 401 },
+        { ...API, hasKey: false },
+      ).message,
+    ).toMatch(/wants an API key/);
+  });
+
+  it('only warns when a server has no model list, since chat may still work', () => {
+    expect(
+      describeApiConnection({ kind: 'http', status: 404 }, API),
+    ).toMatchObject({
+      tone: 'warn',
+      message: expect.stringMatching(/no model list/),
+    });
+  });
+
+  it('asks for a model before calling the setup good', () => {
+    expect(
+      describeApiConnection(
+        { kind: 'ok', models: ['m'] },
+        { ...API, model: ' ' },
+      ),
+    ).toMatchObject({
+      tone: 'warn',
+      message: expect.stringMatching(/Choose a model/),
+    });
+  });
+
+  it('warns about a model the key cannot see', () => {
+    expect(
+      describeApiConnection({ kind: 'ok', models: ['other'] }, API),
+    ).toMatchObject({ tone: 'warn' });
+    expect(
+      describeApiConnection({ kind: 'ok', models: ['m'] }, API),
+    ).toMatchObject({ tone: 'ok' });
+  });
+
+  it("accepts Gemini's prefixed ids for the bare name", () => {
+    expect(apiHasModel('gemini-2.5-flash', ['models/gemini-2.5-flash'])).toBe(
+      true,
+    );
+    expect(apiHasModel('gemini', ['models/gemini-2.5-flash'])).toBe(false);
+  });
+});
 
 const OPTS = {
   baseUrl: 'http://localhost:11434',

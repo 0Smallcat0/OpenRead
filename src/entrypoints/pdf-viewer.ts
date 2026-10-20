@@ -2,7 +2,7 @@ import { mountSelectionTranslator } from '../ui/selection';
 import { togglePdfTranslation } from '../ui/pdf-translate';
 import { translateViaPort } from '../ui/port-translate';
 import { shouldBypassAI } from '../core/language';
-import { loadSettings } from '../settings';
+import { activeModel, loadSettings } from '../settings';
 
 /**
  * Runs inside the vendored PDF.js viewer page (loaded by viewer.html as a
@@ -147,7 +147,7 @@ export default defineUnlistedScript(() => {
       const s = await loadSettings();
       return {
         engine: s.engine,
-        modelId: s.modelId,
+        modelId: activeModel(s),
         targetLang: s.targetLang,
         obsidianVault: s.obsidianVault,
         obsidianFolder: s.obsidianFolder,

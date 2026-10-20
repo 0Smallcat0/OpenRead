@@ -17,6 +17,8 @@
 import {
   loadSettings,
   saveSettings,
+  loadApiKey,
+  saveApiKey,
   TARGET_LANGUAGES,
   DEFAULT_SETTINGS,
   type Settings,
@@ -27,13 +29,24 @@ import { describeRestrictedPage } from '../core/restricted';
 import { toBcp47 } from '../core/bcp47';
 import type { PackReport } from '../api/builtin';
 import {
+  describeApiConnection,
   describeConnection,
+  type ApiProbe,
   type ConnectionProbe,
   type PlatformOs,
 } from '../core/diagnostics';
 
 export interface PopupDeps {
   probe: (baseUrl: string, signal?: AbortSignal) => Promise<ConnectionProbe>;
+  /**
+   * Ask an OpenAI-compatible API which models the key can use. Optional: a
+   * popup without it simply has no connection line for that engine.
+   */
+  probeApi?: (
+    baseUrl: string,
+    apiKey: string,
+    signal?: AbortSignal,
+  ) => Promise<ApiProbe>;
   /** Which OS to tailor the OLLAMA_ORIGINS fix command for. */
   platformOs: () => Promise<PlatformOs>;
   writeClipboard: (text: string) => Promise<void>;
@@ -110,6 +123,12 @@ interface Elements {
   baseUrl: HTMLInputElement;
   model: HTMLInputElement;
   modelOptions: HTMLDataListElement;
+  apiOnly: HTMLElement | null;
+  apiBaseUrl: HTMLInputElement | null;
+  apiKey: HTMLInputElement | null;
+  apiModel: HTMLInputElement | null;
+  apiModelOptions: HTMLDataListElement | null;
+  apiConnection: HTMLElement | null;
   lang: HTMLSelectElement;
   displayMode: HTMLSelectElement | null;
   hoverTranslate: HTMLSelectElement | null;
@@ -146,6 +165,13 @@ function collect(root: ParentNode): Elements | null {
   const baseUrl = root.querySelector<HTMLInputElement>('#baseUrl');
   const model = root.querySelector<HTMLInputElement>('#modelId');
   const modelOptions = root.querySelector<HTMLDataListElement>('#modelOptions');
+  const apiOnly = root.querySelector<HTMLElement>('#apiOnly');
+  const apiBaseUrl = root.querySelector<HTMLInputElement>('#apiBaseUrl');
+  const apiKey = root.querySelector<HTMLInputElement>('#apiKey');
+  const apiModel = root.querySelector<HTMLInputElement>('#apiModel');
+  const apiModelOptions =
+    root.querySelector<HTMLDataListElement>('#apiModelOptions');
+  const apiConnection = root.querySelector<HTMLElement>('#apiConnection');
   const lang = root.querySelector<HTMLSelectElement>('#targetLang');
   const displayMode = root.querySelector<HTMLSelectElement>('#displayMode');
   const hoverTranslate =
@@ -206,6 +232,12 @@ function collect(root: ParentNode): Elements | null {
     baseUrl,
     model,
     modelOptions,
+    apiOnly,
+    apiBaseUrl,
+    apiKey,
+    apiModel,
+    apiModelOptions,
+    apiConnection,
     lang,
     displayMode,
     hoverTranslate,
@@ -308,10 +340,19 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
       'A local LLM through Ollama. Slower and needs a server plus a model ' +
       'download, but it reads the surrounding page for context and unlocks ' +
       'capture enrichment.',
+    openai:
+      'Any OpenAI-compatible API with your own key — OpenAI, DeepSeek, ' +
+      'OpenRouter, Gemini, Groq, or LM Studio on this computer. The text you ' +
+      'translate is sent to that provider and billed to your key. The key is ' +
+      'kept on this computer only.',
   };
 
   const currentEngine = (): Engine =>
-    el.engine.value === 'ollama' ? 'ollama' : 'builtin';
+    el.engine.value === 'ollama'
+      ? 'ollama'
+      : el.engine.value === 'openai'
+        ? 'openai'
+        : 'builtin';
 
   /** The hosts the user has excluded, and the one this popup was opened over. */
   let except: string[] = [];
@@ -473,7 +514,8 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
         }
         case 'unavailable':
           setPackNote(
-            `Chrome cannot translate ${pair}. Switch to Ollama for this pair.`,
+            `Chrome cannot translate ${pair}. Switch to Ollama or your own ` +
+              `API for this pair.`,
             'warn',
           );
           break;
@@ -488,7 +530,7 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
           setPackNote(
             'This browser has no built-in translator, so nothing here will ' +
               'work until you update to Chrome 138 or later — or switch the ' +
-              'translator above to Ollama.',
+              'translator above to Ollama or your own API.',
             'warn',
           );
           break;
@@ -542,6 +584,64 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
       el.ollamaOnly.setAttribute('hidden', '');
       el.enrichOnly?.setAttribute('hidden', '');
     }
+    if (engine === 'openai') el.apiOnly?.removeAttribute('hidden');
+    else el.apiOnly?.setAttribute('hidden', '');
+  };
+
+  // The API's own probe, kept apart from Ollama's for the same reasons: a
+  // retyped model is re-judged from it without a request, and a slow answer
+  // for an address the user has since changed must not overwrite a newer one.
+  let lastApiProbe: ApiProbe | null = null;
+  let apiGeneration = 0;
+  let apiInFlight: AbortController | null = null;
+
+  const apiBase = (): string =>
+    el.apiBaseUrl?.value.trim() || DEFAULT_SETTINGS.apiBaseUrl;
+
+  const renderApi = (): void => {
+    if (!lastApiProbe || !el.apiConnection) return;
+    const report = describeApiConnection(lastApiProbe, {
+      baseUrl: apiBase(),
+      model: el.apiModel?.value ?? '',
+      hasKey: (el.apiKey?.value.trim() ?? '') !== '',
+    });
+    el.apiConnection.textContent = report.message;
+    el.apiConnection.className = report.tone;
+  };
+
+  /**
+   * Whether the stored key has reached the field. Until it has, a probe would
+   * go out keyless and report "wants a key" to a user who saved one, and a
+   * write-through would store the empty field over it.
+   */
+  let keyLoaded = false;
+
+  const checkApi = (): void => {
+    if (currentEngine() !== 'openai' || !deps.probeApi || !el.apiConnection) {
+      return;
+    }
+    if (!settingsLoaded || (el.apiKey && !keyLoaded)) return;
+    const mine = ++apiGeneration;
+    apiInFlight?.abort();
+    const controller = new AbortController();
+    apiInFlight = controller;
+    el.apiConnection.textContent = 'Checking…';
+    el.apiConnection.className = '';
+    void deps
+      .probeApi(apiBase(), el.apiKey?.value ?? '', controller.signal)
+      .then((probe) => {
+        if (mine !== apiGeneration) return;
+        lastApiProbe = probe;
+        el.apiModelOptions?.replaceChildren();
+        if (probe.kind === 'ok') {
+          for (const id of probe.models) {
+            const option = document.createElement('option');
+            option.value = id;
+            el.apiModelOptions?.appendChild(option);
+          }
+        }
+        renderApi();
+      });
   };
 
   const check = (): void => {
@@ -589,6 +689,10 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
       engine: currentEngine(),
       baseUrl: el.baseUrl.value.trim() || DEFAULT_SETTINGS.baseUrl,
       modelId: el.model.value.trim() || DEFAULT_SETTINGS.modelId,
+      apiBaseUrl: apiBase(),
+      apiModel: el.apiModel
+        ? el.apiModel.value.trim()
+        : DEFAULT_SETTINGS.apiModel,
       targetLang: el.lang.value,
       autoTranslate: currentAuto(),
       autoTranslateExcept: except,
@@ -611,7 +715,13 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
       obsidianFolder: el.folder.value.trim() || DEFAULT_SETTINGS.obsidianFolder,
       enrichOnCapture: el.enrich.checked,
     };
-    return saveSettings(settings)
+    // The key goes to local storage, beside the synced settings rather than in
+    // them, and in the same write as far as the status line is concerned: a
+    // Save that kept the address and lost the key is a failed Save.
+    return Promise.all([
+      saveSettings(settings),
+      el.apiKey && keyLoaded ? saveApiKey(el.apiKey.value) : undefined,
+    ])
       .then(() => {
         if (!announce) return;
         el.status.classList.remove('error');
@@ -635,6 +745,8 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     renderEngine();
     el.baseUrl.value = settings.baseUrl;
     el.model.value = settings.modelId;
+    if (el.apiBaseUrl) el.apiBaseUrl.value = settings.apiBaseUrl;
+    if (el.apiModel) el.apiModel.value = settings.apiModel;
     el.lang.value = settings.targetLang;
     el.auto.value = settings.autoTranslate;
     if (el.displayMode) el.displayMode.value = settings.displayMode;
@@ -653,7 +765,22 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     settingsLoaded = true;
     renderPack();
     check();
+    checkApi();
   });
+
+  if (el.apiKey) {
+    void loadApiKey()
+      .then(
+        (key) => {
+          if (el.apiKey) el.apiKey.value = key;
+        },
+        () => undefined,
+      )
+      .finally(() => {
+        keyLoaded = true;
+        checkApi();
+      });
+  }
 
   // The host arrives on its own schedule, and it only changes what the
   // exception row says, so it re-renders rather than gating the load above.
@@ -720,6 +847,19 @@ export function mountPopup(root: ParentNode, deps: PopupDeps): boolean {
     renderEngine();
     renderPack();
     check();
+    checkApi();
+    void persist();
+  });
+  // A new address or key is a new question for the server; a new model name
+  // is answered by the list already in hand.
+  for (const field of [el.apiBaseUrl, el.apiKey]) {
+    field?.addEventListener('change', () => {
+      checkApi();
+      void persist();
+    });
+  }
+  el.apiModel?.addEventListener('input', renderApi);
+  el.apiModel?.addEventListener('change', () => {
     void persist();
   });
   el.baseUrl.addEventListener('change', () => {

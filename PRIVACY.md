@@ -1,9 +1,10 @@
 # Privacy Policy — OpenRead
 
-_Last updated: 2026-08-06_
+_Last updated: 2026-10-21_
 
-OpenRead is a local-first browser extension. It is designed so that your data
-never leaves your machine.
+OpenRead is a local-first browser extension. On its two default engines your
+data never leaves your machine; the optional third sends the text you translate
+to an API you name, and to nothing else.
 
 ## What the extension collects
 
@@ -24,8 +25,14 @@ It depends on which engine you have chosen in the popup.
   default `http://localhost:11434`, i.e. your own computer — and inference runs
   on that machine. If you point the URL at a remote machine, the text goes to
   that machine, which you chose and control.
+- **Your own API (opt-in).** The text, with a few sentences around it for
+  context, is sent to the OpenAI-compatible address you enter — OpenAI,
+  DeepSeek, OpenRouter, Google, Groq, or a server on your own computer — with
+  the key you paste. That provider handles it under its own terms and bills
+  your key. Nothing is sent there until you choose this engine.
 
-In neither case is the text sent to the developer or to any third party.
+In no case is the text sent to the developer, and on the first two engines it
+is sent to no third party at all.
 
 **Automatic translation** is off until you turn it on, and it changes what gets
 translated, not where it goes. Once on, a page you open is handed to whichever
@@ -63,7 +70,11 @@ you run it.
   automatic-translation mode and the list of sites excluded from it,
   Obsidian vault and folder, enrichment toggle) are stored with
   `chrome.storage.sync`. They stay inside your browser profile; Chrome may sync
-  them across your own signed-in browsers as with any extension setting.
+  them across your own signed-in browsers as with any extension setting. The
+  API address and model name are among them.
+- **Your API key**, if you enter one, is stored with `chrome.storage.local`:
+  in this browser profile only, never synced, and sent only to the API address
+  you entered alongside it.
 - **Captured notes** ("Save to Obsidian") are written to your local Obsidian
   vault via the `obsidian://` URL scheme, or copied to your clipboard as a
   fallback. They are not transmitted anywhere else.
@@ -90,7 +101,7 @@ you run it.
 
 None. All code ships inside the extension package. On the default engine the
 extension makes no network requests; on the Ollama engine it makes them only to
-the server URL you configure.
+the server URL you configure; on your own API, only to the address you enter.
 
 ## Changes
 
