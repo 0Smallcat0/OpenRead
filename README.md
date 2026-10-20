@@ -1,9 +1,9 @@
 # OpenRead
 
-> **Read the web, your PDFs, your books and YouTube's captions in your own
-> language, without sending a word of it to anyone.** No account and no cloud
-> by default — and your own API key, if you want a stronger model than your
-> machine can run.
+> **Bilingual translation for web pages, PDFs, books and YouTube captions —
+> free, with no account and no quota.** The default engine is the translator
+> Chrome already ships, running on your own machine, so there is no key to get
+> and nothing to pay. Bring your own API key if you want a stronger model.
 
 ![Selecting a paragraph on Wikipedia and translating it into Traditional Chinese in place, with buttons to save it to Obsidian or copy it](docs/screenshots/demo.gif)
 
@@ -16,6 +16,9 @@
 
 ## Why
 
+- **Free, and it stays free.** No sign-in, no daily limit, no paid tier. The
+  default engine costs nothing to run because it runs on your computer, not on
+  a server someone has to pay for.
 - **Some things cannot go in a cloud translator.** Unpublished drafts,
   contracts, medical records, anything under NDA. Both default engines run on
   your own machine; the optional third sends text only to the API you name.
@@ -28,6 +31,9 @@
 - **And EPUBs.** A book opens in a reader of its own, with its contents, its
   pictures and your place in it kept. Ask for a translation once and it follows
   you from chapter to chapter.
+- **And YouTube.** Turn on CC and every caption line shows with its translation
+  under it. Auto-generated captions are joined back into sentences before they
+  are translated.
 - **Traditional Chinese that reads like Taiwan.** Most tools translate into
   Simplified and convert character by character, which produces `界面`, `公裡`,
   `數據庫` where a Taiwanese reader expects `介面`, `公里`, `資料庫`. OpenRead
@@ -243,7 +249,7 @@ all, since that is the easy way to send nothing and prove nothing.
 ```bash
 pnpm install
 pnpm build        # -> .output/chrome-mv3, load it unpacked
-pnpm test         # 874 unit tests
+pnpm test         # 913 unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
 pnpm eval:builtin # score the default engine in a real Chrome -> eval/BUILTIN-RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)
@@ -252,6 +258,7 @@ pnpm e2e:page     # whole-page translation in a real Chrome, end to end
 pnpm e2e:stress   # hostile pages: infinite feeds, route swaps, rapid toggling
 pnpm e2e:egress   # prove the default engine sends nothing, in a real Chrome
 pnpm e2e:byok     # your own API key, against a stand-in provider on 127.0.0.1
+pnpm e2e:youtube  # bilingual captions on a real YouTube video, CC off and on again
 pnpm e2e:epub     # a real .epub opened, read and translated in a real Chrome
 pnpm e2e:first-run # what a brand-new install does on a brand-new profile
 pnpm e2e:prefetch  # prove installing it starts the language-pack download
