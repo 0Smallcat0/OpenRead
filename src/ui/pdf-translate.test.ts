@@ -146,6 +146,50 @@ describe('pages the viewer draws later', () => {
   });
 });
 
+describe('a page drawn as the last worker stops', () => {
+  // PDF.js builds a text layer through a chain of promises, so a page can be
+  // drawn in any microtask. Between a worker leaving its loop and its count
+  // going down, the observer saw a worker still running and left the page
+  // queued — and nothing ever looked at the queue again. A little later and
+  // the observer started a second run that the first run's finish() then
+  // declared done, so the button could no longer stop it.
+  it.each(Array.from({ length: 12 }, (_, n) => n))(
+    'is translated when drawn %i microtasks after the last translation',
+    async (delay) => {
+      viewerWith(1);
+      const extra = document.createElement('div');
+      extra.className = 'page';
+      extra.innerHTML = '<div class="textLayer"></div>';
+      document.getElementById('viewer')?.appendChild(extra);
+      const draw = (): void => {
+        const span = document.createElement('span');
+        span.textContent = 'A page drawn while the last worker was leaving.';
+        extra.querySelector('.textLayer')?.appendChild(span);
+      };
+      let first = true;
+
+      await translatePdf(document, {
+        targetLang: 'Traditional Chinese',
+        translate: (text) => {
+          if (first) {
+            first = false;
+            let chain = Promise.resolve();
+            for (let i = 0; i < delay; i++) chain = chain.then(() => undefined);
+            void chain.then(draw);
+          }
+          return Promise.resolve(`[zh] ${text}`);
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(blocks()).toBe(2);
+      expect(
+        document.getElementById('oit-page-progress')?.textContent ?? '',
+      ).not.toMatch(/Done — 1 pages/);
+    },
+  );
+});
+
 describe('a page where every paragraph failed', () => {
   it('is not marked translated, so the next press tries it again', async () => {
     // Every paragraph throwing — a language pack not there yet, Ollama not

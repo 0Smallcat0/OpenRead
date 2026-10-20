@@ -379,12 +379,32 @@ export async function translatePdf(
     );
   };
 
+  /** Settles the first time every worker has stopped: the press's own result. */
+  let firstIdle: () => void = () => undefined;
+  const settled = new Promise<void>((resolve) => {
+    firstIdle = resolve;
+  });
+
+  // Whether to finish is decided where the last worker stops, in the same
+  // step, rather than by whoever awaited it. A page drawn in the microtasks
+  // between a worker leaving its loop and its count going down saw a worker
+  // still running and stayed queued for good; a run the observer started
+  // just after was then declared done by the earlier run's finish(), and
+  // the button could no longer stop it.
   const run = async (): Promise<void> => {
     draining++;
     try {
       await drain();
     } finally {
       draining--;
+      if (draining === 0) {
+        if (!controller.signal.aborted && queued.length > 0) {
+          void run();
+        } else {
+          finish();
+          firstIdle();
+        }
+      }
     }
   };
 
@@ -405,21 +425,21 @@ export async function translatePdf(
     active = controller;
     progress = mountPageProgress(doc, stopPdfTranslation);
     progress.update(pages, pages + queued.length);
-    void run().then(finish);
+    void run();
   });
   const viewer = doc.getElementById('viewer') ?? doc.body;
   watcher.observe(viewer, { childList: true, subtree: true });
 
-  await Promise.all(
-    Array.from(
-      { length: Math.min(PAGE_CONCURRENCY, Math.max(queued.length, 1)) },
-      () => run(),
-    ),
-  );
+  for (
+    let worker = 0;
+    worker < Math.min(PAGE_CONCURRENCY, Math.max(queued.length, 1));
+    worker++
+  ) {
+    void run();
+  }
+  await settled;
 
-  const stopped = controller.signal.aborted;
-  finish();
-  return { pages, paragraphs, stopped };
+  return { pages, paragraphs, stopped: controller.signal.aborted };
 }
 
 /** One control, the same three meanings the web page's button has. */
