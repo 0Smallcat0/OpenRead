@@ -120,9 +120,9 @@ let badges: { text?: string; title?: string }[];
 /** How often the worker has poked a `chrome.*` API to stay alive. */
 let platformInfoCalls: number;
 
-/** Let the worker's awaited `loadSettings()` and stream call resolve. */
+/** Let the worker's awaited settings, each raced against its time limit, and stream call resolve. */
 async function settle(): Promise<void> {
-  for (let i = 0; i < 6; i++) await Promise.resolve();
+  for (let i = 0; i < 20; i++) await Promise.resolve();
 }
 
 beforeEach(async () => {
@@ -1370,5 +1370,101 @@ describe('the right-click menu', () => {
     const before = createdMenus.length;
     registered.onInstalled();
     expect(createdMenus.length).toBe(before);
+  });
+});
+
+describe('a step before the request that never answers', () => {
+  // `originRuleReady` and `loadSettings` were awaited with no limit and, in
+  // the capture path, outside any try. A storage call or a rule install that
+  // hung held the capture's "Saving…" and the translation's spinner for good;
+  // one that threw meant no answer was ever sent.
+  const ENRICH = {
+    type: 'ENRICH_CAPTURE',
+    text: 'body',
+    model: 'qwen3:latest',
+    targetLang: 'Traditional Chinese',
+  };
+  const never = (): Promise<never> => new Promise<never>(() => undefined);
+
+  function connect(): FakePort {
+    const port = new FakePort('stream-translate');
+    registered.onConnect(port);
+    return port;
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('enriches anyway when the Origin rule never finishes installing', async () => {
+    vi.useFakeTimers();
+    sessionRules.mockImplementation(never);
+    registered.onStartup();
+    mocks.enrichText.mockResolvedValue({ title: 'T', tags: [] });
+    const sendResponse = vi.fn();
+    registered.onMessage(ENRICH, {}, sendResponse);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(sendResponse).toHaveBeenCalledWith({
+      result: { title: 'T', tags: [] },
+    });
+  });
+
+  it('answers a capture with null when settings never load', async () => {
+    vi.useFakeTimers();
+    mocks.loadSettings.mockImplementation(never);
+    const sendResponse = vi.fn();
+    registered.onMessage(ENRICH, {}, sendResponse);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(sendResponse).toHaveBeenCalledWith({ result: null });
+    expect(mocks.enrichText).not.toHaveBeenCalled();
+  });
+
+  it('answers a capture with null when settings fail to load', async () => {
+    mocks.loadSettings.mockRejectedValue(new Error('storage gone'));
+    const sendResponse = vi.fn();
+    registered.onMessage(ENRICH, {}, sendResponse);
+
+    await settle();
+    expect(sendResponse).toHaveBeenCalledWith({ result: null });
+  });
+
+  it('translates anyway when the Origin rule never finishes installing', async () => {
+    vi.useFakeTimers();
+    sessionRules.mockImplementation(never);
+    registered.onStartup();
+    mocks.translateStream.mockImplementation(
+      ({ onChunk }: { onChunk: (chunk: string) => void }) => {
+        onChunk('你好');
+        return Promise.resolve();
+      },
+    );
+    const port = connect();
+    port.send({
+      type: 'START_STREAM',
+      text: 'Hello',
+      model: 'm',
+      targetLang: 'Traditional Chinese',
+    });
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(port.posted.at(-1)).toEqual({ status: 'done' });
+  });
+
+  it('says so when settings cannot be read for a translation', async () => {
+    vi.useFakeTimers();
+    mocks.loadSettings.mockImplementation(never);
+    const port = connect();
+    port.send({
+      type: 'START_STREAM',
+      text: 'Hello',
+      model: 'm',
+      targetLang: 'Traditional Chinese',
+    });
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(port.posted.at(-1)).toMatchObject({ status: 'error' });
+    expect(mocks.translateStream).not.toHaveBeenCalled();
   });
 });
