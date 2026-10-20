@@ -246,3 +246,29 @@ describe('renderChapter: requests that do not look like a src', () => {
     expect(html).not.toContain('t.example');
   });
 });
+
+describe('renderChapter: SVG presentation attributes', () => {
+  it('fetches nothing through fill, stroke, filter, mask, clip-path, marker or cursor', async () => {
+    // These are CSS, parsed as CSS, and a url() in one is fetched exactly like
+    // one in a style attribute — with the reader page's CSP setting no
+    // img-src to stop it.
+    const { html } = await render(
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+        '<rect width="10" height="10" fill="url(https://t.example/a.svg#g)"/>' +
+        '<rect stroke="url( https://t.example/b.svg#g)" filter="url(https://t.example/c.svg#f)"/>' +
+        '<rect mask="url(https://t.example/d.svg#m)" clip-path="URL(https://t.example/e.svg#c)"/>' +
+        '<path marker-start="url(https://t.example/f.svg#m)" cursor="url(https://t.example/g.cur), auto"/>' +
+        '<rect fill="u\\72l(https://t.example/h.svg#g)"/></svg>',
+    );
+    expect(html).not.toContain('t.example');
+  });
+
+  it('keeps a url() that points inside the chapter', async () => {
+    const { html } = await render(
+      '<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g"/></defs>' +
+        '<rect fill="url(#g)" stroke="url(\'#g\')" width="10"/></svg>',
+    );
+    expect(html).toContain('fill="url(#g)"');
+    expect(html).toContain('stroke="url(\'#g\')"');
+  });
+});

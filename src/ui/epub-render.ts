@@ -139,6 +139,29 @@ function stripStyleUrls(element: Element): void {
   else element.removeAttribute('style');
 }
 
+/** The SVG namespace, whose presentation attributes are CSS. */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** `url(#id)`: a paint server or filter inside this chapter, fetching nothing. */
+const LOCAL_URL = /url\(\s*(['"]?)#[^'"()\\\s]*\1\s*\)/gi;
+
+/**
+ * `fill`, `stroke`, `filter`, `mask`, `clip-path`, `marker-*`, `cursor`: on an
+ * SVG element these are CSS properties written as attributes, and a remote
+ * `url()` in one is fetched exactly like one in `style` — the reader page's
+ * CSP sets no `img-src` to stop it. A reference to `#id` inside the chapter is
+ * how SVG fills with a gradient, and stays.
+ */
+function stripPresentationUrls(element: Element): void {
+  if (element.namespaceURI !== SVG_NS) return;
+  for (const { name, value } of Array.from(element.attributes)) {
+    if (name === 'style' || name === 'href' || name === 'xlink:href') continue;
+    if (STYLE_REQUEST.test(value.replace(LOCAL_URL, ''))) {
+      element.removeAttribute(name);
+    }
+  }
+}
+
 /**
  * SVG animation, which can set any attribute to anything after the chapter has
  * been cleaned — `<set attributeName="href" to="https://…">` is a remote image
@@ -228,6 +251,7 @@ export async function renderChapter(
     }
     stripEventHandlers(element);
     stripStyleUrls(element);
+    stripPresentationUrls(element);
 
     // A responsive image set is several more URLs, all of them unresolved.
     element.removeAttribute('srcset');
