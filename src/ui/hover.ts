@@ -85,7 +85,10 @@ function blockAt(doc: Document, x: number, y: number): HTMLElement | null {
  * than tracking key state separately — the browser already carries it, and two
  * sources of truth about whether Alt is down is one more than is needed.
  */
-export function mountHoverTranslate(doc: Document, deps: HoverDeps): () => void {
+export function mountHoverTranslate(
+  doc: Document,
+  deps: HoverDeps,
+): () => void {
   let key: HoverKey = 'off';
   let marked: HTMLElement | null = null;
   /** The block a translation is running for, so pointing again does not stack. */
@@ -97,35 +100,41 @@ export function mountHoverTranslate(doc: Document, deps: HoverDeps): () => void 
   };
 
   const onMove = (event: MouseEvent): void => {
-    void deps.getKey().then((current) => {
-      key = current;
-      if (key === 'off' || !held(event, key)) {
+    // Caught: this runs on every mousemove, and once the extension reloads
+    // the script left in an open tab fails every storage read — "Extension
+    // context invalidated" — which was one unhandled rejection per pixel.
+    void deps
+      .getKey()
+      .then((current) => {
+        key = current;
+        if (key === 'off' || !held(event, key)) {
+          unmark();
+          return;
+        }
+        const block = blockAt(doc, event.clientX, event.clientY);
+        if (!block) {
+          unmark();
+          return;
+        }
+        if (block === marked) return;
         unmark();
-        return;
-      }
-      const block = blockAt(doc, event.clientX, event.clientY);
-      if (!block) {
-        unmark();
-        return;
-      }
-      if (block === marked) return;
-      unmark();
-      ensureStyle(doc);
-      block.classList.add(HOVER_CLASS);
-      marked = block;
+        ensureStyle(doc);
+        block.classList.add(HOVER_CLASS);
+        marked = block;
 
-      if (busy === block) return;
-      busy = block;
-      void deps
-        .translateBlock(block)
-        .catch(() => undefined)
-        .finally(() => {
-          if (busy === block) busy = null;
-          // The outline has done its job once the translation is under the
-          // paragraph; leaving it would mark a block that is no longer offered.
-          if (marked === block) unmark();
-        });
-    });
+        if (busy === block) return;
+        busy = block;
+        void deps
+          .translateBlock(block)
+          .catch(() => undefined)
+          .finally(() => {
+            if (busy === block) busy = null;
+            // The outline has done its job once the translation is under the
+            // paragraph; leaving it would mark a block that is no longer offered.
+            if (marked === block) unmark();
+          });
+      })
+      .catch(() => undefined);
   };
 
   // A key released while the pointer sits still produces no `mousemove`, so the

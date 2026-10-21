@@ -91,3 +91,17 @@ describe('parseEnrichResponse', () => {
     expect(parseEnrichResponse('{"title": unterminated')).toBeNull();
   });
 });
+
+describe('length caps and emoji', () => {
+  it('never leaves half a surrogate pair for the Obsidian URI to choke on', () => {
+    // The caps counted UTF-16 units, so a model that answered in emoji could
+    // be cut mid-pair — and `encodeURIComponent` throws on what is left.
+    const long = 'a' + '🧠'.repeat(400);
+    const out = parseEnrichResponse(
+      JSON.stringify({ title: long, summary: long, tags: [long] }),
+    );
+    expect(() => encodeURIComponent(out?.title ?? '')).not.toThrow();
+    expect(() => encodeURIComponent(out?.summary ?? '')).not.toThrow();
+    expect(() => encodeURIComponent(out?.tags?.[0] ?? '')).not.toThrow();
+  });
+});

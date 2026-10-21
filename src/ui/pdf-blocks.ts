@@ -81,16 +81,28 @@ export function collectPdfLines(
     spans = [];
   };
 
-  for (const child of Array.from(layer.children)) {
-    if (child.tagName === 'BR') {
-      flush();
-      continue;
+  const walk = (parent: Element): void => {
+    for (const child of Array.from(parent.children)) {
+      if (child.tagName === 'BR') {
+        flush();
+        continue;
+      }
+      // A tagged PDF's structure. The viewer asks for `includeMarkedContent`,
+      // so anything exported from Word, Google Docs or InDesign arrives with
+      // its spans and `<br>`s nested inside these wrappers — and taking the
+      // wrapper for a span glued every line of it together without a space,
+      // and handed the whole page over as one paragraph.
+      if (child.classList.contains('markedContent')) {
+        walk(child);
+        continue;
+      }
+      // Anything else with text is part of the current line. PDF.js also emits
+      // empty spans for positioning, which contribute nothing and are dropped
+      // by the emptiness check in `flush`.
+      if (child instanceof HTMLElement) spans.push(child);
     }
-    // Anything else with text is part of the current line. PDF.js also emits
-    // empty spans for positioning, which contribute nothing and are dropped by
-    // the emptiness check in `flush`.
-    if (child instanceof HTMLElement) spans.push(child);
-  }
+  };
+  walk(layer);
   flush();
   return lines;
 }
@@ -135,7 +147,8 @@ function overlaps(a: Box, b: Box): boolean {
 function medianPitch(lines: PdfLine[]): number {
   const pitches: number[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const step = (lines[i] as PdfLine).box.top - (lines[i - 1] as PdfLine).box.top;
+    const step =
+      (lines[i] as PdfLine).box.top - (lines[i - 1] as PdfLine).box.top;
     if (step > 0) pitches.push(step);
   }
   if (pitches.length === 0) return 0;

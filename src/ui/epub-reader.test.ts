@@ -24,6 +24,8 @@ interface Store {
   saved: Map<string, ReadingPosition>;
   urls: string[];
   revoked: string[];
+  /** Holds every position lookup until it settles, to pin a race in place. */
+  gate?: Promise<unknown>;
 }
 
 function reset(): Store {
@@ -42,7 +44,10 @@ function reader(store: Store, onChapter?: (info: { index: number }) => void) {
       return url;
     },
     revokeUrl: (url) => store.revoked.push(url),
-    loadPosition: (id) => Promise.resolve(store.saved.get(id) ?? null),
+    loadPosition: async (id) => {
+      await store.gate;
+      return store.saved.get(id) ?? null;
+    },
     savePosition: (id, position) => {
       store.saved.set(id, position);
       return Promise.resolve();
@@ -161,6 +166,85 @@ describe('mountReader', () => {
 
     await view.next();
     expect(store.revoked).toEqual(store.urls);
+  });
+
+  it('shows the chapter asked for last, not the one that rendered last', async () => {
+    // Two quick presses — Next twice, or a contents entry while a chapter full
+    // of pictures is still decompressing — used to race: whichever render
+    // finished last won the page, under a header and a saved position that
+    // named the other chapter, and its pictures were never released.
+    const pictures = Array.from(
+      { length: 30 },
+      (_, n) => `<img src="fig${String(n)}.png" alt=""/>`,
+    ).join('');
+    const chapters: string[] = [];
+    const view = reader(store, ({ index }) => chapters.push(String(index)));
+    await view.open(
+      await buildEpub({
+        chapters: [
+          { name: 'ch1.xhtml', body: '<p>Opening.</p>' },
+          { name: 'ch2.xhtml', body: `<p>Slow pictures.</p>${pictures}` },
+          { name: 'ch3.xhtml', body: '<p>The plain chapter.</p>' },
+        ],
+        extra: Array.from({ length: 30 }, (_, n) => ({
+          name: `OEBPS/fig${String(n)}.png`,
+          body: `PNGDATA${String(n)}`,
+        })),
+      }),
+    );
+    chapters.length = 0;
+
+    await Promise.all([view.goTo(1), view.goTo(2)]);
+
+    expect(id('oit-epub-content').textContent).toContain('The plain chapter.');
+    expect(id('oit-epub-where').textContent).toContain('3 / 3');
+    expect(view.position()?.spineIndex).toBe(2);
+    expect(chapters).toEqual(['2']);
+    // Every picture the abandoned render made is let go.
+    expect(store.revoked.sort()).toEqual(store.urls.sort());
+  });
+
+  it('does not paint the last book over the one opened during its render', async () => {
+    // A slow chapter of book A, then book B opened before it finished: A's
+    // chapter was painted under B's title, reported as B's chapter, and its
+    // index saved as B's reading position.
+    const pictures = Array.from(
+      { length: 30 },
+      (_, n) => `<img src="fig${String(n)}.png" alt=""/>`,
+    ).join('');
+    const chapters: string[] = [];
+    const view = reader(store, ({ index }) => chapters.push(String(index)));
+    await view.open(
+      await buildEpub({
+        identifier: 'urn:A',
+        chapters: [
+          { name: 'ch1.xhtml', body: '<p>A opening.</p>' },
+          { name: 'ch2.xhtml', body: `<p>A slow pictures.</p>${pictures}` },
+        ],
+        extra: Array.from({ length: 30 }, (_, n) => ({
+          name: `OEBPS/fig${String(n)}.png`,
+          body: `PNGDATA${String(n)}`,
+        })),
+      }),
+    );
+    const bookB = await buildEpub({
+      identifier: 'urn:B',
+      chapters: [{ name: 'only.xhtml', body: '<p>B only chapter.</p>' }],
+    });
+    chapters.length = 0;
+    store.saved.clear();
+
+    // B's position lookup waits for A's render, so A finishes while B is
+    // already the open book.
+    const slow = view.goTo(1);
+    store.gate = slow;
+    await Promise.all([slow, view.open(bookB)]);
+
+    expect(id('oit-epub-content').textContent).toContain('B only chapter.');
+    expect(id('oit-epub-content').textContent).not.toContain('A slow');
+    expect(chapters).toEqual(['0']);
+    expect([...store.saved.values()].map((p) => p.spineIndex)).toEqual([0]);
+    expect(store.revoked.sort()).toEqual(store.urls.sort());
   });
 
   it('remembers where the reader was and opens there', async () => {

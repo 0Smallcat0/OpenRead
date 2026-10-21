@@ -200,6 +200,18 @@ export async function loadSettings(): Promise<Settings> {
 export const MAX_EXCEPT_BYTES = 6000;
 
 /**
+ * Size as storage counts it: bytes of UTF-8, not characters.
+ *
+ * `.length` counts UTF-16 units, and a CJK character is one of those and three
+ * bytes. Measured in characters, a glossary of 359 `termN = 資料庫錯誤` lines
+ * came to 5,993 and went to storage as 9,591 bytes — over the ceiling, so every
+ * save after it was rejected, target language and engine included.
+ */
+function jsonBytes(value: unknown): number {
+  return new TextEncoder().encode(JSON.stringify(value)).length;
+}
+
+/**
  * Trim the exception list to something storage will accept, newest kept.
  *
  * Dropping the oldest entries is a real loss and it is the lesser one: the
@@ -207,7 +219,7 @@ export const MAX_EXCEPT_BYTES = 6000;
  */
 export function limitExcept(hosts: readonly string[]): string[] {
   const kept = [...hosts];
-  while (kept.length > 0 && JSON.stringify(kept).length > MAX_EXCEPT_BYTES) {
+  while (kept.length > 0 && jsonBytes(kept) > MAX_EXCEPT_BYTES) {
     kept.shift();
   }
   return kept;
@@ -232,12 +244,9 @@ export const MAX_GLOSSARY_BYTES = 6000;
  * boundary — half a rule is a rule that fires on the wrong string.
  */
 export function limitGlossary(raw: string): string {
-  if (JSON.stringify(raw).length <= MAX_GLOSSARY_BYTES) return raw;
+  if (jsonBytes(raw) <= MAX_GLOSSARY_BYTES) return raw;
   const lines = raw.split(/\r?\n/);
-  while (
-    lines.length > 0 &&
-    JSON.stringify(lines.join('\n')).length > MAX_GLOSSARY_BYTES
-  ) {
+  while (lines.length > 0 && jsonBytes(lines.join('\n')) > MAX_GLOSSARY_BYTES) {
     lines.pop();
   }
   return lines.join('\n');

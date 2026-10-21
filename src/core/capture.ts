@@ -89,12 +89,14 @@ export function buildMarkdown(note: CaptureNote): string {
 
 /** Vault filename (no extension): a sanitised title plus a compact timestamp. */
 export function captureFilename(note: CaptureNote): string {
-  const base =
-    (note.title || note.source || 'capture')
-      .replace(ILLEGAL_FILENAME, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 60) || 'capture';
+  const cleaned = (note.title || note.source || 'capture')
+    .replace(ILLEGAL_FILENAME, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // By code point, not UTF-16 unit: a cut through an emoji leaves half a
+  // surrogate pair, and `encodeURIComponent` throws on that — the save failed
+  // with "URI malformed" for any title with an emoji near the 60th place.
+  const base = Array.from(cleaned).slice(0, 60).join('').trim() || 'capture';
   return `${base} ${compactStamp(note.capturedAt)}`.trim();
 }
 
@@ -137,7 +139,10 @@ export function resolveSourceUrl(href: string): string {
   try {
     const params = new URLSearchParams(href.slice(q + 1));
     const file = params.get('file');
-    return file ? decodeURIComponent(file) : href;
+    // Already decoded by `get`. A second decode changed the address itself —
+    // `a%20b.pdf` into `a b.pdf`, `100%25` into `100%` — and threw outright on
+    // a `%` that was not an escape, recording the viewer's URL instead.
+    return file || href;
   } catch {
     return href;
   }

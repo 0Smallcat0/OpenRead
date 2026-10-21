@@ -92,7 +92,18 @@ function cleanScalar(value: unknown, max: number): string | undefined {
     .replace(/^["'“”「」]+|["'“”「」]+$/g, '')
     .trim();
   if (!trimmed) return undefined;
-  return trimmed.slice(0, max);
+  return clip(trimmed, max);
+}
+
+/**
+ * The first `max` characters, counted by code point.
+ *
+ * `.slice` counts UTF-16 units, and a cut through an emoji leaves half a
+ * surrogate pair — which `encodeURIComponent` refuses outright when the note is
+ * turned into an Obsidian URI, failing the capture.
+ */
+function clip(value: string, max: number): string {
+  return Array.from(value).slice(0, max).join('');
 }
 
 /** Normalise tags from an array (or a comma/、-separated string) into a deduped,
@@ -107,12 +118,12 @@ function cleanTags(value: unknown): string[] | undefined {
   const tags: string[] = [];
   for (const item of raw) {
     if (typeof item !== 'string') continue;
-    const tag = item
+    const lowered = item
       .trim()
       .replace(/^#/, '')
       .replace(/\s+/g, '-')
-      .toLowerCase()
-      .slice(0, MAX_TAG_LEN);
+      .toLowerCase();
+    const tag = clip(lowered, MAX_TAG_LEN);
     if (!tag || seen.has(tag)) continue;
     seen.add(tag);
     tags.push(tag);

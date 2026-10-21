@@ -22,6 +22,37 @@ Bilingual Translation`, 38 of the 45 characters a manifest name may have.
 
 ### Fixed
 
+- **A second request waiting on the same language-pack download hears it
+  too.** The translator is created once per pair and shared, but Chrome takes
+  one progress monitor per create — the first caller's. A second tab in the
+  same language, or the first tab closed mid-download, left everyone else with
+  no progress and a watchdog that called a moving download "not moved for
+  three minutes". The one monitor now fans out to every waiter.
+- **Selecting text in the EPUB reader no longer claims the book is English.**
+  The reader page declares `lang="en"`, and the selection panel sent that as
+  the source language — a German book asked for English came back unchanged.
+- **PDF:** pages the viewer draws after the first pass are now translated (the
+  observer only queued them); tagged PDFs (`span.markedContent`) are no longer
+  glued into one paragraph; a page whose every paragraph failed is no longer
+  marked translated forever; per-page `ResizeObserver`s are disconnected on
+  clear.
+- **EPUB:** a slow chapter render can no longer overwrite a newer navigation;
+  `background` attributes, escaped or `image-set()` CSS, SVG `feImage`/`use`
+  and SMIL animation can no longer fetch from the network; books whose only
+  "encryption" is IDPF/Adobe font obfuscation open instead of being refused as
+  DRM.
+- **Settings:** the glossary and exception-list size limits count UTF-8 bytes,
+  as `chrome.storage.sync` does — a CJK glossary made every save fail.
+- **Glossary:** non-ASCII terms (`кот`, `résumé`) no longer match inside other
+  words; a numeric term no longer corrupts earlier placeholders.
+- **Capture:** enrichment has a 30 s deadline; an emoji cut in half at the
+  title limit no longer throws and leaves the button on "Saving…"; a PDF's
+  source URL is no longer decoded twice.
+- **Text box translation** no longer overwrites what was typed while it ran,
+  and the "Click into a text box first" notice is shown only by the top frame.
+- **Hover translation** no longer throws an unhandled rejection on every mouse
+  move after the extension reloads.
+
 - **`e2e:page` no longer fails a healthy build over somebody's connection.**
   The language-pack phase waited seven minutes for the banner to say "Ready"
   and failed if it did not. Seven minutes is a guess about a network, and a

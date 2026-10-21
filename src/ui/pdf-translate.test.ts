@@ -13,6 +13,7 @@ import {
   translatePdf,
   stopPdfTranslation,
   clearPdfTranslation,
+  togglePdfTranslation,
   PDF_TRANSLATION_CLASS,
 } from './pdf-translate';
 
@@ -115,5 +116,170 @@ describe('translatePdf', () => {
     });
     clearPdfTranslation(document);
     expect(blocks()).toBe(0);
+  });
+});
+
+describe('pages the viewer draws later', () => {
+  it('translates a page drawn after the first pass has finished', async () => {
+    // Pages render lazily — a text layer on 2 of 14 on the viewer's own
+    // sample — and the observer that watches for the rest only ever added
+    // them to a queue nobody was draining any more. Scrolling on translated
+    // nothing past the first screen.
+    viewerWith(1);
+    const extra = document.createElement('div');
+    extra.className = 'page';
+    extra.innerHTML = '<div class="textLayer"></div>';
+    document.getElementById('viewer')?.appendChild(extra);
+
+    await translatePdf(document, {
+      targetLang: 'Traditional Chinese',
+      translate: (text) => Promise.resolve(`[zh] ${text}`),
+    });
+    expect(blocks()).toBe(1);
+
+    const span = document.createElement('span');
+    span.textContent = 'A page the reader scrolled to, drawn only just now.';
+    extra.querySelector('.textLayer')?.appendChild(span);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(blocks()).toBe(2);
+    expect(extra.nextElementSibling?.className).toBe(PDF_TRANSLATION_CLASS);
+  });
+});
+
+describe('a page drawn as the last worker stops', () => {
+  // PDF.js builds a text layer through a chain of promises, so a page can be
+  // drawn in any microtask. Between a worker leaving its loop and its count
+  // going down, the observer saw a worker still running and left the page
+  // queued — and nothing ever looked at the queue again. A little later and
+  // the observer started a second run that the first run's finish() then
+  // declared done, so the button could no longer stop it.
+  it.each(Array.from({ length: 12 }, (_, n) => n))(
+    'is translated when drawn %i microtasks after the last translation',
+    async (delay) => {
+      viewerWith(1);
+      const extra = document.createElement('div');
+      extra.className = 'page';
+      extra.innerHTML = '<div class="textLayer"></div>';
+      document.getElementById('viewer')?.appendChild(extra);
+      const draw = (): void => {
+        const span = document.createElement('span');
+        span.textContent = 'A page drawn while the last worker was leaving.';
+        extra.querySelector('.textLayer')?.appendChild(span);
+      };
+      let first = true;
+
+      await translatePdf(document, {
+        targetLang: 'Traditional Chinese',
+        translate: (text) => {
+          if (first) {
+            first = false;
+            let chain = Promise.resolve();
+            for (let i = 0; i < delay; i++) chain = chain.then(() => undefined);
+            void chain.then(draw);
+          }
+          return Promise.resolve(`[zh] ${text}`);
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(blocks()).toBe(2);
+      expect(
+        document.getElementById('oit-page-progress')?.textContent ?? '',
+      ).not.toMatch(/Done — 1 pages/);
+    },
+  );
+});
+
+describe('a page where every paragraph failed', () => {
+  it('is not marked translated, so the next press tries it again', async () => {
+    // Every paragraph throwing — a language pack not there yet, Ollama not
+    // running — still marked the page done. The badge said "1 pages
+    // translated" over a page with nothing under it, and every later press
+    // found "Nothing to translate" until the tab was reloaded.
+    viewerWith(1);
+    const failed = await translatePdf(document, {
+      targetLang: 'Traditional Chinese',
+      translate: () => Promise.reject(new Error('engine down')),
+    });
+    expect(failed.pages).toBe(0);
+    expect(document.getElementById('oit-page-progress')?.textContent).toMatch(
+      /failed/,
+    );
+
+    const retried = await translatePdf(document, {
+      targetLang: 'Traditional Chinese',
+      translate: (text) => Promise.resolve(`[zh] ${text}`),
+    });
+    expect(retried.pages).toBe(1);
+    expect(blocks()).toBe(1);
+  });
+});
+
+describe('a press after some pages failed', () => {
+  it('retries the failed pages rather than clearing the ones that worked', async () => {
+    // One page translated and one failed: the document "is translated", so
+    // the next press took the clear path and wiped the page that worked. The
+    // badge had just said "1 failed" — the reader pressed to retry it, and
+    // had to press twice more to get both.
+    viewerWith(2);
+    const first = await togglePdfTranslation(document, {
+      targetLang: 'Traditional Chinese',
+      translate: (text) =>
+        text.startsWith('Page 2')
+          ? Promise.reject(new Error('engine hiccup'))
+          : Promise.resolve(`[zh] ${text}`),
+    });
+    expect(first?.pages).toBe(1);
+    expect(blocks()).toBe(1);
+
+    const retried: string[] = [];
+    const second = await togglePdfTranslation(document, {
+      targetLang: 'Traditional Chinese',
+      translate: (text) => {
+        retried.push(text);
+        return Promise.resolve(`[zh] ${text}`);
+      },
+    });
+    expect(second?.pages).toBe(1);
+    expect(retried).toHaveLength(1);
+    expect(retried[0]).toMatch(/^Page 2/);
+    expect(blocks()).toBe(2);
+
+    // With nothing left failed, the press is a clear again.
+    expect(
+      await togglePdfTranslation(document, {
+        targetLang: 'Traditional Chinese',
+        translate: (text) => Promise.resolve(text),
+      }),
+    ).toBeNull();
+    expect(blocks()).toBe(0);
+  });
+});
+
+describe('a press after the target language changed', () => {
+  it('translates into the new language rather than clearing', async () => {
+    // A web page already did this: the reader switched the popup from
+    // Chinese to Japanese and pressed, and got Japanese. In the PDF viewer
+    // the same press found a translated document and cleared it, leaving the
+    // reader with nothing and a second press to make.
+    viewerWith(1);
+    await togglePdfTranslation(document, {
+      targetLang: 'Traditional Chinese',
+      translate: (text) => Promise.resolve(`[zh] ${text}`),
+    });
+    expect(blocks()).toBe(1);
+
+    const again = await togglePdfTranslation(document, {
+      targetLang: 'Japanese',
+      translate: (text) => Promise.resolve(`[ja] ${text}`),
+    });
+    expect(again?.pages).toBe(1);
+    const block = document.querySelector<HTMLElement>(
+      `.${PDF_TRANSLATION_CLASS}`,
+    );
+    expect(blocks()).toBe(1);
+    expect(block?.lang).toBe('ja');
+    expect(block?.textContent).toMatch(/^\[ja\]/);
   });
 });

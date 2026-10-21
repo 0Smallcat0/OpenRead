@@ -255,6 +255,16 @@ export async function translateStream(params: StreamParams): Promise<void> {
   }
 }
 
+/**
+ * How long a capture waits for its enrichment before going without.
+ *
+ * Total, not idle: the request is not streamed, so there is nothing between
+ * sending and the answer to reset a clock on. Generous, because a cold model
+ * load alone was measured at ~12 s, and Ollama serves one request at a time by
+ * default — a capture made during a page translation queues behind it.
+ */
+export const ENRICH_TIMEOUT_MS = 30_000;
+
 export interface EnrichParams {
   text: string;
   baseUrl: string;
@@ -275,23 +285,37 @@ export async function enrichText(
   const { text, baseUrl, model, targetLang, signal } = params;
   if (!text || !baseUrl) return null;
 
-  const response = await fetch(endpoint(baseUrl), {
-    method: 'POST',
-    signal,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      messages: buildEnrichMessages(text, targetLang),
-      stream: false,
-      think: false,
-      format: ENRICH_SCHEMA,
-      options: { temperature: 0 },
-    }),
-  });
-  if (!response.ok) return null;
-
-  const data = (await response.json()) as {
-    message?: { content?: string };
-  };
+  // There was no deadline here at all, so a server that accepted the request
+  // and never answered held the capture on "Enriching…" for as long as the
+  // worker lived — the one outcome "best-effort" exists to rule out. A timeout
+  // rejects like any other network failure, which callers already turn into a
+  // plain capture. A timer rather than `AbortSignal.timeout`, so the body read
+  // is covered too and the timer is cleared the moment the answer is in.
+  const deadline = new AbortController();
+  const timer = setTimeout(() => {
+    deadline.abort(new DOMException('Enrichment timed out', 'TimeoutError'));
+  }, ENRICH_TIMEOUT_MS);
+  let data: { message?: { content?: string } };
+  try {
+    const response = await fetch(endpoint(baseUrl), {
+      method: 'POST',
+      signal: signal
+        ? AbortSignal.any([signal, deadline.signal])
+        : deadline.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: buildEnrichMessages(text, targetLang),
+        stream: false,
+        think: false,
+        format: ENRICH_SCHEMA,
+        options: { temperature: 0 },
+      }),
+    });
+    if (!response.ok) return null;
+    data = (await response.json()) as typeof data;
+  } finally {
+    clearTimeout(timer);
+  }
   return parseEnrichResponse(data.message?.content ?? '');
 }

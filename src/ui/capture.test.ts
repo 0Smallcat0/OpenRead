@@ -193,3 +193,19 @@ describe('optional local enrichment', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 });
+
+describe('a note that cannot be put in a URL', () => {
+  it('answers with an outcome rather than rejecting', async () => {
+    // Half a surrogate pair — a page can hold one — makes
+    // `encodeURIComponent` throw. The rejection went to a `.then` with no
+    // handler, so the button stayed disabled on "Saving…" with no message.
+    const outcome = captureNote(
+      noteOf({ original: 'broken \uD83D text' }),
+      CONFIG,
+    );
+    await expect(outcome).resolves.toHaveProperty('ok');
+    // Never a URL with the note half-encoded in it.
+    const settled = await outcome;
+    expect(settled.ok ? settled.method : 'failed').not.toBe('obsidian');
+  });
+});

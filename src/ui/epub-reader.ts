@@ -122,6 +122,12 @@ export function mountReader(doc: Document, deps: ReaderDeps): Reader {
   let key = '';
   let index = 0;
   let urls: string[] = [];
+  /**
+   * Which `goTo` is the latest. Rendering a chapter is asynchronous — every
+   * picture in it is decompressed first — so two quick presses can finish in
+   * either order, and only the one asked for last may touch the page.
+   */
+  let navigation = 0;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
   const view = doc.defaultView;
@@ -262,28 +268,32 @@ export function mountReader(doc: Document, deps: ReaderDeps): Reader {
   });
 
   async function goTo(target: number, fragment = ''): Promise<void> {
-    if (!book) return;
-    const bounded = Math.min(Math.max(0, target), book.spine.length - 1);
-    const chapter = book.spine[bounded];
+    // Held for the whole render: `book` can change at every await below.
+    const current = book;
+    if (!current) return;
+    const bounded = Math.min(Math.max(0, target), current.spine.length - 1);
+    const chapter = current.spine[bounded];
     if (!chapter) return;
 
     clearError();
     releaseChapterUrls();
     index = bounded;
+    const turn = ++navigation;
 
     let rendered;
     try {
       rendered = await renderChapter(
-        await book.readText(chapter.path),
+        await current.readText(chapter.path),
         chapter.path,
         {
-          has: book.has,
-          read: book.read,
+          has: current.has,
+          read: current.read,
           createUrl: deps.createUrl,
         },
         doc,
       );
     } catch (failure) {
+      if (turn !== navigation) return;
       content.replaceChildren();
       showError(
         `This chapter could not be read. ${(failure as Error).message}`,
@@ -291,15 +301,23 @@ export function mountReader(doc: Document, deps: ReaderDeps): Reader {
       return;
     }
 
+    // Overtaken by a later press while it rendered. Painting it now would put
+    // this chapter under the other one's header and saved position, and its
+    // pictures would never be released — so they are released here instead.
+    if (turn !== navigation) {
+      for (const url of rendered.urls) deps.revokeUrl(url);
+      return;
+    }
+
     urls = rendered.urls;
     content.replaceChildren(rendered.fragment);
 
     const label = labelFor(bounded);
-    where.textContent = `${String(bounded + 1)} / ${String(book.spine.length)}${
+    where.textContent = `${String(bounded + 1)} / ${String(current.spine.length)}${
       label ? ` · ${label}` : ''
     }`;
     previous.disabled = bounded === 0;
-    next.disabled = bounded === book.spine.length - 1;
+    next.disabled = bounded === current.spine.length - 1;
     markTocPosition();
 
     // A link with a fragment means a place inside the chapter; anything else
@@ -315,7 +333,7 @@ export function mountReader(doc: Document, deps: ReaderDeps): Reader {
 
     deps.onChapter?.({
       index: bounded,
-      total: book.spine.length,
+      total: current.spine.length,
       title: label,
     });
   }
@@ -341,6 +359,11 @@ export function mountReader(doc: Document, deps: ReaderDeps): Reader {
 
     releaseChapterUrls();
     book = opened;
+    // A chapter of the previous book still rendering is overtaken here, not
+    // only when this book's first chapter starts: the position lookup below
+    // is a wait, and in it that chapter would paint under this book's title
+    // and save its index as this book's position.
+    navigation++;
     key = bookKey(opened);
     welcome.hidden = true;
     shell.hidden = false;

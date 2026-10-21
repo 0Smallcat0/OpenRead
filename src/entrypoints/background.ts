@@ -208,6 +208,40 @@ export default defineBackground(() => {
   chrome.runtime.onInstalled.addListener(() => {
     originRuleReady = applyOriginStripRule();
   });
+
+  /**
+   * How long a request waits on the rule, then on its settings.
+   *
+   * Both used to be awaited with no limit, and a storage call or rule install
+   * that never answered held a translation's spinner and a capture's
+   * "Saving…" for good. Seconds, not the milliseconds either normally takes:
+   * a cold worker on a busy machine is slow, and a false timeout costs more
+   * than a short wait.
+   */
+  const ORIGIN_RULE_WAIT_MS = 5_000;
+  const SETTINGS_WAIT_MS = 5_000;
+
+  function within<T>(promise: Promise<T>, ms: number): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error('Timed out'));
+      }, ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => {
+      clearTimeout(timer);
+    });
+  }
+
+  /**
+   * The rule, or going without it. Without it a stock Ollama answers 403,
+   * which says what to set; waiting forever says nothing.
+   */
+  const ruleReady = (): Promise<void> =>
+    within(originRuleReady, ORIGIN_RULE_WAIT_MS).catch(() => undefined);
+
+  const settingsInTime = (): ReturnType<typeof loadSettings> =>
+    within(loadSettings(), SETTINGS_WAIT_MS);
   /**
    * The pair fetched ahead of time.
    *
@@ -601,7 +635,20 @@ export default defineBackground(() => {
       const { signal } = controller;
 
       void (async () => {
-        const { engine, baseUrl, glossary } = await loadSettings();
+        let settings: Awaited<ReturnType<typeof loadSettings>>;
+        try {
+          settings = await settingsInTime();
+        } catch {
+          if (signal.aborted) return;
+          post({
+            status: 'error',
+            message:
+              "OpenRead couldn't read its settings. Reload the page and try again.",
+          });
+          return;
+        }
+        if (signal.aborted) return;
+        const { engine, baseUrl, glossary } = settings;
 
         // The glossary, applied here rather than in either engine, because it
         // is a property of what the user wants translated and not of what
@@ -724,7 +771,7 @@ export default defineBackground(() => {
           }
         }
 
-        await originRuleReady;
+        await ruleReady();
         try {
           await withGlossary((text, onChunk) =>
             translateStream({
@@ -807,10 +854,10 @@ export default defineBackground(() => {
 
       if (request.type === 'ENRICH_CAPTURE') {
         void (async () => {
-          await originRuleReady;
-          const { baseUrl } = await loadSettings();
           let result = null;
           try {
+            await ruleReady();
+            const { baseUrl } = await settingsInTime();
             result = await enrichText({
               text: request.text,
               baseUrl,

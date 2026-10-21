@@ -24,6 +24,14 @@ import { toBcp47 } from '../core/bcp47';
 
 /** Marks a page whose translation has been placed after it. */
 export const PDF_TRANSLATED_ATTR = 'data-oit-pdf-translated';
+/**
+ * Marks a page where every paragraph failed, so the next press retries it.
+ *
+ * Without it a press after a partial failure saw a translated document and
+ * cleared it — wiping the pages that worked, when the badge had just said
+ * "1 failed" and the reader was pressing to try that page again.
+ */
+const PDF_FAILED_ATTR = 'data-oit-pdf-failed';
 export const PDF_TRANSLATION_CLASS = 'oit-pdf-translation';
 const STYLE_ID = 'oit-pdf-translation-style';
 
@@ -57,6 +65,13 @@ export interface PdfResult {
 
 let active: AbortController | null = null;
 let watcher: MutationObserver | null = null;
+/**
+ * The observers keeping each panel as wide as its page.
+ *
+ * Each one holds its page and its panel; left attached, every translate and
+ * clear kept another set of removed panels alive for the life of the tab.
+ */
+const widthWatchers = new Set<ResizeObserver>();
 
 export function isPdfTranslationRunning(): boolean {
   return active !== null;
@@ -73,6 +88,14 @@ export function isPdfTranslated(doc: Document): boolean {
   return doc.querySelector(`.${PDF_TRANSLATION_CLASS}`) !== null;
 }
 
+/** Whether what is on the page is in `targetLang`, judged by its `lang`. */
+function isPdfTranslatedInto(doc: Document, targetLang: string): boolean {
+  const tag = toBcp47(targetLang) ?? '';
+  return Array.from(
+    doc.querySelectorAll<HTMLElement>(`.${PDF_TRANSLATION_CLASS}`),
+  ).every((block) => block.lang === tag);
+}
+
 /** Remove every inserted translation. Returns how many pages were cleared. */
 export function clearPdfTranslation(doc: Document): number {
   stopPdfTranslation();
@@ -80,10 +103,13 @@ export function clearPdfTranslation(doc: Document): number {
     doc.querySelectorAll(`.${PDF_TRANSLATION_CLASS}`),
   );
   for (const node of inserted) node.remove();
+  for (const observer of widthWatchers) observer.disconnect();
+  widthWatchers.clear();
   for (const page of Array.from(
-    doc.querySelectorAll(`[${PDF_TRANSLATED_ATTR}]`),
+    doc.querySelectorAll(`[${PDF_TRANSLATED_ATTR}], [${PDF_FAILED_ATTR}]`),
   )) {
     page.removeAttribute(PDF_TRANSLATED_ATTR);
+    page.removeAttribute(PDF_FAILED_ATTR);
   }
   return inserted.length;
 }
@@ -186,7 +212,9 @@ function matchPageWidth(page: HTMLElement, block: HTMLElement): void {
   apply();
   const view = page.ownerDocument.defaultView;
   if (typeof view?.ResizeObserver === 'function') {
-    new view.ResizeObserver(apply).observe(page);
+    const observer = new view.ResizeObserver(apply);
+    observer.observe(page);
+    widthWatchers.add(observer);
   }
 }
 
@@ -211,7 +239,12 @@ function attachPage(
   page.setAttribute(PDF_TRANSLATED_ATTR, '');
 }
 
-/** Translate one page's paragraphs, in order, and place them after it. */
+/**
+ * Translate one page's paragraphs, in order, and place them after it.
+ *
+ * Null when every paragraph failed: the page is then left unmarked, so the
+ * next press tries it again rather than finding it "already translated".
+ */
 async function translatePdfPage(
   page: HTMLElement,
   deps: PdfTranslateDeps,
@@ -227,7 +260,7 @@ async function translatePdfPage(
    * as stuck at 100%, which is exactly what it looked like.
    */
   onParagraph?: () => void,
-): Promise<number> {
+): Promise<number | null> {
   const layer = page.querySelector('.textLayer');
   if (!layer) return 0;
   const paragraphs = collectPdfParagraphs(layer).filter(
@@ -243,6 +276,7 @@ async function translatePdfPage(
   }
 
   const out: string[] = [];
+  let failures = 0;
   for (const paragraph of paragraphs) {
     if (signal.aborted) return 0;
     try {
@@ -256,9 +290,16 @@ async function translatePdfPage(
     } catch {
       // One paragraph of a page, on a document that may be hundreds. The page
       // is still worth placing; a gap is better than an error per line.
+      failures++;
     }
   }
-  if (signal.aborted || out.length === 0) {
+  if (signal.aborted) return 0;
+  // Nothing translated, and nothing because nothing worked — a language pack
+  // that is not there yet, an engine that is not running. Marking it would
+  // say "done" over a page with nothing under it, and every later press
+  // would find nothing left to translate until the tab was reloaded.
+  if (out.length === 0 && failures === paragraphs.length) return null;
+  if (out.length === 0) {
     page.setAttribute(PDF_TRANSLATED_ATTR, '');
     return 0;
   }
@@ -282,9 +323,11 @@ export async function translatePdf(
   const controller = new AbortController();
   active = controller;
 
-  const progress: Progress = mountPageProgress(doc, stopPdfTranslation);
+  let progress: Progress = mountPageProgress(doc, stopPdfTranslation);
   let pages = 0;
   let paragraphs = 0;
+  /** Pages where every paragraph failed, left unmarked for a later press. */
+  let failedPages = 0;
   let queued = renderedPages(doc);
   progress.update(0, queued.length);
 
@@ -322,11 +365,64 @@ export async function translatePdf(
         () => progress.update(pages, pages + queued.length + 1),
       );
       if (controller.signal.aborted) return;
-      paragraphs += done;
-      pages++;
+      if (done === null) {
+        failedPages++;
+        next.setAttribute(PDF_FAILED_ATTR, '');
+      } else {
+        next.removeAttribute(PDF_FAILED_ATTR);
+        paragraphs += done;
+        pages++;
+      }
       progress.update(pages, pages + queued.length);
       if (queued.length === 0) {
         queued = renderedPages(doc).filter((page) => !claimed.has(page));
+      }
+    }
+  };
+
+  /** Workers currently draining, so the observer knows whether to start one. */
+  let draining = 0;
+
+  const finish = (): void => {
+    const stopped = controller.signal.aborted;
+    if (active === controller) active = null;
+    const failed = failedPages > 0 ? `, ${String(failedPages)} failed` : '';
+    progress.finish(
+      stopped
+        ? `Stopped — ${String(pages)} pages translated`
+        : pages === 0 && failedPages === 0
+          ? 'Nothing to translate in this document'
+          : `Done — ${String(pages)} pages translated${failed}`,
+      // A failure is the one result worth leaving on screen to be read.
+      failedPages > 0,
+    );
+  };
+
+  /** Settles the first time every worker has stopped: the press's own result. */
+  let firstIdle: () => void = () => undefined;
+  const settled = new Promise<void>((resolve) => {
+    firstIdle = resolve;
+  });
+
+  // Whether to finish is decided where the last worker stops, in the same
+  // step, rather than by whoever awaited it. A page drawn in the microtasks
+  // between a worker leaving its loop and its count going down saw a worker
+  // still running and stayed queued for good; a run the observer started
+  // just after was then declared done by the earlier run's finish(), and
+  // the button could no longer stop it.
+  const run = async (): Promise<void> => {
+    draining++;
+    try {
+      await drain();
+    } finally {
+      draining--;
+      if (draining === 0) {
+        if (!controller.signal.aborted && queued.length > 0) {
+          void run();
+        } else {
+          finish();
+          firstIdle();
+        }
       }
     }
   };
@@ -338,28 +434,31 @@ export async function translatePdf(
     const fresh = renderedPages(doc).filter(
       (page) => !queued.includes(page) && !claimed.has(page),
     );
-    if (fresh.length > 0) queued.push(...fresh);
+    if (fresh.length === 0) return;
+    queued.push(...fresh);
+    // Queued is not translated. Once the first pass has finished nothing is
+    // draining any more, and a page the reader scrolled to afterwards sat in
+    // this queue for good — everything past the first screen of a PDF stayed
+    // untranslated, which is the opposite of what the observer is here for.
+    if (draining > 0) return;
+    active = controller;
+    progress = mountPageProgress(doc, stopPdfTranslation);
+    progress.update(pages, pages + queued.length);
+    void run();
   });
   const viewer = doc.getElementById('viewer') ?? doc.body;
   watcher.observe(viewer, { childList: true, subtree: true });
 
-  await Promise.all(
-    Array.from(
-      { length: Math.min(PAGE_CONCURRENCY, Math.max(queued.length, 1)) },
-      () => drain(),
-    ),
-  );
+  for (
+    let worker = 0;
+    worker < Math.min(PAGE_CONCURRENCY, Math.max(queued.length, 1));
+    worker++
+  ) {
+    void run();
+  }
+  await settled;
 
-  const stopped = controller.signal.aborted;
-  if (active === controller) active = null;
-  progress.finish(
-    stopped
-      ? `Stopped — ${String(pages)} pages translated`
-      : pages === 0
-        ? 'Nothing to translate in this document'
-        : `Done — ${String(pages)} pages translated`,
-  );
-  return { pages, paragraphs, stopped };
+  return { pages, paragraphs, stopped: controller.signal.aborted };
 }
 
 /** One control, the same three meanings the web page's button has. */
@@ -372,8 +471,22 @@ export async function togglePdfTranslation(
     return null;
   }
   if (isPdfTranslated(doc)) {
-    clearPdfTranslation(doc);
-    return null;
+    // Another language on the page is replaced, as a web page's is: the
+    // reader changed the target and pressed, and clearing left them with
+    // nothing and a second press to make.
+    if (!isPdfTranslatedInto(doc, deps.targetLang)) {
+      clearPdfTranslation(doc);
+      return translatePdf(doc, deps);
+    }
+    // A failed page the viewer still has drawn is retried first: it is what
+    // the reader is pressing about. One scrolled out of the viewer's cache is
+    // not, or a press could never clear the document again.
+    if (
+      !renderedPages(doc).some((page) => page.hasAttribute(PDF_FAILED_ATTR))
+    ) {
+      clearPdfTranslation(doc);
+      return null;
+    }
   }
   return translatePdf(doc, deps);
 }

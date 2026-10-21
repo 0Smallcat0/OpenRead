@@ -114,24 +114,69 @@ function stripEventHandlers(element: Element): void {
 }
 
 /**
- * Take the `url(…)` out of an inline style.
+ * Take the network requests out of an inline style.
  *
  * An inline style is worth keeping — centred verse, a hanging indent — but
  * `background-image: url(https://…)` is a network request wearing a costume,
- * and one that no element-level rule would catch.
+ * and one that no element-level rule would catch. Nor is `url(` the only way
+ * to write one: `image-set('https://…' 1x)` fetches with no `url(` in it at
+ * all, and a CSS escape (`u\72l(…)`) spells `url(` without those four
+ * letters. A declaration with any of them goes; a backslash is reason enough,
+ * because nothing a chapter legitimately says inline needs one.
  */
+const STYLE_REQUEST = /url\s*\(|image-set\s*\(|image\s*\(|\\/i;
+
 function stripStyleUrls(element: Element): void {
   const style = element.getAttribute('style');
   if (!style) return;
-  if (!/url\s*\(/i.test(style)) return;
+  if (!STYLE_REQUEST.test(style)) return;
   const cleaned = style
     .split(';')
-    .filter((declaration) => !/url\s*\(/i.test(declaration))
+    .filter((declaration) => !STYLE_REQUEST.test(declaration))
     .join(';')
     .trim();
   if (cleaned) element.setAttribute('style', cleaned);
   else element.removeAttribute('style');
 }
+
+/** The SVG namespace, whose presentation attributes are CSS. */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** `url(#id)`: a paint server or filter inside this chapter, fetching nothing. */
+const LOCAL_URL = /url\(\s*(['"]?)#[^'"()\\\s]*\1\s*\)/gi;
+
+/**
+ * `fill`, `stroke`, `filter`, `mask`, `clip-path`, `marker-*`, `cursor`: on an
+ * SVG element these are CSS properties written as attributes, and a remote
+ * `url()` in one is fetched exactly like one in `style` — the reader page's
+ * CSP sets no `img-src` to stop it. A reference to `#id` inside the chapter is
+ * how SVG fills with a gradient, and stays.
+ */
+function stripPresentationUrls(element: Element): void {
+  if (element.namespaceURI !== SVG_NS) return;
+  for (const { name, value } of Array.from(element.attributes)) {
+    if (name === 'style' || name === 'href' || name === 'xlink:href') continue;
+    if (STYLE_REQUEST.test(value.replace(LOCAL_URL, ''))) {
+      element.removeAttribute(name);
+    }
+  }
+}
+
+/**
+ * SVG animation, which can set any attribute to anything after the chapter has
+ * been cleaned — `<set attributeName="href" to="https://…">` is a remote image
+ * the checks below never see. A chapter is text to read, not a cartoon.
+ */
+const ANIMATION_ELEMENTS = new Set([
+  'set',
+  'animate',
+  'animateMotion',
+  'animateTransform',
+  'discard',
+]);
+
+/** SVG elements whose plain `href` fetches what it names. */
+const FETCHING_HREF = new Set(['image', 'feImage', 'use']);
 
 /**
  * Rewrite one link.
@@ -200,20 +245,28 @@ export async function renderChapter(
   };
 
   for (const element of Array.from(body.querySelectorAll('*'))) {
+    if (ANIMATION_ELEMENTS.has(element.localName)) {
+      element.remove();
+      continue;
+    }
     stripEventHandlers(element);
     stripStyleUrls(element);
+    stripPresentationUrls(element);
 
     // A responsive image set is several more URLs, all of them unresolved.
     element.removeAttribute('srcset');
     element.removeAttribute('poster');
+    // `<table background>` and `<td background>`: obsolete, and still fetched.
+    element.removeAttribute('background');
 
     if (element.localName === 'a') rewriteLink(element, chapterPath);
 
-    // `src` on an image, `href`/`xlink:href` on an SVG <image>. All three name
-    // a picture and all three are fetched without anyone clicking anything.
+    // `src` on an image, `href`/`xlink:href` on an SVG <image> — and on
+    // <feImage> and <use>, which fetch just the same. All of them are fetched
+    // without anyone clicking anything.
     const pointers: [string | null, string][] = [
       [element.getAttribute('src'), 'src'],
-      element.localName === 'image'
+      FETCHING_HREF.has(element.localName)
         ? [element.getAttribute('href'), 'href']
         : [null, ''],
       [element.getAttributeNS(XLINK_NS, 'href'), 'xlink'],
@@ -221,6 +274,8 @@ export async function renderChapter(
 
     for (const [value, attribute] of pointers) {
       if (value === null) continue;
+      // `<use href="#icon">`: a reference within this chapter, fetching nothing.
+      if (value.startsWith('#')) continue;
       if (isRemoteHref(value)) {
         // Not fetched, and not left pointing at a host either: an <img> whose
         // src is removed still renders, as a broken picture, so the element

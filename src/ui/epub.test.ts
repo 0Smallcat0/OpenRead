@@ -381,7 +381,45 @@ describe('openEpub', () => {
       extra: [
         {
           name: 'META-INF/encryption.xml',
-          body: '<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container"/>',
+          body: encryption('http://www.w3.org/2001/04/xmlenc#aes128-cbc'),
+        },
+      ],
+    });
+    await expect(openEpub(bytes)).rejects.toThrow(/copy-protected|DRM/);
+  });
+
+  it('opens a DRM-free book whose only encryption is a mangled font', async () => {
+    // Font obfuscation is not DRM: it scrambles an embedded font so it cannot
+    // be lifted out of the book, and every chapter is plain XHTML. Calibre,
+    // Sigil and plenty of DRM-free shops write it, and treating the file that
+    // records it as proof of DRM refused all of those books.
+    for (const algorithm of [
+      'http://www.idpf.org/2008/embedding',
+      'http://ns.adobe.com/pdf/enc#RC',
+    ]) {
+      const bytes = await buildEpub({
+        extra: [
+          { name: 'META-INF/encryption.xml', body: encryption(algorithm) },
+          { name: 'OEBPS/fonts/f.otf', body: 'FONT' },
+        ],
+      });
+      const book = await openEpub(bytes);
+      expect(book.spine).toHaveLength(2);
+    }
+  });
+
+  it('refuses font obfuscation applied to something that is not a font', async () => {
+    // The obfuscation algorithm scrambles the first kilobyte of whatever it
+    // names. Named on a chapter, that chapter opens as garbage with nothing to
+    // say why, which is the outcome the DRM check exists to prevent.
+    const bytes = await buildEpub({
+      extra: [
+        {
+          name: 'META-INF/encryption.xml',
+          body: encryption(
+            'http://www.idpf.org/2008/embedding',
+            'OEBPS/text/ch1.xhtml',
+          ),
         },
       ],
     });
@@ -396,3 +434,15 @@ describe('openEpub', () => {
     ).rejects.toThrow(/could not be opened/);
   });
 });
+
+/** An `encryption.xml` naming one encrypted file, the way producers write it. */
+function encryption(algorithm: string, uri = 'OEBPS/fonts/f.otf'): string {
+  return (
+    '<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" ' +
+    'xmlns:enc="http://www.w3.org/2001/04/xmlenc#" ' +
+    'xmlns:ds="http://www.w3.org/2000/09/xmldsig#">' +
+    `<enc:EncryptedData><enc:EncryptionMethod Algorithm="${algorithm}"/>` +
+    `<enc:CipherData><enc:CipherReference URI="${uri}"/>` +
+    '</enc:CipherData></enc:EncryptedData></encryption>'
+  );
+}

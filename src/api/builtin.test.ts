@@ -239,6 +239,48 @@ describe('detectLanguage', () => {
     stub({ detected: [] });
     expect(await detectLanguage('Hello')).toBeNull();
   });
+
+  it('lets every caller waiting on the detector download hear it', async () => {
+    // One detector is shared, and Chrome takes one monitor per create — the
+    // first caller's, and only if that caller asked. A text box that started
+    // the download silently left a PDF waiting on it with no number at all;
+    // one that joined late heard nothing until the next event.
+    const global = globalThis as unknown as Record<string, unknown>;
+    const listeners: ((event: { loaded: number }) => void)[] = [];
+    let finish: (value: unknown) => void = () => undefined;
+    global.LanguageDetector = {
+      availability: () => Promise.resolve('downloadable'),
+      create: (options: {
+        monitor?: (m: {
+          addEventListener: (
+            type: string,
+            listener: (event: { loaded: number }) => void,
+          ) => void;
+        }) => void;
+      }) => {
+        options.monitor?.({
+          addEventListener: (_type, listener) => listeners.push(listener),
+        });
+        return new Promise((resolve) => (finish = resolve));
+      },
+    };
+
+    // The first caller asks for no progress at all.
+    const first = detectLanguage('Hello there');
+    for (const listener of listeners) listener({ loaded: 0.4 });
+    const heard: number[] = [];
+    const second = detectLanguage('Hello again', undefined, (loaded) =>
+      heard.push(loaded),
+    );
+    expect(heard).toEqual([0.4]);
+    for (const listener of listeners) listener({ loaded: 0.9 });
+    expect(heard).toEqual([0.4, 0.9]);
+    finish({
+      detect: () =>
+        Promise.resolve([{ detectedLanguage: 'en', confidence: 0.9 }]),
+    });
+    expect(await Promise.all([first, second])).toEqual(['en', 'en']);
+  });
 });
 
 describe('reusing the translator for a language pair', () => {
@@ -692,5 +734,117 @@ describe('a language-pack download that never moves', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+  it('lets every request waiting on one download hear it, not only the first', async () => {
+    // The create is shared per pair, and Chrome takes one monitor per create
+    // — the first caller's. A second tab in the same language, or the first
+    // tab closed mid-download, left everyone else listening to nothing: no
+    // progress on their badge, and a watchdog that called a download moving
+    // the whole time "not moved for three minutes".
+    const global = globalThis as unknown as Record<string, unknown>;
+    const listeners: ((event: { loaded: number }) => void)[] = [];
+    global.Translator = {
+      availability: () => Promise.resolve('downloadable'),
+      create: (options: {
+        monitor?: (m: {
+          addEventListener: (
+            type: string,
+            listener: (event: { loaded: number }) => void,
+          ) => void;
+        }) => void;
+      }) => {
+        options.monitor?.({
+          addEventListener: (_type, listener) => listeners.push(listener),
+        });
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            resolve({ translate: (input: string) => Promise.resolve(input) });
+          }, DOWNLOAD_STALL_MS * 3);
+        });
+      },
+    };
+
+    vi.useFakeTimers();
+    try {
+      const first = new AbortController();
+      const heard: number[] = [];
+      const runs = [
+        translateBuiltin({
+          text: 'The tab that started the download.',
+          targetLang: 'Traditional Chinese',
+          sourceLang: 'en',
+          signal: first.signal,
+          onChunk: () => undefined,
+        }),
+        translateBuiltin({
+          text: 'A second tab in the same language.',
+          targetLang: 'Traditional Chinese',
+          sourceLang: 'en',
+          onChunk: () => undefined,
+          onDownloadProgress: (loaded) => heard.push(loaded),
+        }),
+      ];
+      await vi.advanceTimersByTimeAsync(0);
+      // The tab that started it is closed.
+      first.abort();
+      await expect(runs[0]).rejects.toThrow(/Abort/);
+      for (let i = 0; i < 3; i++) {
+        await vi.advanceTimersByTimeAsync(DOWNLOAD_STALL_MS - 1000);
+        for (const listener of listeners) listener({ loaded: 0.25 * (i + 1) });
+      }
+      await vi.advanceTimersByTimeAsync(DOWNLOAD_STALL_MS);
+      await expect(runs[1]).resolves.toBeUndefined();
+      expect(heard).toEqual([0, 0.25, 0.5, 0.75]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('tells a request that joins mid-download how far it has already got', async () => {
+    // Joining at 60% used to mean hearing only the 0 announced before the
+    // join, then nothing until Chrome's next event — which on a slow pack is
+    // tens of seconds of a badge with no number on a download that is moving.
+    const global = globalThis as unknown as Record<string, unknown>;
+    const listeners: ((event: { loaded: number }) => void)[] = [];
+    let finish: (value: unknown) => void = () => undefined;
+    global.Translator = {
+      availability: () => Promise.resolve('downloadable'),
+      create: (options: {
+        monitor?: (m: {
+          addEventListener: (
+            type: string,
+            listener: (event: { loaded: number }) => void,
+          ) => void;
+        }) => void;
+      }) => {
+        options.monitor?.({
+          addEventListener: (_type, listener) => listeners.push(listener),
+        });
+        return new Promise((resolve) => (finish = resolve));
+      },
+    };
+
+    const first = translateBuiltin({
+      text: 'The tab that started the download.',
+      targetLang: 'Traditional Chinese',
+      sourceLang: 'en',
+      onChunk: () => undefined,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    for (const listener of listeners) listener({ loaded: 0.6 });
+
+    const heard: number[] = [];
+    const second = translateBuiltin({
+      text: 'A second tab, arriving late.',
+      targetLang: 'Traditional Chinese',
+      sourceLang: 'en',
+      onChunk: () => undefined,
+      onDownloadProgress: (loaded) => heard.push(loaded),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(heard).toEqual([0, 0.6]);
+    for (const listener of listeners) listener({ loaded: 0.8 });
+    expect(heard).toEqual([0, 0.6, 0.8]);
+    finish({ translate: (input: string) => Promise.resolve(input) });
+    await Promise.all([first, second]);
   });
 });

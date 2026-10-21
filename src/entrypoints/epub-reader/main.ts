@@ -213,6 +213,8 @@ mountSelectionTranslator({
       enrichOnCapture: settings.enrichOnCapture,
     };
   },
+  // The book is in whatever language its author wrote; this page says `en`.
+  fromPageLanguage: false,
 });
 
 // One paragraph of a book is as worth pointing at as one paragraph of a page.

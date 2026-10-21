@@ -121,3 +121,32 @@ describe('applyEnrichment', () => {
     expect(base.tags).toEqual(['openread']);
   });
 });
+
+describe('characters outside the Basic Multilingual Plane', () => {
+  it('never cuts an emoji in half, so the note can still be built', () => {
+    // `.slice(0, 60)` counts UTF-16 units. A title with an emoji straddling
+    // the 60th left half a surrogate pair, and `encodeURIComponent` throws
+    // `URIError: URI malformed` on that — the save failed with no message.
+    const filename = captureFilename({ ...base, title: 'a' + '😀'.repeat(40) });
+    expect(() => buildObsidianUri({ filename, content: 'x' })).not.toThrow();
+    expect(filename.startsWith('a' + '😀'.repeat(29))).toBe(true);
+  });
+});
+
+describe('resolveSourceUrl, decoding once', () => {
+  it('keeps escapes that belong to the document address', () => {
+    // `URLSearchParams.get` has already decoded the value once; decoding it
+    // again turned `a%20b.pdf` into `a b.pdf` and `100%25` into `100%`.
+    const wrap = (url: string): string =>
+      `chrome-extension://abc/pdfjs/web/viewer.html?file=${encodeURIComponent(url)}`;
+    expect(resolveSourceUrl(wrap('https://x.org/a%20b.pdf'))).toBe(
+      'https://x.org/a%20b.pdf',
+    );
+    expect(resolveSourceUrl(wrap('https://x.org/d.pdf?name=a%26b%3Dc'))).toBe(
+      'https://x.org/d.pdf?name=a%26b%3Dc',
+    );
+    expect(resolveSourceUrl(wrap('https://x.org/100%25.pdf'))).toBe(
+      'https://x.org/100%25.pdf',
+    );
+  });
+});

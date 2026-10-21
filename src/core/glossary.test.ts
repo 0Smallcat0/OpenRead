@@ -176,3 +176,68 @@ describe('hasGlossaryTerm', () => {
     expect(hasGlossaryTerm('React React', entries)).toBe(true);
   });
 });
+
+describe('word edges outside ASCII', () => {
+  it('will not fire inside a longer Cyrillic word', () => {
+    // The boundary test only knew [A-Za-z0-9], so `кот` matched inside
+    // `который` and the sentence went out as `Это [[0]]орый час?`.
+    const hidden = protectTerms('Это который час?', [{ term: 'кот', as: '' }]);
+    expect(hidden.text).toBe('Это который час?');
+  });
+
+  it('will not fire inside a longer word on an accented edge', () => {
+    const hidden = protectTerms('the résuméstyle field', [
+      { term: 'résumé', as: 'CV' },
+    ]);
+    expect(hidden.values).toEqual([]);
+    expect(
+      protectTerms('my résumé.', [{ term: 'résumé', as: 'CV' }]).text,
+    ).toBe('my [[0]].');
+  });
+
+  it('will not fire when the next character is a combining mark', () => {
+    // A vowel sign or an accent written as a separate mark is part of the
+    // word, but not a letter: `भारत` fired inside `भारतीय` and came back as
+    // `Indiaीय`, and `cafe` inside a decomposed `café`.
+    expect(
+      protectTerms('भारतीय लोग', [{ term: 'भारत', as: 'India' }]).values,
+    ).toEqual([]);
+    expect(
+      protectTerms('cafe\u0301 here', [{ term: 'cafe', as: 'X' }]).values,
+    ).toEqual([]);
+    // A term that itself ends in a mark still gets its end boundary.
+    expect(
+      protectTerms('हिन्दीभाषी', [{ term: 'हिन्दी', as: 'Hindi' }]).values,
+    ).toEqual([]);
+    expect(protectTerms('भारत में', [{ term: 'भारत', as: 'India' }]).text).toBe(
+      '[[0]] में',
+    );
+  });
+
+  it('still matches Japanese and Thai with no spaces around them', () => {
+    expect(
+      protectTerms('データベースを作る', [{ term: 'データベース', as: 'DB' }])
+        .text,
+    ).toBe('[[0]]を作る');
+    expect(
+      protectTerms('สร้างฐานข้อมูลใหม่', [{ term: 'ฐานข้อมูล', as: 'DB' }])
+        .text,
+    ).toBe('สร้าง[[0]]ใหม่');
+  });
+});
+
+describe('a term that is a number', () => {
+  it('does not rewrite the placeholders already issued', () => {
+    // Longer terms go first, so `React` became `[[0]]` — and then the term
+    // `0` matched the 0 inside it: `[[[[1]]]] [[2]] rocks`, which could never
+    // be restored, so the glossary silently did nothing for the block.
+    const entries = [
+      { term: 'React', as: 'R' },
+      { term: '0', as: 'zero' },
+    ];
+    const hidden = protectTerms('React 0 rocks', entries);
+    expect(hidden.text).toBe('[[0]] [[1]] rocks');
+    const restored = restoreTerms(hidden.text, hidden);
+    expect(restored).toEqual({ text: 'R zero rocks', complete: true });
+  });
+});

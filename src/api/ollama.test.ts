@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { extractChunk, translateStream } from './ollama';
+import {
+  extractChunk,
+  translateStream,
+  enrichText,
+  ENRICH_TIMEOUT_MS,
+} from './ollama';
 
 describe('extractChunk', () => {
   it('extracts content from a native NDJSON line', () => {
@@ -323,5 +328,40 @@ describe('translateStream', () => {
     });
 
     expect(chunks.join('')).toBe('字字字');
+  });
+});
+
+describe('enrichText', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('gives up on a server that never answers, rather than holding the capture', async () => {
+    // Best-effort is the whole contract — "a weak local model can never block a
+    // capture" — and there was no deadline at all. Ollama serves one request
+    // at a time by default, so a capture made during a page translation or a
+    // cold model load sat on "Enriching…" for as long as the worker lived.
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url: string, init?: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              reject(new DOMException('Aborted', 'AbortError'));
+            });
+          }),
+      ),
+    );
+    const run = enrichText({
+      text: 'A paragraph.',
+      baseUrl: 'http://localhost:11434',
+      model: 'qwen3',
+      targetLang: 'English',
+    }).catch(() => null);
+    await vi.advanceTimersByTimeAsync(ENRICH_TIMEOUT_MS + 1000);
+    const outcome = await Promise.race([run, Promise.resolve('pending')]);
+    expect(outcome).toBeNull();
   });
 });

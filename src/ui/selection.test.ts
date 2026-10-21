@@ -385,10 +385,10 @@ describe('selecting without a mouse', () => {
       toString: () => text,
       rangeCount: 1,
       getRangeAt: () => ({
-      getBoundingClientRect: () => RECT,
-      // One rectangle per line fragment; a one-line selection has one.
-      getClientRects: () => [RECT],
-    }),
+        getBoundingClientRect: () => RECT,
+        // One rectangle per line fragment; a one-line selection has one.
+        getClientRects: () => [RECT],
+      }),
     } as unknown as Selection);
     document.dispatchEvent(
       new KeyboardEvent('keyup', {
@@ -413,10 +413,10 @@ describe('selecting without a mouse', () => {
       toString: () => 'Hello, world!',
       rangeCount: 1,
       getRangeAt: () => ({
-      getBoundingClientRect: () => RECT,
-      // One rectangle per line fragment; a one-line selection has one.
-      getClientRects: () => [RECT],
-    }),
+        getBoundingClientRect: () => RECT,
+        // One rectangle per line fragment; a one-line selection has one.
+        getClientRects: () => [RECT],
+      }),
     } as unknown as Selection);
     document.dispatchEvent(
       new KeyboardEvent('keyup', { key: 'a', ctrlKey: true, bubbles: true }),
@@ -431,10 +431,10 @@ describe('selecting without a mouse', () => {
       toString: () => 'Hello, world!',
       rangeCount: 1,
       getRangeAt: () => ({
-      getBoundingClientRect: () => RECT,
-      // One rectangle per line fragment; a one-line selection has one.
-      getClientRects: () => [RECT],
-    }),
+        getBoundingClientRect: () => RECT,
+        // One rectangle per line fragment; a one-line selection has one.
+        getClientRects: () => [RECT],
+      }),
     } as unknown as Selection);
     document.dispatchEvent(
       new KeyboardEvent('keyup', { key: 'ArrowRight', bubbles: true }),
@@ -866,7 +866,8 @@ describe('what language the selection is in', () => {
   async function mountForEnglish(): Promise<void> {
     teardown?.();
     teardown = mountSelectionTranslator({
-      getSettings: () => Promise.resolve({ ...SETTINGS, targetLang: 'English' }),
+      getSettings: () =>
+        Promise.resolve({ ...SETTINGS, targetLang: 'English' }),
     });
     await settle();
   }
@@ -887,8 +888,7 @@ describe('what language the selection is in', () => {
     await settle();
 
     const sent = ports.at(-1)?.posted.at(-1) as
-      | { sourceLang?: string; text?: string }
-      | undefined;
+      { sourceLang?: string; text?: string } | undefined;
     expect(sent?.text).toBe('我今天沒吃飯');
     expect(sent?.sourceLang).toBeUndefined();
   });
@@ -901,8 +901,29 @@ describe('what language the selection is in', () => {
     await settle();
 
     const sent = ports.at(-1)?.posted.at(-1) as
-      | { sourceLang?: string }
-      | undefined;
+      { sourceLang?: string } | undefined;
     expect(sent?.sourceLang).toBe('en');
+  });
+
+  it('does not claim the host page language where the text is not its own', async () => {
+    // The EPUB reader is the extension's own page and declares `en`. A German
+    // book selected there and asked for English was sent as `en`, and the
+    // engine handed the German back as "already in that language".
+    document.documentElement.lang = 'en';
+    teardown?.();
+    teardown = mountSelectionTranslator({
+      getSettings: () =>
+        Promise.resolve({ ...SETTINGS, targetLang: 'English' }),
+      fromPageLanguage: false,
+    });
+    await settle();
+    const icon = await select('Es war einmal ein kleines Mädchen.');
+    icon.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await settle();
+
+    const sent = ports.at(-1)?.posted.at(-1) as
+      { sourceLang?: string; text?: string } | undefined;
+    expect(sent?.text).toBe('Es war einmal ein kleines Mädchen.');
+    expect(sent?.sourceLang).toBeUndefined();
   });
 });

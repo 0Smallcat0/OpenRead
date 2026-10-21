@@ -15,7 +15,8 @@
  */
 
 /** Fields worth offering. */
-const EDITABLE = 'input, textarea, [contenteditable=""], [contenteditable="true"]';
+const EDITABLE =
+  'input, textarea, [contenteditable=""], [contenteditable="true"]';
 
 /**
  * Types where the text is a value rather than prose. A password is not to be
@@ -61,19 +62,32 @@ export type InputTarget = HTMLInputElement | HTMLTextAreaElement | HTMLElement;
  * the host: a comment box in a web component would otherwise never be found.
  */
 export function activeField(doc: Document): InputTarget | null {
+  const element = deepActiveElement(doc);
+  if (
+    !element ||
+    !(element instanceof (doc.defaultView?.HTMLElement ?? HTMLElement))
+  ) {
+    return null;
+  }
+  if (!element.matches(EDITABLE)) return null;
+  if (
+    element instanceof (doc.defaultView?.HTMLInputElement ?? HTMLInputElement)
+  ) {
+    if (NOT_PROSE.has(element.type.toLowerCase())) return null;
+  }
+  if ('readOnly' in element && (element as HTMLInputElement).readOnly)
+    return null;
+  if ('disabled' in element && (element as HTMLInputElement).disabled)
+    return null;
+  return element;
+}
+
+/** The focused element, looking through open shadow roots to the real one. */
+function deepActiveElement(doc: Document): Element | null {
   let element: Element | null = doc.activeElement;
   while (element?.shadowRoot?.activeElement) {
     element = element.shadowRoot.activeElement;
   }
-  if (!element || !(element instanceof (doc.defaultView?.HTMLElement ?? HTMLElement))) {
-    return null;
-  }
-  if (!element.matches(EDITABLE)) return null;
-  if (element instanceof (doc.defaultView?.HTMLInputElement ?? HTMLInputElement)) {
-    if (NOT_PROSE.has(element.type.toLowerCase())) return null;
-  }
-  if ('readOnly' in element && (element as HTMLInputElement).readOnly) return null;
-  if ('disabled' in element && (element as HTMLInputElement).disabled) return null;
   return element;
 }
 
@@ -86,6 +100,17 @@ export function fieldText(field: InputTarget): string {
     return field.value;
   }
   return field.textContent ?? '';
+}
+
+/** Everything in the field, markup included for an editor box. */
+function rawContent(field: InputTarget): string {
+  if (
+    field instanceof HTMLInputElement ||
+    field instanceof HTMLTextAreaElement
+  ) {
+    return field.value;
+  }
+  return field.innerHTML;
 }
 
 /**
@@ -134,9 +159,28 @@ export async function translateActiveInput(
 ): Promise<'no-field' | 'empty' | 'failed' | 'done'> {
   const field = activeField(doc);
   if (!field) {
-    deps.notify?.('Click into a text box first, then press the shortcut.');
+    // The shortcut and the context menu reach every frame, and only one of
+    // them holds the box. Said once, by the top frame, and not even there when
+    // its focus is an <iframe> — the box is inside it, being translated, and
+    // a "click into a text box" over it is simply wrong.
+    // A frame other than the top one speaks only when it holds the focus
+    // itself: a password field inside an iframe leaves the top page's focus on
+    // the <iframe>, and with both quiet the shortcut did nothing at all.
+    const view = doc.defaultView;
+    const topFrame = view !== null && view === view.top;
+    // Deep, like the field itself: an <iframe> inside a web component leaves
+    // the top page's focus on the shadow host, and the notice went up over a
+    // box the frame was translating.
+    const tag = deepActiveElement(doc)?.tagName;
+    if ((topFrame || doc.hasFocus()) && tag !== 'IFRAME' && tag !== 'FRAME') {
+      deps.notify?.('Click into a text box first, then press the shortcut.');
+    }
     return 'no-field';
   }
+  // The whole field as it stands, markup included, for the check below:
+  // trimmed text alone missed new lines typed at the end and a picture or a
+  // line break added to an editor box, and replacing threw them away.
+  const snapshot = rawContent(field);
   const source = fieldText(field).trim();
   if (!source) {
     deps.notify?.('Nothing written yet.');
@@ -153,6 +197,14 @@ export async function translateActiveInput(
     // box they have left is worse than not writing at all.
     if (activeField(doc) !== field) {
       deps.notify?.('You moved out of the box, so nothing was changed.');
+      return 'failed';
+    }
+    // And what is in it now is what was sent. Anything typed during the round
+    // trip was not translated, and replacing the box would throw it away.
+    if (rawContent(field) !== snapshot) {
+      deps.notify?.(
+        'The text changed while it was being translated, so nothing was replaced.',
+      );
       return 'failed';
     }
     if (!replaceFieldText(field, translated)) {
