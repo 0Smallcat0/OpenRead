@@ -5,20 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.21.1] - 2026-08-16
+## [2.24.0] - 2026-10-21
 
-### Changed
+The release for the reader a paid translator has just turned away. When its
+free tier lost its machine translation engines and began asking for a sign-in,
+the complaints left in its 1–2 star reviews were, in order: the paywall and
+the quota, the free engines taken away, being made to log in, captions, and an
+API key of one's own that it would not take. OpenRead already answered the
+first three — free and unlimited, an engine that runs on the reader's own
+computer, no account. This release answers the other two: bilingual YouTube
+captions, and your own key on any OpenAI-compatible provider. The default
+engines still send nothing anywhere.
 
-- **The store listing has a name that says what this is.** The Chrome Web Store
-  title is `manifest.name` — not a field in the developer dashboard — so the
-  listing had always shown a bare `OpenRead`, which carries no keywords and sits
-  one space away from an unrelated extension called **Open Read** (a paywall
-  shortcut, 104 users, untouched since February). It is now `OpenRead — Local
-Bilingual Translation`, 38 of the 45 characters a manifest name may have.
-  `short_name` keeps `OpenRead` for the toolbar tooltip and the extensions list,
-  where a tagline is only something to truncate.
-
-## [Unreleased]
+Underneath, every path a user takes — language-pack downloads, PDF, EPUB,
+capture, glossary, settings, text boxes — walked again, and what broke on it
+fixed.
 
 ### Added
 
@@ -246,6 +247,19 @@ Bilingual Translation`, 38 of the 45 characters a manifest name may have.
   the failure it prevents is not Firefox-specific: any rejection there escapes
   the request handler and leaves the port unanswered, which on Chrome a quota
   error or a rejected rule would do just as well.
+
+## [2.21.1] - 2026-08-16
+
+### Changed
+
+- **The store listing has a name that says what this is.** The Chrome Web Store
+  title is `manifest.name` — not a field in the developer dashboard — so the
+  listing had always shown a bare `OpenRead`, which carries no keywords and sits
+  one space away from an unrelated extension called **Open Read** (a paywall
+  shortcut, 104 users, untouched since February). It is now `OpenRead — Local
+  Bilingual Translation`, 38 of the 45 characters a manifest name may have.
+  `short_name` keeps `OpenRead` for the toolbar tooltip and the extensions list,
+  where a tagline is only something to truncate.
 
 ## [2.21.0] - 2026-08-14
 

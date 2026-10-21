@@ -1,7 +1,7 @@
 # Chrome Web Store listing copy
 
-Paste-ready copy for the store listing, current as of the release after
-**2.23.0** (your own API key, YouTube captions).
+Paste-ready copy for the store listing, current as of **2.24.0** (your own
+API key, YouTube captions).
 
 > **Who it is written for.** The readers most likely to install a free,
 > no-login translator today are the ones a paid one has just pushed out: its
