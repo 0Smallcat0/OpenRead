@@ -20,8 +20,9 @@
   default engine costs nothing to run because it runs on your computer, not on
   a server someone has to pay for.
 - **Some things cannot go in a cloud translator.** Unpublished drafts,
-  contracts, medical records, anything under NDA. Both default engines run on
-  your own machine; the optional third sends text only to the API you name.
+  contracts, medical records, anything under NDA. The built-in engine and
+  Ollama both run on your own machine; your own API key, if you add one, sends
+  text only to the address you name.
 - **Bilingual, not replaced.** The translation goes _under_ each paragraph, so
   a sentence that looks wrong can be checked against the original instead of
   taken on faith.
@@ -55,8 +56,9 @@ translator, whose language pack Chrome downloads once per language pair — abou
 350 MB, measured at 82 seconds on a 4 MB/s connection. That download starts the
 moment the extension is installed rather than the first time you press
 translate, and the extension holds it open until it lands: Chrome does not
-resume an interrupted one, it waits three minutes and then starts over. After
-it arrives, a page takes about two seconds.
+resume an interrupted one, it waits three minutes and then starts over. The
+popup says whether yours is ready. After it arrives, a page takes about two
+seconds.
 
 <p align="center">
   <img src="docs/screenshots/popup.png" alt="The OpenRead popup: translator set to Chrome built-in, target language Traditional Chinese" width="290" />
@@ -75,21 +77,18 @@ it arrives, a page takes about two seconds.
   equivalent API: the only engine left there is Ollama, which means a server
   and a five-gigabyte model — the opposite of what this is for.
 - **Thirty-nine target languages**, every one probed against a real Chrome
-  rather than taken from documentation. The source language is whatever the
-  page is in — that side is not a list.
+  rather than taken from documentation. It starts on your browser's own
+  language; change it in the popup. The source language is whatever the page
+  is in — that side is not a list.
 - **Three settings for how it looks**: the original beside the translation or
   the translation alone; a line, nothing, a dashed underline or a tinted
   background; smaller, the same, or larger. They apply to a page you are
   already looking at, without re-translating it.
-- **The first translation of a language pair waits for a download.** Chrome
-  fetches the model itself, once per pair per browser profile — 30 seconds to
-  two minutes. The popup says whether yours is ready and offers to fetch it
-  before you need it, so the wait happens while you are not waiting.
 - **Chrome decides which pairs exist.** It downloads packs per language pair,
   and a pair it has no pack for is one the built-in engine cannot do. When that
-  happens OpenRead falls back to Ollama; with no Ollama configured, that is
-  where the attempt ends — or choose your own API in the popup, which has no
-  pairs to run out of.
+  happens OpenRead falls back to Ollama if you run it; if you do not, it says
+  so and points you at **Your own API key** in the popup, which has no pairs to
+  run out of.
 
 ## Use it
 
@@ -178,7 +177,9 @@ job it is.
 ## Without a browser
 
 The same pipeline as a command and as an MCP server, so a script or an agent
-can translate locally too:
+can translate locally too. Outside the browser there is no built-in
+translator, so these run on [Ollama](https://ollama.com) — `ollama pull qwen3`
+first:
 
 ```bash
 npx openread "The quick brown fox jumps over the lazy dog."
@@ -196,14 +197,16 @@ extension's.
 | ------------------------- | --------------------------- | ------------------------- | -------------------- |
 | To install                | nothing                     | a server + a 5.2 GB model | nothing — a key      |
 | A 44-block article        | **~2 s**                    | 54 s                      | depends on provider  |
-| chrF on 27 fixtures       | 36.5                        | **46.4**                  | depends on the model |
+| Quality (chrF, 27 texts)  | 36.5                        | **46.4**                  | depends on the model |
 | Reads surrounding context | no                          | yes                       | yes                  |
 | Choose the model          | no                          | yes                       | yes                  |
 | Capture enrichment        | no                          | yes                       | no                   |
 | Text leaves your machine  | no                          | no                        | **yes**, to that API |
 
-The first two run entirely on your machine, and their numbers come from the
-same 27 fixtures against the same Taiwanese references — the built-in engine's
+chrF is a standard translation-quality score: how closely the output matches a
+human translation, higher is better. The first two engines run entirely on your
+machine, and their numbers come from the same 27 texts against the same
+Taiwanese references — the built-in engine's
 are in [`eval/BUILTIN-RESULTS.md`](eval/BUILTIN-RESULTS.md), the model's in
 [`eval/BENCHMARK-RESULTS.md`](eval/BENCHMARK-RESULTS.md). Ten chrF is the price
 of installing nothing; a whole segment finishes on the built-in engine in about
@@ -226,10 +229,11 @@ No account, no analytics, and no endpoint of the developer's anywhere in the
 code. On the default engine the extension makes no network request at all; on
 the Ollama engine, only to the server URL you configured, on your own machine;
 on your own API, only to the address you entered, with your key.
-Permissions are `storage`, `activeTab`, `contextMenus` and
-`declarativeNetRequest` — the last one strips the `Origin` header from this
-extension's own requests to your Ollama server, scoped so a web page's requests
-can never match it. [Full policy](PRIVACY.md).
+Permissions are access to the sites you visit (`<all_urls>`), which is what
+lets it translate whatever page or PDF you are on, plus `storage`,
+`activeTab`, `contextMenus` and `declarativeNetRequest` — the last one strips
+the `Origin` header from this extension's own requests to your Ollama server,
+scoped so a web page's requests can never match it. [Full policy](PRIVACY.md).
 
 That is the author of the extension telling you the extension is safe, which is
 worth very little. So it is also a test you can run:
@@ -249,7 +253,7 @@ all, since that is the easy way to send nothing and prove nothing.
 ```bash
 pnpm install
 pnpm build        # -> .output/chrome-mv3, load it unpacked
-pnpm test         # 913 unit tests
+pnpm test         # unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
 pnpm eval:builtin # score the default engine in a real Chrome -> eval/BUILTIN-RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)

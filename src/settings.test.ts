@@ -8,13 +8,47 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
   activeModel,
+  defaultTargetLang,
   limitExcept,
   limitGlossary,
   loadApiKey,
+  loadSettings,
   DEFAULT_SETTINGS,
   MAX_EXCEPT_BYTES,
   MAX_GLOSSARY_BYTES,
 } from './settings';
+
+describe('the target language on a first install', () => {
+  afterEach(() => {
+    delete (globalThis as { chrome?: unknown }).chrome;
+  });
+
+  const browser = (ui: string, stored: Record<string, unknown> = {}): void => {
+    (globalThis as { chrome?: unknown }).chrome = {
+      i18n: { getUILanguage: () => ui },
+      storage: { sync: { get: () => Promise.resolve(stored) } },
+    };
+  };
+
+  it("is the browser's own language", async () => {
+    browser('ja');
+    expect((await loadSettings()).targetLang).toBe('Japanese');
+    browser('zh-TW');
+    expect((await loadSettings()).targetLang).toBe('Traditional Chinese');
+  });
+
+  it('never overrides a language the reader chose', async () => {
+    browser('ja', { targetLang: 'Korean' });
+    expect((await loadSettings()).targetLang).toBe('Korean');
+  });
+
+  it('falls back to the shipped default where it cannot tell', () => {
+    browser('fa-IR');
+    expect(defaultTargetLang()).toBe(DEFAULT_SETTINGS.targetLang);
+    delete (globalThis as { chrome?: unknown }).chrome;
+    expect(defaultTargetLang()).toBe(DEFAULT_SETTINGS.targetLang);
+  });
+});
 
 describe('the API key', () => {
   afterEach(() => {

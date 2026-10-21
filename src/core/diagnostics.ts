@@ -88,10 +88,14 @@ export function corsFixCommand(os: PlatformOs): string {
  *
  * Both reasons, first cause first. `builtinReason` is null when Ollama was the
  * engine the user actually picked, and then there is no first cause to report.
+ *
+ * When Ollama did not answer at all, the user almost certainly never set it
+ * up, so its message is replaced by the setting that gets them a translation.
  */
 export function describeEngineFailure(
   builtinReason: string | null,
   ollamaMessage: string,
+  ollamaUnreachable = false,
 ): string {
   const first = builtinReason?.trim();
   if (!first) return ollamaMessage;
@@ -99,6 +103,12 @@ export function describeEngineFailure(
   // could hand over anything; joining without this produces "…translator
   // OpenRead fell back".
   const punctuated = /[.!?]$/.test(first) ? first : `${first}.`;
+  if (ollamaUnreachable) {
+    return (
+      `${punctuated} To translate it anyway, open the OpenRead popup and set ` +
+      'Translator to "Your own API key", or install Ollama.'
+    );
+  }
   return `${punctuated} OpenRead fell back to Ollama, which also failed: ${ollamaMessage}`;
 }
 

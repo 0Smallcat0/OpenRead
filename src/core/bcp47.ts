@@ -88,6 +88,28 @@ export function toBcp47(targetLang: string): string | null {
 }
 
 /**
+ * The popup language a browser UI locale reads in, or null when the list does
+ * not have it.
+ *
+ * Chinese is split by script, not by the bare `zh`: `zh-TW`, `zh-HK` and
+ * `zh-Hant-*` read Traditional, everything else Simplified.
+ */
+export function languageForLocale(locale: string): string | null {
+  const tag = locale.trim().replace(/_/g, '-').toLowerCase();
+  if (tag === 'zh' || tag.startsWith('zh-')) {
+    return /^zh-(tw|hk|mo|hant)\b/.test(tag)
+      ? 'Traditional Chinese'
+      : 'Simplified Chinese';
+  }
+  const base = tag.split('-')[0];
+  // Chrome reports Norwegian Bokmål as `nb` and older builds Hebrew as `iw`.
+  const code =
+    base === 'nb' || base === 'nn' ? 'no' : base === 'iw' ? 'he' : base;
+  const match = Object.entries(BY_NAME).find(([, c]) => c === code);
+  return match ? match[0] : null;
+}
+
+/**
  * Whether the built-in translator can be asked for this language at all.
  * Availability of the actual language pack is a separate, runtime question.
  */

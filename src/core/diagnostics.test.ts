@@ -231,6 +231,28 @@ describe('describeEngineFailure', () => {
     expect(describeEngineFailure(null, OLLAMA_DOWN)).toBe(OLLAMA_DOWN);
   });
 
+  it('points a user who never set up Ollama at the setting that works', () => {
+    // Ollama did not answer at all, so the user almost certainly does not run
+    // it: "Can't reach Ollama" names a server they never chose.
+    const message = describeEngineFailure(
+      'Chrome has no en → ja language pack.',
+      OLLAMA_DOWN,
+      true,
+    );
+    expect(message).toContain('en → ja');
+    expect(message).toContain('"Your own API key"');
+    expect(message).not.toContain("Can't reach Ollama");
+  });
+
+  it('keeps Ollama’s own message when Ollama answered and failed', () => {
+    const message = describeEngineFailure(
+      'Chrome has no en → ja language pack.',
+      'model "qwen3" not found',
+      false,
+    );
+    expect(message).toContain('model "qwen3" not found');
+  });
+
   it('treats a blank reason as no reason', () => {
     expect(describeEngineFailure('   ', OLLAMA_DOWN)).toBe(OLLAMA_DOWN);
   });

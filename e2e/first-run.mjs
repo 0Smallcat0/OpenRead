@@ -15,7 +15,7 @@
  * transcript from this one.
  *
  *   pnpm build && pnpm e2e:first-run
- *   OPENREAD_BUILD=.output/store-2.18.1 pnpm e2e:first-run   # the shipped one
+ *   OPENREAD_BUILD=.output/store-<version> pnpm e2e:first-run   # a packaged one
  *
  * Environment overrides: OPENREAD_CHROME, OPENREAD_BUILD, OPENREAD_URL.
  */
@@ -29,7 +29,8 @@ import { fileURLToPath } from 'node:url';
 const CHROME =
   process.env.OPENREAD_CHROME ??
   'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const TARGET = process.env.OPENREAD_URL ?? 'https://en.wikipedia.org/wiki/Ollama';
+const TARGET =
+  process.env.OPENREAD_URL ?? 'https://en.wikipedia.org/wiki/Ollama';
 const PORT = 9338;
 
 const EXTENSION = process.env.OPENREAD_BUILD
@@ -54,6 +55,9 @@ const chrome = spawn(
     '--enable-unsafe-extension-debugging',
     '--no-first-run',
     '--no-default-browser-check',
+    // A first install translates into the browser's language; pin the reader
+    // the en -> zh-Hant transcript below was recorded for.
+    '--lang=zh-TW',
     // Reproduce a machine where Chrome's built-in translator is not on offer —
     // an older Chrome, an ineligible one, or one an enterprise policy has
     // turned it off on. That is what a computer this extension "does not work
@@ -198,7 +202,10 @@ try {
   // that predates the install produces, and the popup's own handler used to
   // discard it.
   const delivery = await worker.evaluate(async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
     try {
       await chrome.tabs.sendMessage(tab.id, { type: 'TRANSLATE_PAGE' });
       return 'delivered';
@@ -251,8 +258,9 @@ try {
       inserted: document.querySelectorAll('.oit-bilingual').length,
       sample: first?.innerText?.slice(0, 70) ?? '(nothing)',
       badge:
-        document.getElementById('oit-page-progress')?.innerText?.replace(/\n/g, ' ') ??
-        '(no badge)',
+        document
+          .getElementById('oit-page-progress')
+          ?.innerText?.replace(/\n/g, ' ') ?? '(no badge)',
     };
   });
   console.log('\n--- outcome ---');

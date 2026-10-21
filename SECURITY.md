@@ -36,7 +36,11 @@ The threat model is narrow, which makes the interesting bugs easy to name.
 **In scope:**
 
 - Any path by which page content, a selection, or a translation leaves the
-  machine — other than to the Ollama server URL the user configured themselves.
+  machine — other than to the Ollama server URL, or the API address, the user
+  configured themselves.
+- Any way the API key for the **Your own API key** engine reaches anything but
+  the address it was entered for: another host, a web page, synced storage, or
+  a capture.
 - Any way a web page can reach the extension's privileged surfaces: the message
   port, the background broker, `chrome.storage`, or the bundled PDF.js viewer.
 - Any way a web page's own requests can match the `declarativeNetRequest` rule
@@ -68,9 +72,11 @@ guess:
   translation, or ask for the whole page.
 - On the default engine the extension makes **no network request at all**. On
   the Ollama engine it makes requests to the configured server URL and nowhere
-  else.
-- `chrome.storage` holds settings only: engine, server URL, model name, target
-  language, Obsidian vault and folder, enrichment toggle.
+  else; on your own API, to the address you entered, with your key.
+- `chrome.storage.sync` holds settings only: engine, server and API addresses,
+  model names, languages, display options, glossary, excluded sites, Obsidian
+  vault and folder, enrichment toggle. The API key is the one secret, and it is
+  kept in `chrome.storage.local` on this machine, never synced.
 - There is no analytics, no telemetry, no remote configuration, and no code
   that is not in the package.
 

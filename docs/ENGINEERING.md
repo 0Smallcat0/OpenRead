@@ -48,11 +48,11 @@ mid-artifact exactly as they do in a live stream.
 _Measured over 23 curated fixtures (21 Traditional-Chinese targets). Regenerate
 with `pnpm eval`; full report in [`eval/RESULTS.md`](../eval/RESULTS.md)._
 
-**748 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
-pure core at **100% function / 97.5% line** coverage, the selection, capture and
+**921 unit tests** cover everything with real behaviour (`pnpm test:cov`): the
+pure core at **100% function / 97.9% line** coverage, the selection, capture and
 EPUB-reader UI driven through jsdom with a stubbed extension port, and the
 background worker — which owns cancellation, error translation and the PDF and
-EPUB routes. Overall: 90% function, 93% line.
+EPUB routes. Overall: 91% function, 94% line.
 
 ## The engine most people are served by
 

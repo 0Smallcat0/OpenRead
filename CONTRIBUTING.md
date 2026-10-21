@@ -4,7 +4,7 @@ Thanks for your interest in contributing. This document covers everything you ne
 
 ## Prerequisites
 
-- Node.js >= 20
+- Node.js >= 22
 - [pnpm](https://pnpm.io/installation)
 
 ## Setup

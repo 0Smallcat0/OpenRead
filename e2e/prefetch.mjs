@@ -73,6 +73,9 @@ const chrome = spawn(
     '--enable-unsafe-extension-debugging',
     '--no-first-run',
     '--no-default-browser-check',
+    // A first install prefetches the pack for the browser's language, and an
+    // English browser has none to guess. Pin a reader who needs one.
+    '--lang=zh-TW',
     'about:blank',
   ],
   { stdio: 'ignore' },

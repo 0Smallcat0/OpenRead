@@ -43,6 +43,8 @@ export type TranslationStyle = 'line' | 'plain' | 'dashed' | 'highlight';
 /** Size of the translation relative to the text it sits under. */
 export type TranslationScale = 'small' | 'same' | 'large';
 
+import { languageForLocale } from './core/bcp47';
+
 export type { HoverKey } from './ui/hover';
 import type { HoverKey } from './ui/hover';
 
@@ -145,7 +147,7 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 /**
- * Languages offered in the popup, in display order (first = default).
+ * Languages offered in the popup, in display order.
  *
  * The four this shipped with, then the rest alphabetically. Every one of them
  * was probed against a real Chrome — see `core/bcp47.ts` for what was left out
@@ -215,7 +217,19 @@ export async function loadSettings(): Promise<Settings> {
     'obsidianFolder',
     'enrichOnCapture',
   ])) as Partial<Settings>;
-  return { ...DEFAULT_SETTINGS, ...stored };
+  return { ...DEFAULT_SETTINGS, targetLang: defaultTargetLang(), ...stored };
+}
+
+/**
+ * The language a first install translates into: the browser's own UI
+ * language, so a reader in Tokyo or São Paulo is not handed Traditional
+ * Chinese. Traditional Chinese when the list does not have that language.
+ */
+export function defaultTargetLang(): string {
+  const ui = (
+    globalThis as { chrome?: { i18n?: { getUILanguage?: () => string } } }
+  ).chrome?.i18n?.getUILanguage?.();
+  return (ui && languageForLocale(ui)) ?? DEFAULT_SETTINGS.targetLang;
 }
 
 /** The model the chosen engine will run, for messages that name it. */

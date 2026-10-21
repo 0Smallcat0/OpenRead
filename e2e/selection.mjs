@@ -55,6 +55,9 @@ const chrome = spawn(
     '--enable-unsafe-extension-debugging',
     '--no-first-run',
     '--no-default-browser-check',
+    // A first install translates into the browser's language; pin it so the
+    // en -> zh-Hant pair below is the one the extension asks for.
+    '--lang=zh-TW',
     'about:blank',
   ],
   { stdio: 'ignore' },

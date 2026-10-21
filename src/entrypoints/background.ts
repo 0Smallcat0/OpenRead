@@ -501,8 +501,9 @@ export default defineBackground(() => {
     const { engine, targetLang } = await loadSettings();
     if (engine !== 'builtin') return;
     const target = toBcp47(targetLang);
-    // A language only Ollama serves. Nothing to fetch.
-    if (!target) return;
+    // A language only Ollama serves, or an English reader, for whom there is
+    // no pair to guess: nothing to fetch.
+    if (!target || target === PREFETCH_SOURCE) return;
     await ensurePack(PREFETCH_SOURCE, target);
   }
 
@@ -837,7 +838,11 @@ export default defineBackground(() => {
           // could not serve them.
           post({
             status: 'error',
-            message: describeEngineFailure(builtinReason, message_),
+            message: describeEngineFailure(
+              builtinReason,
+              message_,
+              error instanceof TypeError,
+            ),
           });
         }
       })();
