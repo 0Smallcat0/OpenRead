@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.24.0] - 2026-10-21
+## [2.24.0] - 2026-10-22
 
 The release for the reader a paid translator has just turned away. When its
 free tier lost its machine translation engines and began asking for a sign-in,
@@ -45,6 +45,17 @@ fixed.
   `chrome.storage.local` and is never synced; the popup checks it against the
   provider's model list and offers what it can reach; a 429 is waited out per
   `Retry-After`. `e2e:byok` drives it against a stand-in API.
+
+### Changed
+
+- **The first target language is the browser's own**, not Traditional Chinese
+  for everyone: a Chrome in French starts on French, one in Taiwan on
+  Traditional Chinese. The popup still changes it.
+- **When nothing on the computer can translate, the message says what will.**
+  With Chrome's translator unavailable and no Ollama running, it used to send
+  the reader to install Ollama; it now names **Your own API key** first.
+- A reader whose browser is in English is no longer sent to prefetch an
+  English-to-English pack.
 
 ### Fixed
 
