@@ -90,10 +90,13 @@ jobs:
           zip=".output/openread-${GITHUB_REF_NAME#v}-chrome.zip"
           # The numeric id, not `gh release view --json id`, which answers with
           # the GraphQL node id that the REST endpoint below will not take.
-          id=$(gh api \
+          #
+          # The exit status decides, not whether anything came back: on a 404
+          # gh still prints the error body to stdout, and v2.24.0 took that
+          # JSON for an id and PATCHed a URL built from it.
+          if id=$(gh api \
             "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" \
-            --jq .id 2>/dev/null || true)
-          if [ -n "${id}" ]; then
+            --jq .id 2>/dev/null); then
             # Not `gh release edit`. That sends `tag_name` back with the patch,
             # and GitHub answers 422 "Release.tag_name already exists" — about a
             # tag which is, of course, this release's own. This branch had never
