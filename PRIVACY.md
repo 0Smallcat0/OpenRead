@@ -1,9 +1,10 @@
 # Privacy Policy — OpenRead
 
-_Last updated: 2026-08-06_
+_Last updated: 2026-10-21_
 
-OpenRead is a local-first browser extension. It is designed so that your data
-never leaves your machine.
+OpenRead is a local-first browser extension. On its two default engines your
+data never leaves your machine; the optional third sends the text you translate
+to an API you name, and to nothing else.
 
 ## What the extension collects
 
@@ -24,8 +25,20 @@ It depends on which engine you have chosen in the popup.
   default `http://localhost:11434`, i.e. your own computer — and inference runs
   on that machine. If you point the URL at a remote machine, the text goes to
   that machine, which you chose and control.
+- **Your own API (opt-in).** The text, with a few sentences around it for
+  context, is sent to the OpenAI-compatible address you enter — OpenAI,
+  DeepSeek, OpenRouter, Google, Groq, or a server on your own computer — with
+  the key you paste. That provider handles it under its own terms and bills
+  your key. Nothing is sent there until you choose this engine.
 
-In neither case is the text sent to the developer or to any third party.
+In no case is the text sent to the developer, and on the first two engines it
+is sent to no third party at all.
+
+**YouTube captions** follow the same rules. With the setting on and captions
+(CC) turned on in a video, the extension reads the caption track YouTube's own
+player has downloaded and hands its lines, a minute or so ahead of playback, to
+whichever engine you chose. It makes no request to YouTube of its own, and
+turning CC off stops it.
 
 **Automatic translation** is off until you turn it on, and it changes what gets
 translated, not where it goes. Once on, a page you open is handed to whichever
@@ -61,9 +74,14 @@ you run it.
 
 - **Settings** (engine, Ollama server URL, model name, target language,
   automatic-translation mode and the list of sites excluded from it,
-  Obsidian vault and folder, enrichment toggle) are stored with
+  YouTube captions on or off, Obsidian vault and folder, enrichment toggle)
+  are stored with
   `chrome.storage.sync`. They stay inside your browser profile; Chrome may sync
-  them across your own signed-in browsers as with any extension setting.
+  them across your own signed-in browsers as with any extension setting. The
+  API address and model name are among them.
+- **Your API key**, if you enter one, is stored with `chrome.storage.local`:
+  in this browser profile only, never synced, and sent only to the API address
+  you entered alongside it.
 - **Captured notes** ("Save to Obsidian") are written to your local Obsidian
   vault via the `obsidian://` URL scheme, or copied to your clipboard as a
   fallback. They are not transmitted anywhere else.
@@ -76,8 +94,9 @@ you run it.
   navigations into the bundled PDF.js viewer. Page content is read only when
   you select text and invoke a translation, or explicitly ask for the whole
   page.
-- `contextMenus` — add the two right-click entries ("Translate selection with
-  OpenRead", "Translate this page with OpenRead"). It reads nothing.
+- `contextMenus` — add the three right-click entries ("Translate selection with
+  OpenRead", "Translate this page with OpenRead", "Translate what you typed
+  with OpenRead"). It reads nothing.
 - `declarativeNetRequest` — strip the `Origin` header from **this extension's
   own** requests to the Ollama server you configured, which is what removes the
   `OLLAMA_ORIGINS` setup step. The rule is scoped to requests with no owning
@@ -90,7 +109,15 @@ you run it.
 
 None. All code ships inside the extension package. On the default engine the
 extension makes no network requests; on the Ollama engine it makes them only to
-the server URL you configure.
+the server URL you configure; on your own API, only to the address you enter.
+
+## Chrome Web Store User Data Policy
+
+The use of information received by OpenRead adheres to the Chrome Web Store
+User Data Policy, including the Limited Use requirements. The text you
+translate is used only to translate it for you; it is not sold, not used for
+advertising, not read by any person, and not transferred to anyone except the
+API you name for the third engine.
 
 ## Changes
 

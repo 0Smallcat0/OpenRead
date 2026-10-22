@@ -5,20 +5,57 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.21.1] - 2026-08-16
+## [2.24.0] - 2026-10-22
+
+The release for the reader a paid translator has just turned away. When its
+free tier lost its machine translation engines and began asking for a sign-in,
+the complaints left in its 1–2 star reviews were, in order: the paywall and
+the quota, the free engines taken away, being made to log in, captions, and an
+API key of one's own that it would not take. OpenRead already answered the
+first three — free and unlimited, an engine that runs on the reader's own
+computer, no account. This release answers the other two: bilingual YouTube
+captions, and your own key on any OpenAI-compatible provider. The default
+engines still send nothing anywhere.
+
+Underneath, every path a user takes — language-pack downloads, PDF, EPUB,
+capture, glossary, settings, text boxes — walked again, and what broke on it
+fixed.
+
+### Added
+
+- **Bilingual YouTube captions.** Turn captions on and each line shows with its
+  translation under it, inside the player. The track is the one the player
+  already fetched — read as it arrives rather than requested again, so there
+  is no token to forge and nothing to break when YouTube changes it. Speech
+  recognition, which sends a timestamp per word and no punctuation at all, is
+  rebuilt into sentences at the speaker's pauses before anything is
+  translated; a transcript is cut at its own full stops. Translation runs 90
+  seconds ahead of the playhead rather than over the whole track, so a
+  two-hour lecture on your own API key costs what you watch of it. Captions
+  already in your language — YouTube's own translation into it included — are
+  left alone, adverts get none, and three failures in a row hand YouTube its
+  captions back with the reason. On by default, since nothing happens until
+  CC is pressed; **Bilingual YouTube captions** in the popup turns it off.
+  `e2e:youtube` drives it on a real video in a fresh profile.
+- **Your own API key, on any OpenAI-compatible provider** — OpenAI, DeepSeek,
+  OpenRouter, Groq, Gemini's compatibility endpoint, or LM Studio on this
+  computer. For the reader whose language pair Chrome has no pack for and
+  whose computer cannot run a model worth reading. Opt-in, never a fallback:
+  the default engines still send nothing. The key stays in
+  `chrome.storage.local` and is never synced; the popup checks it against the
+  provider's model list and offers what it can reach; a 429 is waited out per
+  `Retry-After`. `e2e:byok` drives it against a stand-in API.
 
 ### Changed
 
-- **The store listing has a name that says what this is.** The Chrome Web Store
-  title is `manifest.name` — not a field in the developer dashboard — so the
-  listing had always shown a bare `OpenRead`, which carries no keywords and sits
-  one space away from an unrelated extension called **Open Read** (a paywall
-  shortcut, 104 users, untouched since February). It is now `OpenRead — Local
-Bilingual Translation`, 38 of the 45 characters a manifest name may have.
-  `short_name` keeps `OpenRead` for the toolbar tooltip and the extensions list,
-  where a tagline is only something to truncate.
-
-## [Unreleased]
+- **The first target language is the browser's own**, not Traditional Chinese
+  for everyone: a Chrome in French starts on French, one in Taiwan on
+  Traditional Chinese. The popup still changes it.
+- **When nothing on the computer can translate, the message says what will.**
+  With Chrome's translator unavailable and no Ollama running, it used to send
+  the reader to install Ollama; it now names **Your own API key** first.
+- A reader whose browser is in English is no longer sent to prefetch an
+  English-to-English pack.
 
 ### Fixed
 
@@ -221,6 +258,19 @@ Bilingual Translation`, 38 of the 45 characters a manifest name may have.
   the failure it prevents is not Firefox-specific: any rejection there escapes
   the request handler and leaves the port unanswered, which on Chrome a quota
   error or a rejected rule would do just as well.
+
+## [2.21.1] - 2026-08-16
+
+### Changed
+
+- **The store listing has a name that says what this is.** The Chrome Web Store
+  title is `manifest.name` — not a field in the developer dashboard — so the
+  listing had always shown a bare `OpenRead`, which carries no keywords and sits
+  one space away from an unrelated extension called **Open Read** (a paywall
+  shortcut, 104 users, untouched since February). It is now `OpenRead — Local
+  Bilingual Translation`, 38 of the 45 characters a manifest name may have.
+  `short_name` keeps `OpenRead` for the toolbar tooltip and the extensions list,
+  where a tagline is only something to truncate.
 
 ## [2.21.0] - 2026-08-14
 

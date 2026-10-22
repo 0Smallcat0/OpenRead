@@ -222,7 +222,8 @@ export interface SelectionSettings {
    * running on Chrome's own translator that we are "waiting on qwen3:latest"
    * names a thing they never installed.
    */
-  engine?: 'builtin' | 'ollama';
+  engine?: 'builtin' | 'ollama' | 'openai';
+  /** The model the chosen engine runs; for `openai`, the API's model. */
   modelId: string;
   targetLang: string;
   /** Obsidian vault to capture into; empty = the user's current/last vault. */
@@ -561,11 +562,13 @@ export function mountSelectionTranslator(
             content,
             settings.engine === 'ollama'
               ? `Translating… still waiting on ${settings.modelId} — the first request after a restart loads the model into memory.`
-              : // The built-in engine's long wait is a language pack, not a
-                // model load, and it is measured in minutes rather than
-                // seconds: 145 s for Japanese, 219 s for Traditional Chinese
-                // on a profile that had neither.
-                'Translating… Chrome is fetching the language pack for this pair. That happens once, and takes a couple of minutes.',
+              : settings.engine === 'openai'
+                ? `Translating… still waiting on ${settings.modelId}. The provider has not answered yet.`
+                : // The built-in engine's long wait is a language pack, not a
+                  // model load, and it is measured in minutes rather than
+                  // seconds: 145 s for Japanese, 219 s for Traditional Chinese
+                  // on a profile that had neither.
+                  'Translating… Chrome is fetching the language pack for this pair. That happens once, and takes a couple of minutes.',
           );
         }
       }, SLOW_HINT_MS);

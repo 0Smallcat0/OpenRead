@@ -1,6 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { toBcp47, isBuiltinTarget } from './bcp47';
+import { toBcp47, isBuiltinTarget, languageForLocale } from './bcp47';
 import { TARGET_LANGUAGES } from '../settings';
+
+describe('languageForLocale', () => {
+  it('splits Chinese by script, not by the bare zh', () => {
+    expect(languageForLocale('zh-TW')).toBe('Traditional Chinese');
+    expect(languageForLocale('zh-HK')).toBe('Traditional Chinese');
+    expect(languageForLocale('zh-Hant-TW')).toBe('Traditional Chinese');
+    expect(languageForLocale('zh-CN')).toBe('Simplified Chinese');
+    expect(languageForLocale('zh')).toBe('Simplified Chinese');
+  });
+
+  it('reads the base language of any other locale', () => {
+    expect(languageForLocale('en-US')).toBe('English');
+    expect(languageForLocale('pt_BR')).toBe('Portuguese');
+    expect(languageForLocale('ja')).toBe('Japanese');
+    expect(languageForLocale('nb')).toBe('Norwegian');
+  });
+
+  it('answers only with a language the popup offers', () => {
+    expect(languageForLocale('fa-IR')).toBeNull();
+    for (const locale of ['en', 'zh-TW', 'de-AT', 'iw']) {
+      expect(TARGET_LANGUAGES).toContain(languageForLocale(locale));
+    }
+  });
+});
 
 describe('toBcp47', () => {
   it('distinguishes Traditional from Simplified, which is the whole point', () => {

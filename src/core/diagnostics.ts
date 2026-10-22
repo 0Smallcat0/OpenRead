@@ -24,6 +24,14 @@ export type ConnectionProbe =
   | { kind: 'unreachable' }
   | { kind: 'http'; status: number };
 
+/** What a `GET /models` probe of an OpenAI-compatible API found. */
+export type ApiProbe =
+  | { kind: 'ok'; models: string[] }
+  /** 401 or 403 — the server is there and does not accept this key. */
+  | { kind: 'unauthorized'; status: number }
+  | { kind: 'unreachable' }
+  | { kind: 'http'; status: number };
+
 export interface ConnectionReport {
   tone: 'ok' | 'warn' | 'error';
   message: string;
@@ -80,10 +88,14 @@ export function corsFixCommand(os: PlatformOs): string {
  *
  * Both reasons, first cause first. `builtinReason` is null when Ollama was the
  * engine the user actually picked, and then there is no first cause to report.
+ *
+ * When Ollama did not answer at all, the user almost certainly never set it
+ * up, so its message is replaced by the setting that gets them a translation.
  */
 export function describeEngineFailure(
   builtinReason: string | null,
   ollamaMessage: string,
+  ollamaUnreachable = false,
 ): string {
   const first = builtinReason?.trim();
   if (!first) return ollamaMessage;
@@ -91,6 +103,12 @@ export function describeEngineFailure(
   // could hand over anything; joining without this produces "…translator
   // OpenRead fell back".
   const punctuated = /[.!?]$/.test(first) ? first : `${first}.`;
+  if (ollamaUnreachable) {
+    return (
+      `${punctuated} To translate it anyway, open the OpenRead popup and set ` +
+      'Translator to "Your own API key", or install Ollama.'
+    );
+  }
   return `${punctuated} OpenRead fell back to Ollama, which also failed: ${ollamaMessage}`;
 }
 
@@ -152,6 +170,82 @@ export function describeConnection(
         tone: 'ok',
         message: `Connected — ${String(count)} model${count === 1 ? '' : 's'} available.`,
       };
+    }
+  }
+}
+
+/**
+ * Whether a provider's model list covers the name the user typed.
+ *
+ * Gemini's compatibility endpoint lists `models/gemini-2.5-flash` and accepts
+ * `gemini-2.5-flash` in a request, so an exact comparison would warn about a
+ * setup that works.
+ */
+export function apiHasModel(model: string, listed: string[]): boolean {
+  const wanted = model.trim();
+  return listed.some((id) => id === wanted || id.endsWith(`/${wanted}`));
+}
+
+export interface DescribeApiOptions {
+  baseUrl: string;
+  model: string;
+  hasKey: boolean;
+}
+
+/**
+ * Render an API probe as the popup's connection line.
+ *
+ * The same job `describeConnection` does for Ollama, for the failures a pasted
+ * key actually meets: a key from a different provider than the address, a
+ * typo in the address, a model the key cannot see.
+ */
+export function describeApiConnection(
+  probe: ApiProbe,
+  { baseUrl, model, hasKey }: DescribeApiOptions,
+): ConnectionReport {
+  switch (probe.kind) {
+    case 'unauthorized':
+      return {
+        tone: 'error',
+        message: hasKey
+          ? `${baseUrl} rejected this key (${String(probe.status)}). Check that ` +
+            'it is a key for this provider.'
+          : `${baseUrl} wants an API key. Paste one above.`,
+      };
+
+    case 'unreachable':
+      return {
+        tone: 'error',
+        message: `Can't reach ${baseUrl}. Check the address.`,
+      };
+
+    case 'http':
+      // Not every compatible server lists its models — a 404 here can be a
+      // server that only implements chat. Worth a warning, not a verdict.
+      return {
+        tone: 'warn',
+        message:
+          probe.status === 404
+            ? `${baseUrl} has no model list (404). If the address ends at the ` +
+              'version, like …/v1, type the model name and try a translation.'
+            : `${baseUrl} answered ${String(probe.status)} when asked for its models.`,
+      };
+
+    case 'ok': {
+      const wanted = model.trim();
+      if (!wanted) {
+        return {
+          tone: 'warn',
+          message: 'Connected. Choose a model to translate with.',
+        };
+      }
+      if (probe.models.length > 0 && !apiHasModel(wanted, probe.models)) {
+        return {
+          tone: 'warn',
+          message: `Connected, but this key cannot see "${wanted}".`,
+        };
+      }
+      return { tone: 'ok', message: `Connected — translating with ${wanted}.` };
     }
   }
 }

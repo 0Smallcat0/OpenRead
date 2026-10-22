@@ -19,8 +19,16 @@ const MARKUP = `
     <select id="engine">
       <option value="builtin">builtin</option>
       <option value="ollama">ollama</option>
+      <option value="openai">openai</option>
     </select>
     <p id="engineNote"></p>
+    <div id="apiOnly" hidden>
+      <input id="apiBaseUrl" type="text" />
+      <input id="apiKey" type="password" />
+      <input id="apiModel" type="text" list="apiModelOptions" />
+      <datalist id="apiModelOptions"></datalist>
+      <div id="apiConnection"></div>
+    </div>
     <div id="ollamaOnly">
     <input id="baseUrl" type="text" />
     <div id="connection"></div>
@@ -66,6 +74,7 @@ const MARKUP = `
       <span id="siteExceptLabel"></span>
     </label>
     <textarea id="glossary"></textarea>
+    <input id="videoSubtitles" type="checkbox" />
     <input id="obsidianVault" type="text" />
     <input id="obsidianFolder" type="text" />
     <input id="enrichOnCapture" type="checkbox" />
@@ -75,6 +84,8 @@ const MARKUP = `
 `;
 
 let stored: Record<string, unknown>;
+/** `chrome.storage.local`, where the API key lives and nothing else does. */
+let local: Record<string, unknown>;
 let packState:
   | 'unavailable'
   | 'downloadable'
@@ -94,6 +105,13 @@ function stubChrome(): void {
         get: () => Promise.resolve({ ...stored }),
         set: (values: Record<string, unknown>) => {
           Object.assign(stored, values);
+          return Promise.resolve();
+        },
+      },
+      local: {
+        get: () => Promise.resolve({ ...local }),
+        set: (values: Record<string, unknown>) => {
+          Object.assign(local, values);
           return Promise.resolve();
         },
       },
@@ -155,6 +173,7 @@ beforeEach(() => {
     modelId: 'qwen3:latest',
     targetLang: 'Traditional Chinese',
   };
+  local = {};
   written = [];
   pageTranslations = 0;
   packState = 'available';
@@ -567,6 +586,17 @@ bug = 瑕疵`;
     expect(stored.enrichOnCapture).toBe(true);
   });
 
+  it('shows video captions on by default and stores turning them off', async () => {
+    await open();
+    const box = document.getElementById('videoSubtitles') as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    box.checked = false;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+
+    expect(stored.videoSubtitles).toBe(false);
+  });
+
   it('writes before translating, so the page gets what the popup shows', async () => {
     const select = await open();
     select.value = 'Korean';
@@ -936,6 +966,102 @@ describe('the language pack, before it is needed', () => {
     });
 
     expect(pairs).toContain('ja->zh-Hant');
+  });
+});
+
+describe('your own API key', () => {
+  let probeApi: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    probeApi = vi.fn(() =>
+      Promise.resolve({ kind: 'ok', models: ['model-a', 'model-b'] }),
+    );
+  });
+
+  const withApi = (): PopupDeps =>
+    deps({ probeApi: probeApi as unknown as PopupDeps['probeApi'] });
+
+  it('keeps its controls out of sight until it is chosen', async () => {
+    stored = { engine: 'builtin' };
+    mountPopup(document, withApi());
+    await settle();
+    expect($('apiOnly').hasAttribute('hidden')).toBe(true);
+    expect(probeApi).not.toHaveBeenCalled();
+  });
+
+  it('says the text leaves the machine, before anything is sent', async () => {
+    stored = { engine: 'builtin' };
+    mountPopup(document, withApi());
+    await settle();
+    const engine = $('engine') as HTMLSelectElement;
+    engine.value = 'openai';
+    engine.dispatchEvent(new Event('change'));
+    await settle();
+    expect($('apiOnly').hasAttribute('hidden')).toBe(false);
+    expect($('ollamaOnly').hasAttribute('hidden')).toBe(true);
+    expect($('engineNote').textContent).toMatch(/sent to that provider/);
+  });
+
+  it('checks the saved key on open and offers what it can reach', async () => {
+    stored = {
+      engine: 'openai',
+      apiBaseUrl: 'https://api.example.com/v1',
+      apiModel: 'model-a',
+    };
+    local = { apiKey: 'sk-saved' };
+    mountPopup(document, withApi());
+    await settle();
+    // Once, and with the key: a probe that went out before the key had loaded
+    // would have told this user their saved key was missing.
+    expect(probeApi).toHaveBeenCalledTimes(1);
+    expect(probeApi).toHaveBeenCalledWith(
+      'https://api.example.com/v1',
+      'sk-saved',
+      expect.anything(),
+    );
+    const options = Array.from(
+      document.querySelectorAll<HTMLOptionElement>('#apiModelOptions option'),
+    ).map((o) => o.value);
+    expect(options).toEqual(['model-a', 'model-b']);
+    expect($('apiConnection').className).toBe('ok');
+  });
+
+  it('keeps the key in local storage, never in the synced settings', async () => {
+    stored = { engine: 'openai' };
+    mountPopup(document, withApi());
+    await settle();
+    const key = $('apiKey') as HTMLInputElement;
+    key.value = '  sk-new  ';
+    key.dispatchEvent(new Event('change'));
+    await settle();
+    expect(local.apiKey).toBe('sk-new');
+    expect(stored).not.toHaveProperty('apiKey');
+  });
+
+  it('saves the address and model with the rest of the settings', async () => {
+    stored = { engine: 'openai' };
+    mountPopup(document, withApi());
+    await settle();
+    ($('apiBaseUrl') as HTMLInputElement).value =
+      'https://openrouter.ai/api/v1';
+    $('apiBaseUrl').dispatchEvent(new Event('change'));
+    ($('apiModel') as HTMLInputElement).value = 'model-b';
+    $('apiModel').dispatchEvent(new Event('change'));
+    await settle();
+    expect(stored.apiBaseUrl).toBe('https://openrouter.ai/api/v1');
+    expect(stored.apiModel).toBe('model-b');
+  });
+
+  it('re-judges a retyped model from the list already in hand', async () => {
+    stored = { engine: 'openai', apiModel: 'model-a' };
+    local = { apiKey: 'sk' };
+    mountPopup(document, withApi());
+    await settle();
+    const model = $('apiModel') as HTMLInputElement;
+    model.value = 'not-there';
+    model.dispatchEvent(new Event('input'));
+    expect($('apiConnection').className).toBe('warn');
+    expect(probeApi).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -3,7 +3,10 @@
  * user across machines: which engine translates, the Ollama server URL and
  * model for when that engine is Ollama, the target language (kept as the
  * human-readable string the prompt layer expects), and the capture options.
- * No API key — every engine runs on the user's own machine.
+ *
+ * The one secret, an API key for the opt-in `openai` engine, is not among them:
+ * it lives in `chrome.storage.local`, so it stays on this machine instead of
+ * following the user into every browser they sign in to. See `loadApiKey`.
  */
 
 /**
@@ -14,8 +17,15 @@
  * sentence. `ollama` is a local LLM, which costs a server and a multi-gigabyte
  * model and buys surrounding-page context, a choice of model, and the capture
  * enrichment pass.
+ *
+ * `openai` is any server that speaks the OpenAI chat-completions protocol, with
+ * the user's own key: OpenAI itself, DeepSeek, OpenRouter, Groq, Gemini's
+ * compatibility endpoint, or LM Studio on this machine. It is the only engine
+ * that sends text off the machine, and only when the user picks it — for the
+ * reader whose language pair Chrome has no pack for and whose computer cannot
+ * run a model worth reading.
  */
-export type Engine = 'builtin' | 'ollama';
+export type Engine = 'builtin' | 'ollama' | 'openai';
 
 /**
  * Whether the original stays visible beside the translation.
@@ -33,6 +43,8 @@ export type TranslationStyle = 'line' | 'plain' | 'dashed' | 'highlight';
 /** Size of the translation relative to the text it sits under. */
 export type TranslationScale = 'small' | 'same' | 'large';
 
+import { languageForLocale } from './core/bcp47';
+
 export type { HoverKey } from './ui/hover';
 import type { HoverKey } from './ui/hover';
 
@@ -44,6 +56,13 @@ export interface Settings {
   /** Base URL of the local Ollama server, e.g. http://localhost:11434. */
   baseUrl: string;
   modelId: string;
+  /**
+   * Base URL of the OpenAI-compatible API, up to and including the version
+   * segment — `https://api.openai.com/v1`, not `…/v1/chat/completions`.
+   */
+  apiBaseUrl: string;
+  /** Model name as that provider spells it, e.g. `gpt-4o-mini`. */
+  apiModel: string;
   targetLang: string;
   /** Translate a page on load without being asked. See `core/auto-translate`. */
   autoTranslate: AutoTranslate;
@@ -73,6 +92,11 @@ export interface Settings {
    * grammar and for why the placeholder looks the way it does.
    */
   glossary: string;
+  /**
+   * Replace a YouTube video's captions with the original and its translation,
+   * once the reader turns captions on. See `ui/subtitles.ts`.
+   */
+  videoSubtitles: boolean;
   /** Obsidian vault to capture into; empty = the user's current/last vault. */
   obsidianVault: string;
   /** Vault-relative folder for captures; empty = the vault root. */
@@ -91,6 +115,11 @@ export const DEFAULT_SETTINGS: Settings = {
   // Benchmark-driven default: best quality/latency of the models measured
   // in docs/BENCHMARK.md (chrF 46.3, TTFT-UI p50 451 ms on the test rig).
   modelId: 'qwen3:latest',
+  apiBaseUrl: 'https://api.openai.com/v1',
+  // No default model. Providers retire names on their own schedule, and a
+  // default that has been retired fails on the first press with a 404 about a
+  // model the user never chose; the popup offers what the key can reach.
+  apiModel: '',
   targetLang: 'Traditional Chinese',
   // Off until asked for. An extension that starts rewriting pages the moment it
   // is installed is one the user did not consent to yet, whatever the setting
@@ -108,13 +137,17 @@ export const DEFAULT_SETTINGS: Settings = {
   hoverTranslate: 'alt',
   inputTargetLang: 'English',
   glossary: '',
+  // On, unlike automatic page translation, because the reader has already
+  // asked: nothing happens to a video until they press CC, and then only when
+  // the captions are in a language other than theirs.
+  videoSubtitles: true,
   obsidianVault: '',
   obsidianFolder: 'OpenRead',
   enrichOnCapture: false,
 };
 
 /**
- * Languages offered in the popup, in display order (first = default).
+ * Languages offered in the popup, in display order.
  *
  * The four this shipped with, then the rest alphabetically. Every one of them
  * was probed against a real Chrome — see `core/bcp47.ts` for what was left out
@@ -168,6 +201,8 @@ export async function loadSettings(): Promise<Settings> {
     'engine',
     'baseUrl',
     'modelId',
+    'apiBaseUrl',
+    'apiModel',
     'targetLang',
     'autoTranslate',
     'autoTranslateExcept',
@@ -177,11 +212,52 @@ export async function loadSettings(): Promise<Settings> {
     'hoverTranslate',
     'inputTargetLang',
     'glossary',
+    'videoSubtitles',
     'obsidianVault',
     'obsidianFolder',
     'enrichOnCapture',
   ])) as Partial<Settings>;
-  return { ...DEFAULT_SETTINGS, ...stored };
+  return { ...DEFAULT_SETTINGS, targetLang: defaultTargetLang(), ...stored };
+}
+
+/**
+ * The language a first install translates into: the browser's own UI
+ * language, so a reader in Tokyo or São Paulo is not handed Traditional
+ * Chinese. Traditional Chinese when the list does not have that language.
+ */
+export function defaultTargetLang(): string {
+  const ui = (
+    globalThis as { chrome?: { i18n?: { getUILanguage?: () => string } } }
+  ).chrome?.i18n?.getUILanguage?.();
+  return (ui && languageForLocale(ui)) ?? DEFAULT_SETTINGS.targetLang;
+}
+
+/** The model the chosen engine will run, for messages that name it. */
+export function activeModel(settings: Settings): string {
+  return settings.engine === 'openai' ? settings.apiModel : settings.modelId;
+}
+
+/**
+ * The API key for the `openai` engine, or '' when none has been entered.
+ *
+ * `chrome.storage.local`, not `sync`: a key synced to every signed-in browser
+ * is a key on machines the user never typed it into. '' rather than a throw
+ * when local storage is missing, because a missing key is a state the engine
+ * already reports in words — and a local server such as LM Studio needs none.
+ */
+export async function loadApiKey(): Promise<string> {
+  const local = (
+    globalThis as {
+      chrome?: { storage?: { local?: chrome.storage.StorageArea } };
+    }
+  ).chrome?.storage?.local;
+  if (!local) return '';
+  const { apiKey } = (await local.get('apiKey')) as { apiKey?: unknown };
+  return typeof apiKey === 'string' ? apiKey : '';
+}
+
+export async function saveApiKey(apiKey: string): Promise<void> {
+  await chrome.storage.local.set({ apiKey: apiKey.trim() });
 }
 
 /**

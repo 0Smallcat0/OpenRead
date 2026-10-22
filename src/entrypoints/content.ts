@@ -14,7 +14,7 @@ import { shouldBypassAI } from '../core/language';
 import { shouldAutoTranslate } from '../core/auto-translate';
 import { shouldTranslateFrame } from '../core/frames';
 import { collectBlocks } from '../ui/blocks';
-import { loadSettings, type Settings } from '../settings';
+import { activeModel, loadSettings, type Settings } from '../settings';
 import type { PageLanguageResponse } from '../messaging';
 
 /**
@@ -42,7 +42,7 @@ export default defineContentScript({
         const s = await loadSettings();
         return {
           engine: s.engine,
-          modelId: s.modelId,
+          modelId: activeModel(s),
           targetLang: s.targetLang,
           obsidianVault: s.obsidianVault,
           obsidianFolder: s.obsidianFolder,

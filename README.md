@@ -1,7 +1,9 @@
 # OpenRead
 
-> **Read the web, your PDFs and your books in your own language, without
-> sending a word of it to anyone.** No account, no API key, no cloud.
+> **Bilingual translation for web pages, PDFs, books and YouTube captions —
+> free, with no account and no quota.** The default engine is the translator
+> Chrome already ships, running on your own machine, so there is no key to get
+> and nothing to pay. Bring your own API key if you want a stronger model.
 
 ![Selecting a paragraph on Wikipedia and translating it into Traditional Chinese in place, with buttons to save it to Obsidian or copy it](docs/screenshots/demo.gif)
 
@@ -14,9 +16,13 @@
 
 ## Why
 
+- **Free, and it stays free.** No sign-in, no daily limit, no paid tier. The
+  default engine costs nothing to run because it runs on your computer, not on
+  a server someone has to pay for.
 - **Some things cannot go in a cloud translator.** Unpublished drafts,
-  contracts, medical records, anything under NDA. Every engine here runs on
-  your own machine.
+  contracts, medical records, anything under NDA. The built-in engine and
+  Ollama both run on your own machine; your own API key, if you add one, sends
+  text only to the address you name.
 - **Bilingual, not replaced.** The translation goes _under_ each paragraph, so
   a sentence that looks wrong can be checked against the original instead of
   taken on faith.
@@ -26,6 +32,9 @@
 - **And EPUBs.** A book opens in a reader of its own, with its contents, its
   pictures and your place in it kept. Ask for a translation once and it follows
   you from chapter to chapter.
+- **And YouTube.** Turn on CC and every caption line shows with its translation
+  under it. Auto-generated captions are joined back into sentences before they
+  are translated.
 - **Traditional Chinese that reads like Taiwan.** Most tools translate into
   Simplified and convert character by character, which produces `界面`, `公裡`,
   `數據庫` where a Taiwanese reader expects `介面`, `公里`, `資料庫`. OpenRead
@@ -47,8 +56,9 @@ translator, whose language pack Chrome downloads once per language pair — abou
 350 MB, measured at 82 seconds on a 4 MB/s connection. That download starts the
 moment the extension is installed rather than the first time you press
 translate, and the extension holds it open until it lands: Chrome does not
-resume an interrupted one, it waits three minutes and then starts over. After
-it arrives, a page takes about two seconds.
+resume an interrupted one, it waits three minutes and then starts over. The
+popup says whether yours is ready. After it arrives, a page takes about two
+seconds.
 
 <p align="center">
   <img src="docs/screenshots/popup.png" alt="The OpenRead popup: translator set to Chrome built-in, target language Traditional Chinese" width="290" />
@@ -67,20 +77,18 @@ it arrives, a page takes about two seconds.
   equivalent API: the only engine left there is Ollama, which means a server
   and a five-gigabyte model — the opposite of what this is for.
 - **Thirty-nine target languages**, every one probed against a real Chrome
-  rather than taken from documentation. The source language is whatever the
-  page is in — that side is not a list.
+  rather than taken from documentation. It starts on your browser's own
+  language; change it in the popup. The source language is whatever the page
+  is in — that side is not a list.
 - **Three settings for how it looks**: the original beside the translation or
   the translation alone; a line, nothing, a dashed underline or a tinted
   background; smaller, the same, or larger. They apply to a page you are
   already looking at, without re-translating it.
-- **The first translation of a language pair waits for a download.** Chrome
-  fetches the model itself, once per pair per browser profile — 30 seconds to
-  two minutes. The popup says whether yours is ready and offers to fetch it
-  before you need it, so the wait happens while you are not waiting.
 - **Chrome decides which pairs exist.** It downloads packs per language pair,
   and a pair it has no pack for is one the built-in engine cannot do. When that
-  happens OpenRead falls back to Ollama; with no Ollama configured, that is
-  where the attempt ends.
+  happens OpenRead falls back to Ollama if you run it; if you do not, it says
+  so and points you at **Your own API key** in the popup, which has no pairs to
+  run out of.
 
 ## Use it
 
@@ -120,6 +128,15 @@ it arrives, a page takes about two seconds.
   book is read out of the file in your hands: nothing is uploaded, and nothing
   inside it is fetched from anywhere — a picture comes from the archive, and a
   chapter that points at a remote image simply does not get one.
+- **A video** — on YouTube, turn captions on with **CC** and each line shows
+  with its translation under it, inside the player. Auto-generated captions,
+  which arrive one word at a time with no punctuation, are put back into
+  sentences at the speaker's pauses first, so what gets translated is a
+  sentence rather than a fragment. Only the next minute and a half is
+  translated, as the video plays — on your own API key, a two-hour lecture
+  costs what you watch of it. Captions already in your language, YouTube's own
+  translation included, are left as they are. **Bilingual YouTube captions**
+  in the popup turns it off.
 
 | The whole page, bilingual                                                                                                                                                     | A paper, in the bundled PDF viewer                                                                      |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -160,7 +177,9 @@ job it is.
 ## Without a browser
 
 The same pipeline as a command and as an MCP server, so a script or an agent
-can translate locally too:
+can translate locally too. Outside the browser there is no built-in
+translator, so these run on [Ollama](https://ollama.com) — `ollama pull qwen3`
+first:
 
 ```bash
 npx openread "The quick brown fox jumps over the lazy dog."
@@ -172,20 +191,23 @@ Not a reimplementation — `src/node/translate.ts` calls the identical function
 the extension calls, and a test pins the CLI's defaults against the
 extension's.
 
-## Two engines
+## Three engines
 
-|                           | Chrome built-in _(default)_ | Ollama                    |
-| ------------------------- | --------------------------- | ------------------------- |
-| To install                | nothing                     | a server + a 5.2 GB model |
-| A 44-block article        | **~2 s**                    | 54 s                      |
-| chrF on 27 fixtures       | 36.5                        | **46.4**                  |
-| Reads surrounding context | no                          | yes                       |
-| Choose the model          | no                          | yes                       |
-| Capture enrichment        | no                          | yes                       |
+|                           | Chrome built-in _(default)_ | Ollama                    | Your own API         |
+| ------------------------- | --------------------------- | ------------------------- | -------------------- |
+| To install                | nothing                     | a server + a 5.2 GB model | nothing — a key      |
+| A 44-block article        | **~2 s**                    | 54 s                      | depends on provider  |
+| Quality (chrF, 27 texts)  | 36.5                        | **46.4**                  | depends on the model |
+| Reads surrounding context | no                          | yes                       | yes                  |
+| Choose the model          | no                          | yes                       | yes                  |
+| Capture enrichment        | no                          | yes                       | no                   |
+| Text leaves your machine  | no                          | no                        | **yes**, to that API |
 
-Both run entirely on your machine, and both numbers come from the same 27
-fixtures against the same Taiwanese references — the built-in engine's are in
-[`eval/BUILTIN-RESULTS.md`](eval/BUILTIN-RESULTS.md), the model's in
+chrF is a standard translation-quality score: how closely the output matches a
+human translation, higher is better. The first two engines run entirely on your
+machine, and their numbers come from the same 27 texts against the same
+Taiwanese references — the built-in engine's
+are in [`eval/BUILTIN-RESULTS.md`](eval/BUILTIN-RESULTS.md), the model's in
 [`eval/BENCHMARK-RESULTS.md`](eval/BENCHMARK-RESULTS.md). Ten chrF is the price
 of installing nothing; a whole segment finishes on the built-in engine in about
 the time Ollama takes to paint its first character.
@@ -193,15 +215,25 @@ the time Ollama takes to paint its first character.
 Switch in the popup; `ollama pull qwen3` and `ollama serve` is the whole Ollama
 setup, with no `OLLAMA_ORIGINS` step — [here is why](docs/ENGINEERING.md#how-it-works).
 
+**Your own API** is any server that speaks OpenAI's chat-completions protocol:
+OpenAI, DeepSeek, OpenRouter, Groq, Google Gemini's compatibility endpoint, or
+LM Studio on your own computer. Pick the address from the list, paste a key,
+and the popup checks it and offers the models it can reach. It is for the
+language pair Chrome has no pack for, on a computer that cannot run a model
+worth reading. The key is kept in this browser's local storage and is never
+synced; the text you translate goes to that provider and is billed to your key.
+
 ## Privacy
 
-No account, no API key, no analytics, and no remote endpoint anywhere in the
+No account, no analytics, and no endpoint of the developer's anywhere in the
 code. On the default engine the extension makes no network request at all; on
-the Ollama engine, only to the server URL you configured, on your own machine.
-Permissions are `storage`, `activeTab`, `contextMenus` and
-`declarativeNetRequest` — the last one strips the `Origin` header from this
-extension's own requests to your Ollama server, scoped so a web page's requests
-can never match it. [Full policy](PRIVACY.md).
+the Ollama engine, only to the server URL you configured, on your own machine;
+on your own API, only to the address you entered, with your key.
+Permissions are access to the sites you visit (`<all_urls>`), which is what
+lets it translate whatever page or PDF you are on, plus `storage`,
+`activeTab`, `contextMenus` and `declarativeNetRequest` — the last one strips
+the `Origin` header from this extension's own requests to your Ollama server,
+scoped so a web page's requests can never match it. [Full policy](PRIVACY.md).
 
 That is the author of the extension telling you the extension is safe, which is
 worth very little. So it is also a test you can run:
@@ -221,7 +253,7 @@ all, since that is the easy way to send nothing and prove nothing.
 ```bash
 pnpm install
 pnpm build        # -> .output/chrome-mv3, load it unpacked
-pnpm test         # 780 unit tests
+pnpm test         # unit tests
 pnpm eval         # offline reliability eval -> eval/RESULTS.md
 pnpm eval:builtin # score the default engine in a real Chrome -> eval/BUILTIN-RESULTS.md
 pnpm bench        # live model benchmark (needs Ollama)
@@ -229,6 +261,8 @@ pnpm shoot        # re-shoot every screenshot and the clip on this page
 pnpm e2e:page     # whole-page translation in a real Chrome, end to end
 pnpm e2e:stress   # hostile pages: infinite feeds, route swaps, rapid toggling
 pnpm e2e:egress   # prove the default engine sends nothing, in a real Chrome
+pnpm e2e:byok     # your own API key, against a stand-in provider on 127.0.0.1
+pnpm e2e:youtube  # bilingual captions on a real YouTube video, CC off and on again
 pnpm e2e:epub     # a real .epub opened, read and translated in a real Chrome
 pnpm e2e:first-run # what a brand-new install does on a brand-new profile
 pnpm e2e:prefetch  # prove installing it starts the language-pack download

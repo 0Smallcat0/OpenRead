@@ -22,14 +22,14 @@ OPENREAD_CHROME="$EDGE" pnpm e2e:epub
 OPENREAD_CHROME="$EDGE" pnpm e2e:egress
 ```
 
-|                          |                                                                                     |
-| ------------------------ | ----------------------------------------------------------------------------------- |
-| `Translator` API         | **present** — the default engine works, so "nothing to install" is true on Edge too |
-| `LanguageDetector` API   | present                                                                             |
-| First translation, cold  | language pack in **14 s**, then 18 blocks in 4 s                                    |
-| EPUB reader              | opens, reads, translates, follows the reader into the next chapter                  |
-| `pnpm e2e:egress`        | **PASS** — 4 requests observed, 0 off the machine                                                                               |
-| Keyboard shortcuts       | **all three unbound** — see below                                                   |
+|                         |                                                                                     |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| `Translator` API        | **present** — the default engine works, so "nothing to install" is true on Edge too |
+| `LanguageDetector` API  | present                                                                             |
+| First translation, cold | language pack in **14 s**, then 18 blocks in 4 s                                    |
+| EPUB reader             | opens, reads, translates, follows the reader into the next chapter                  |
+| `pnpm e2e:egress`       | **PASS** — 4 requests observed, 0 off the machine                                   |
+| Keyboard shortcuts      | **all three unbound** — see below                                                   |
 
 ### The keyboard shortcuts do not bind on Edge
 
@@ -116,8 +116,9 @@ eventually, in both stores; not worth blocking a first submission on.
 ### Privacy
 
 Edge asks the same questions the Chrome listing answered, and the answers do
-not change: no data is collected, and nothing leaves the machine. Point the
-privacy policy field at
+not change: the developer receives nothing, and on the default engine nothing
+leaves the machine; text goes elsewhere only to an Ollama server or an API the
+user names. Point the privacy policy field at
 <https://github.com/0Smallcat0/OpenRead/blob/main/PRIVACY.md>.
 
 The claim is testable rather than asserted, and saying so is worth a line in

@@ -3,9 +3,9 @@
 **The listing is live.** Item id `mopclgoefogojkfmigfjpbmnnoiodnmb`, public since
 2026-08-11.
 
-| | |
-| --- | --- |
-| Public page | <https://chromewebstore.google.com/detail/mopclgoefogojkfmigfjpbmnnoiodnmb> |
+|              |                                                                                                                |
+| ------------ | -------------------------------------------------------------------------------------------------------------- |
+| Public page  | <https://chromewebstore.google.com/detail/mopclgoefogojkfmigfjpbmnnoiodnmb>                                    |
 | Console item | <https://chrome.google.com/webstore/devconsole/> → the item, or append the item id to the item URL once inside |
 
 Sections 1 and 2 below are the one-time setup and are done. For a new version,
@@ -47,10 +47,10 @@ pnpm zip        # -> .output/openread-<version>-chrome.zip
    (Productivity → Tools), language.
 3. Upload the four 1280×800 screenshots from
    [`screenshots/`](screenshots/), in the numbered order.
-4. **Privacy tab** — paste the single-purpose statement, the three permission
-   justifications, remote code = **No**, data collection = **none**, and the
-   privacy policy URL, all from the "Privacy tab answers" section of
-   `LISTING.md`.
+4. **Privacy tab** — paste the single-purpose statement, the permission
+   justifications, remote code = **No**, data collection = **Website content**
+   only with all three certifications, and the privacy policy URL, all from
+   the "Privacy tab answers" section of `LISTING.md`.
 5. **Distribution tab** — visibility:
    - **Public** — anyone can find it; or
    - **Unlisted** — installable only via the direct link. For a resume/portfolio

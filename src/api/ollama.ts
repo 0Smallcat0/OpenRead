@@ -39,7 +39,7 @@ function endpoint(baseUrl: string): string {
   return `${baseUrl.replace(/\/+$/, '')}/api/chat`;
 }
 
-function wantsTraditional(targetLang: string): boolean {
+export function wantsTraditional(targetLang: string): boolean {
   return (
     targetLang.includes('Traditional') ||
     targetLang.includes('繁體') ||
